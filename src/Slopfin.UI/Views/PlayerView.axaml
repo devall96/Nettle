@@ -1,0 +1,277 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Slopfin.UI.ViewModels"
+             xmlns:c="using:Slopfin.UI.Controls"
+             xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
+             x:Class="Slopfin.UI.Views.PlayerView"
+             x:DataType="vm:PlayerViewModel"
+             Background="Black">
+  <UserControl.Styles>
+    <Style Selector="Panel#Osd">
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.25" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.osd">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Padding" Value="12" />
+      <Setter Property="CornerRadius" Value="999" />
+    </Style>
+    <Style Selector="Button.osd:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.osd PathIcon">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+    </Style>
+    <Style Selector="Button.osd.big PathIcon">
+      <Setter Property="Width" Value="40" />
+      <Setter Property="Height" Value="40" />
+    </Style>
+    <Style Selector="Panel#Overlay TextBlock">
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.track">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="12,8" />
+    </Style>
+    <Style Selector="Button.track.selected">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <vlc:VideoView x:Name="Video" MediaPlayer="{Binding MediaPlayer}">
+    <!-- The overlay is rendered by LibVLCSharp in a transparent window above the native video surface. -->
+    <Panel x:Name="Overlay" Background="#01000000">
+      <!-- Buffering -->
+      <Arc Classes="spin" Width="64" Height="64" StrokeThickness="5" IsVisible="{Binding IsBuffering}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+      <!-- Error -->
+      <Border IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Background="#DD111111" CornerRadius="16" Padding="28"
+              HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="560">
+        <StackPanel Spacing="14">
+          <TextBlock Text="Playback problem" FontSize="20" FontWeight="Bold" />
+          <TextBlock Text="{Binding Error}" TextWrapping="Wrap" Opacity="0.85" />
+          <Button Content="Close" Command="{Binding CloseCommand}" HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+
+      <Panel x:Name="Osd" Opacity="{Binding IsOsdVisible, Converter={x:Static c:BoolToOpacity.Instance}}" IsHitTestVisible="{Binding IsOsdVisible}">
+        <!-- Top gradient + title -->
+        <Border VerticalAlignment="Top" Height="190">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+              <GradientStop Color="#CC000000" Offset="0" />
+              <GradientStop Color="#00000000" Offset="1" />
+            </LinearGradientBrush>
+          </Border.Background>
+        </Border>
+        <Grid VerticalAlignment="Top" Margin="36,30,36,0" ColumnDefinitions="Auto,*,Auto">
+          <Button Classes="osd" Command="{Binding CloseCommand}" ToolTip.Tip="Back (Esc)"><PathIcon Data="{StaticResource Icon.Back}" /></Button>
+          <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Title}" FontSize="22" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="{Binding Subtitle}" Opacity="0.8" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              <Border CornerRadius="4" Padding="7,1" Background="#3322C55E" VerticalAlignment="Center"
+                      IsVisible="{Binding SourceLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{Binding SourceLabel}" FontSize="11" FontWeight="Bold" Foreground="#86EFAC" />
+              </Border>
+            </StackPanel>
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+            <Button Classes="osd" Command="{Binding ToggleTracksCommand}" ToolTip.Tip="Audio &amp; subtitles"><PathIcon Data="{StaticResource Icon.Subtitles}" /></Button>
+            <Button Classes="osd" Command="{Binding ToggleFullScreenCommand}" ToolTip.Tip="Full screen (F)"><PathIcon Data="{StaticResource Icon.Fullscreen}" /></Button>
+          </StackPanel>
+        </Grid>
+
+        <!-- Bottom gradient -->
+        <Border VerticalAlignment="Bottom" Height="260">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+              <GradientStop Color="#00000000" Offset="0" />
+              <GradientStop Color="#E6000000" Offset="1" />
+            </LinearGradientBrush>
+          </Border.Background>
+        </Border>
+
+        <!-- VOD controls -->
+        <StackPanel VerticalAlignment="Bottom" Margin="44,0,44,30" Spacing="6" IsVisible="{Binding IsVod}">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Text="{Binding PositionText}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0" FontFeatures="tnum" />
+            <Slider Grid.Column="1" x:Name="SeekBar" Minimum="0" Maximum="{Binding LengthMs}" Value="{Binding SeekValue}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Text="{Binding RemainingText}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="14,0,0,0" FontFeatures="tnum" />
+          </Grid>
+          <Grid ColumnDefinitions="*,Auto,*">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Button Classes="osd" Command="{Binding ToggleMuteCommand}"><PathIcon Data="{StaticResource Icon.Volume}" /></Button>
+              <Slider Width="130" Minimum="0" Maximum="125" Value="{Binding Volume}" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding EndsAtText}" Opacity="0.7" VerticalAlignment="Center" Margin="16,0,0,0" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="18">
+              <Button Classes="osd" Command="{Binding SeekBackCommand}" ToolTip.Tip="Back (←)"><PathIcon Data="{StaticResource Icon.Rewind}" /></Button>
+              <Button Classes="osd big" Command="{Binding TogglePlayCommand}" x:Name="PlayPause">
+                <Panel>
+                  <PathIcon Data="{StaticResource Icon.Pause}" IsVisible="{Binding IsPlaying}" />
+                  <PathIcon Data="{StaticResource Icon.Play}" IsVisible="{Binding !IsPlaying}" />
+                </Panel>
+              </Button>
+              <Button Classes="osd" Command="{Binding SeekForwardCommand}" ToolTip.Tip="Forward (→)"><PathIcon Data="{StaticResource Icon.Forward}" /></Button>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+              <Button Classes="osd" Command="{Binding PlayNextCommand}" IsVisible="{Binding HasNext}" ToolTip.Tip="Next episode (N)">
+                <PathIcon Data="{StaticResource Icon.SkipNext}" />
+              </Button>
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+
+        <!-- Live controls -->
+        <Grid VerticalAlignment="Bottom" Margin="44,0,44,36" IsVisible="{Binding IsLive}" ColumnDefinitions="Auto,*,Auto">
+          <Border Width="120" Height="72" CornerRadius="10" Background="#33FFFFFF" ClipToBounds="True" Margin="0,0,20,0">
+            <Image Classes="fade" Opacity="0" Stretch="Uniform" Margin="8" c:ImageLoader.DecodeWidth="240" c:ImageLoader.Source="{Binding LogoUrl}" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Border Background="#E53935" CornerRadius="4" Padding="6,1"><TextBlock Text="LIVE" FontSize="11" FontWeight="Bold" /></Border>
+              <TextBlock Text="{Binding ChannelNumber}" FontWeight="Bold" />
+              <TextBlock Text="{Binding Title}" FontWeight="Bold" />
+              <Border CornerRadius="4" Padding="7,1" Background="#3322C55E" IsVisible="{Binding IsLiveDirect}">
+                <TextBlock Text="{Binding LiveSourceLabel}" FontSize="11" FontWeight="Bold" Foreground="#86EFAC" />
+              </Border>
+              <Border CornerRadius="4" Padding="7,1" Background="#33FFFFFF" IsVisible="{Binding !IsLiveDirect}">
+                <TextBlock Text="{Binding LiveSourceLabel}" FontSize="11" FontWeight="Bold" Opacity="0.8" />
+              </Border>
+            </StackPanel>
+            <TextBlock Text="{Binding NowTitle}" FontSize="22" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding Subtitle}" Opacity="0.8" TextTrimming="CharacterEllipsis" IsVisible="{Binding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="{Binding NowTime}" Opacity="0.8" />
+              <ProgressBar Classes="thin" Width="220" Minimum="0" Maximum="1" Value="{Binding LiveProgress}" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Text="{Binding NextTitle}" Opacity="0.65" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Button Classes="osd" Command="{Binding ChannelDownCommand}" ToolTip.Tip="Channel down"><PathIcon Data="{StaticResource Icon.ChevronLeft}" /></Button>
+            <Button Classes="osd big" Command="{Binding TogglePlayCommand}">
+              <Panel>
+                <PathIcon Data="{StaticResource Icon.Pause}" IsVisible="{Binding IsPlaying}" />
+                <PathIcon Data="{StaticResource Icon.Play}" IsVisible="{Binding !IsPlaying}" />
+              </Panel>
+            </Button>
+            <Button Classes="osd" Command="{Binding ChannelUpCommand}" ToolTip.Tip="Channel up"><PathIcon Data="{StaticResource Icon.ChevronRight}" /></Button>
+          </StackPanel>
+        </Grid>
+      </Panel>
+
+      <!-- Between programs (file ended slightly before its slot) -->
+      <TextBlock Text="{Binding LiveInterstitial}" IsVisible="{Binding LiveInterstitial, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" FontSize="26" FontWeight="Bold" />
+
+      <!-- Channel banner (always shows briefly when tuning) -->
+      <Border IsVisible="{Binding IsChannelBannerVisible}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,40,44,0"
+              Background="#CC000000" CornerRadius="14" Padding="22,14">
+        <StackPanel>
+          <TextBlock Text="{Binding ChannelNumber}" FontSize="34" FontWeight="ExtraBold" HorizontalAlignment="Right" />
+          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" HorizontalAlignment="Right" />
+        </StackPanel>
+      </Border>
+
+      <!-- Skip segment -->
+      <Button IsVisible="{Binding IsSkipVisible}" Command="{Binding SkipCommand}" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+              Margin="0,0,48,150" Classes="primary" Padding="26,14">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Text="{Binding SkipLabel}" Foreground="{DynamicResource OnAccentBrush}" FontSize="16" />
+          <PathIcon Data="{StaticResource Icon.SkipNext}" Width="18" Height="18" Foreground="{DynamicResource OnAccentBrush}" />
+        </StackPanel>
+      </Button>
+
+      <!-- Up next -->
+      <Border IsVisible="{Binding IsUpNextVisible}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,48,150"
+              Background="#E6101010" CornerRadius="16" Padding="14" Width="420" BoxShadow="0 10 40 0 #AA000000">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Width="150" Height="84" CornerRadius="10" ClipToBounds="True" Background="#33FFFFFF">
+            <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="300" c:ImageLoader.Source="{Binding UpNextImage}" />
+          </Border>
+          <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="6" VerticalAlignment="Center">
+            <TextBlock Text="UP NEXT" FontSize="11" FontWeight="Bold" Opacity="0.7" LetterSpacing="1.2" />
+            <TextBlock Text="{Binding UpNextTitle}" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="primary" Padding="14,6" Command="{Binding PlayNextCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="Play in" Foreground="{DynamicResource OnAccentBrush}" />
+                  <TextBlock Text="{Binding UpNextCountdown}" Foreground="{DynamicResource OnAccentBrush}" />
+                </StackPanel>
+              </Button>
+              <Button Content="Hide" Padding="14,6" Command="{Binding DismissUpNextCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- TV-style format badges (verified output; press I to show again) -->
+      <ItemsControl ItemsSource="{Binding FormatBadges}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,104,40,0"
+                    Opacity="{Binding IsFormatBadgesVisible, Converter={x:Static c:BoolToOpacity.Instance}}" IsHitTestVisible="False">
+        <ItemsControl.Transitions>
+          <Transitions>
+            <DoubleTransition Property="Opacity" Duration="0:0:0.45" Easing="CubicEaseOut" />
+          </Transitions>
+        </ItemsControl.Transitions>
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:FormatBadgeViewModel">
+            <Border CornerRadius="12" Padding="16,10" Background="#D90A0A0F" BorderThickness="1.5" HorizontalAlignment="Right" MaxWidth="420"
+                    BorderBrush="{DynamicResource AccentBrush}" Classes.dim="{Binding NotVerified}">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding Label}" FontSize="20" FontWeight="ExtraBold" LetterSpacing="1.5" HorizontalAlignment="Right" />
+                <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" TextAlignment="Right" HorizontalAlignment="Right" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+        <ItemsControl.Styles>
+          <Style Selector="Border.dim">
+            <Setter Property="BorderBrush" Value="#66FFFFFF" />
+            <Setter Property="Opacity" Value="0.8" />
+          </Style>
+        </ItemsControl.Styles>
+      </ItemsControl>
+
+      <!-- Tracks panel -->
+      <Border IsVisible="{Binding IsTracksOpen}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,100,36,0"
+              Background="#F0141414" CornerRadius="16" Padding="16" Width="360" MaxHeight="560">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="6">
+            <TextBlock Text="AUDIO" FontSize="12" FontWeight="Bold" Opacity="0.6" LetterSpacing="1.2" Margin="4,0,0,4" />
+            <ItemsControl ItemsSource="{Binding AudioTracks}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TrackOptionViewModel">
+                  <Button Classes="track" Classes.selected="{Binding IsSelected}" Command="{Binding SelectCommand}">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="SUBTITLES" FontSize="12" FontWeight="Bold" Opacity="0.6" LetterSpacing="1.2" Margin="4,12,0,4" />
+            <ItemsControl ItemsSource="{Binding SubtitleTracks}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TrackOptionViewModel">
+                  <Button Classes="track" Classes.selected="{Binding IsSelected}" Command="{Binding SelectCommand}">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Panel>
+  </vlc:VideoView>
+</UserControl>

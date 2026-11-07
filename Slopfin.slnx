@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Slopfin.Core/Slopfin.Core.csproj" />
+    <Project Path="src/Slopfin.Desktop/Slopfin.Desktop.csproj" />
+    <Project Path="src/Slopfin.UI/Slopfin.UI.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Slopfin.UI.ViewModels"
+             xmlns:v="using:Slopfin.UI.Views"
+             xmlns:c="using:Slopfin.UI.Controls"
+             x:Class="Slopfin.UI.Views.AccountPickerView"
+             x:DataType="vm:AccountPickerViewModel">
+  <Grid Classes="page" RowDefinitions="Auto,*,Auto" Margin="48,40">
+    <v:BrandMark HorizontalAlignment="Left" Scale="0.9" />
+
+    <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="36">
+      <TextBlock Classes="h1" Text="Who's watching?" HorizontalAlignment="Center" />
+
+      <ItemsControl ItemsSource="{Binding Accounts}" HorizontalAlignment="Center">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:AccountTileViewModel">
+            <StackPanel Margin="18" Spacing="12" Width="150">
+              <Button Classes="card" Command="{Binding SelectCommand}" HorizontalAlignment="Center">
+                <Border Classes="frame" Width="132" Height="132" CornerRadius="999" ClipToBounds="True"
+                        Background="{DynamicResource AccentGradientBrush}">
+                  <Grid>
+                    <TextBlock Text="{Binding Initial}" FontSize="52" FontWeight="Bold" Foreground="{DynamicResource OnAccentBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Image Classes="fade" Stretch="UniformToFill" Opacity="0" c:ImageLoader.DecodeWidth="264" c:ImageLoader.Source="{Binding AvatarUrl}" />
+                    <Border Background="#99000000" IsVisible="{Binding IsSigningIn}">
+                      <Arc Classes="spin" Width="36" Height="36" Stroke="White" />
+                    </Border>
+                  </Grid>
+                </Border>
+              </Button>
+              <TextBlock Text="{Binding Name}" Classes="h3" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding Server}" Classes="muted caption" HorizontalAlignment="Center" Margin="0,-8,0,0" TextTrimming="CharacterEllipsis" />
+              <Button Content="Forget" Classes="ghost" HorizontalAlignment="Center" Padding="12,6" FontSize="12"
+                      Command="{Binding ForgetCommand}"
+                      IsVisible="{Binding $parent[ItemsControl].((vm:AccountPickerViewModel)DataContext).IsEditing}" />
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <TextBlock Text="{Binding Error}" Foreground="#FF6B6B" HorizontalAlignment="Center" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+        <Button Classes="primary" Command="{Binding AddAccountCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource Icon.Plus}" Width="16" Height="16" />
+            <TextBlock Text="Add account" Foreground="{DynamicResource OnAccentBrush}" />
+          </StackPanel>
+        </Button>
+        <Button Content="Manage" Command="{Binding ToggleEditCommand}" />
+      </StackPanel>
+    </StackPanel>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+      <ToggleSwitch IsChecked="{Binding AutoLogin}" OnContent="" OffContent="" />
+      <TextBlock Text="Sign in automatically to the last profile on launch" Classes="muted" VerticalAlignment="Center" />
+    </StackPanel>
+  </Grid>
+</UserControl>

@@ -1,0 +1,296 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ===== Typography ===== -->
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBlock.display">
+    <Setter Property="FontSize" Value="52" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
+    <Setter Property="LetterSpacing" Value="-1" />
+  </Style>
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="36" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="-0.5" />
+  </Style>
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="TextBlock.h3">
+    <Setter Property="FontSize" Value="19" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+  <Style Selector="TextBlock.accent">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="1.2" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+
+  <!-- ===== Images fade in when loaded ===== -->
+  <Style Selector="Image.fade">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.35" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <!-- ===== Buttons ===== -->
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="18,10" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="RenderTransform" Value="none" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button:pressed">
+    <Setter Property="RenderTransform" Value="scale(0.97)" />
+  </Style>
+  <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+  </Style>
+  <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    <Setter Property="Padding" Value="26,12" />
+    <Setter Property="FontSize" Value="15" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+  <Style Selector="Button.primary:pointerover">
+    <Setter Property="RenderTransform" Value="scale(1.03)" />
+  </Style>
+  <Style Selector="Button.primary:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource TextBrush}" />
+  </Style>
+
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+  </Style>
+
+  <Style Selector="Button.glass">
+    <Setter Property="Background" Value="#33FFFFFF" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.glass:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#55FFFFFF" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <Style Selector="Button.icon">
+    <Setter Property="Padding" Value="10" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.icon PathIcon">
+    <Setter Property="Width" Value="22" />
+    <Setter Property="Height" Value="22" />
+  </Style>
+  <Style Selector="Button.active PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.chip">
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="16,8" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+  </Style>
+  <Style Selector="Button.chip.selected">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+  <Style Selector="Button.chip.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <!-- Navigation rail item -->
+  <Style Selector="Button.nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="14,11" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Button.nav PathIcon">
+    <Setter Property="Width" Value="22" />
+    <Setter Property="Height" Value="22" />
+  </Style>
+  <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.nav.selected">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.nav.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- Media card: no chrome, lifts on hover / remote focus -->
+  <Style Selector="Button.card">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter Name="PART_ContentPresenter"
+                          Background="Transparent"
+                          Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Button.card:pointerover, Button.card:focus-visible">
+    <Setter Property="RenderTransform" Value="scale(1.045)" />
+  </Style>
+  <!-- Cards never show the generic button hover/press fill; the frame + lift is the feedback. -->
+  <Style Selector="Button.card:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.card:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.card:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.card:pressed">
+    <Setter Property="RenderTransform" Value="scale(1.0)" />
+  </Style>
+  <Style Selector="Button.card Border.frame">
+    <Setter Property="BorderThickness" Value="2.5" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.card:focus-visible Border.frame">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.card:pointerover Border.frame">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+  </Style>
+  <Style Selector="Button.card Border.playhint">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button.card:pointerover Border.playhint, Button.card:focus-visible Border.playhint">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <!-- ===== Inputs ===== -->
+  <Style Selector="TextBox">
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="14,11" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBox /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+  </Style>
+  <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+  </Style>
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="ComboBox">
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="MinWidth" Value="180" />
+  </Style>
+
+  <!-- ===== Progress ===== -->
+  <Style Selector="ProgressBar.thin">
+    <Setter Property="MinHeight" Value="4" />
+    <Setter Property="Height" Value="4" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="#40FFFFFF" />
+  </Style>
+
+  <Style Selector="Arc.spin">
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="StrokeThickness" Value="4" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StartAngle" Value="0" />
+    <Setter Property="SweepAngle" Value="260" />
+    <Style.Animations>
+      <Animation Duration="0:0:0.9" IterationCount="Infinite">
+        <KeyFrame Cue="0%">
+          <Setter Property="RotateTransform.Angle" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="RotateTransform.Angle" Value="360" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <!-- Panels -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="24" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!-- Page entrance: content slides up gently -->
+  <Style Selector="Panel.page, Grid.page">
+    <Style.Animations>
+      <Animation Duration="0:0:0.32" Easing="CubicEaseOut" FillMode="Forward">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="TranslateTransform.Y" Value="14" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="1" />
+          <Setter Property="TranslateTransform.Y" Value="0" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+</Styles>

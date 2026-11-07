@@ -1,0 +1,150 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Slopfin.UI.ViewModels"
+             xmlns:c="using:Slopfin.UI.Controls"
+             x:Class="Slopfin.UI.Views.LiveTvView"
+             x:DataType="vm:LiveTvViewModel">
+  <UserControl.Styles>
+    <Style Selector="Button.prog">
+      <Setter Property="Height" Value="64" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="BorderThickness" Value="0,0,4,0" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BgBrush}" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Button.prog.now">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+    </Style>
+    <Style Selector="Button.prog.gap">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button.prog:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    </Style>
+    <Style Selector="Button.prog:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    </Style>
+    <Style Selector="Button.prog:focus-visible TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,*" Classes="page">
+    <!-- Not configured -->
+    <StackPanel Grid.RowSpan="3" IsVisible="{Binding NotConfigured}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14" MaxWidth="520">
+      <PathIcon Data="{StaticResource Icon.Tv}" Width="64" Height="64" Foreground="{DynamicResource AccentBrush}" />
+      <TextBlock Classes="h2" Text="Live TV with NostalgiaTV" HorizontalAlignment="Center" />
+      <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                 Text="Point Slopfin at your NostalgiaTV server to get its channels and full program guide. Streams play directly in Slopfin's player." />
+      <Button Classes="primary" Content="Set up in Settings" Command="{Binding OpenSettingsCommand}" HorizontalAlignment="Center" />
+    </StackPanel>
+
+    <!-- Info panel for the highlighted program -->
+    <Grid Margin="56,40,56,18" ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding !NotConfigured}" Height="200">
+      <Border Width="300" Height="170" CornerRadius="14" ClipToBounds="True" Background="{DynamicResource SurfaceBrush}" Margin="0,0,28,0" VerticalAlignment="Top">
+        <Image Classes="fade" Opacity="0" Stretch="Uniform" Margin="10" c:ImageLoader.DecodeWidth="480" c:ImageLoader.Source="{Binding InfoImage}" />
+      </Border>
+      <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Top">
+        <TextBlock Classes="section" Text="{Binding InfoChannel}" />
+        <TextBlock Classes="h1" Text="{Binding InfoTitle}" TextTrimming="CharacterEllipsis" />
+        <TextBlock Classes="muted" Text="{Binding InfoSub}" />
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <TextBlock Text="{Binding InfoTime}" FontWeight="SemiBold" />
+          <ProgressBar Classes="thin" Width="140" Minimum="0" Maximum="1" Value="{Binding InfoProgress}" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Text="{Binding InfoDesc}" TextWrapping="Wrap" MaxLines="3" TextTrimming="WordEllipsis" Classes="muted" MaxWidth="760" HorizontalAlignment="Left" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+        <Button Classes="icon" Command="{Binding ReloadCommand}" ToolTip.Tip="Reload guide"><PathIcon Data="{StaticResource Icon.Refresh}" /></Button>
+      </StackPanel>
+    </Grid>
+
+    <!-- Time header -->
+    <Grid Grid.Row="1" ColumnDefinitions="200,*" Margin="56,0,56,8" IsVisible="{Binding !NotConfigured}">
+      <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+        <Button Classes="icon" Command="{Binding EarlierCommand}" ToolTip.Tip="Earlier"><PathIcon Data="{StaticResource Icon.ChevronLeft}" /></Button>
+        <Button Classes="chip" Content="{Binding DayLabel}" Command="{Binding JumpToNowCommand}" ToolTip.Tip="Jump to now" />
+        <Button Classes="icon" Command="{Binding LaterCommand}" ToolTip.Tip="Later"><PathIcon Data="{StaticResource Icon.ChevronRight}" /></Button>
+      </StackPanel>
+      <ItemsControl Grid.Column="1" ItemsSource="{Binding Slots}" ClipToBounds="True">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:TimeSlotViewModel">
+            <TextBlock Text="{Binding Label}" Width="{Binding Width}" Classes="muted" FontWeight="SemiBold" VerticalAlignment="Center" Padding="4,0" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Grid>
+
+    <!-- Guide grid (rows virtualized) -->
+    <Grid Grid.Row="2" Margin="56,0,56,24" IsVisible="{Binding !NotConfigured}">
+      <ItemsControl ItemsSource="{Binding Rows}">
+        <ItemsControl.Template>
+          <ControlTemplate>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <ItemsPresenter />
+            </ScrollViewer>
+          </ControlTemplate>
+        </ItemsControl.Template>
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:GuideRowViewModel">
+            <Grid ColumnDefinitions="200,*" Height="68" Margin="0,0,0,4">
+              <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Margin="0,0,6,0" Padding="10,0">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Border Width="60" Height="44" CornerRadius="6" ClipToBounds="True" VerticalAlignment="Center">
+                    <Grid>
+                      <TextBlock Text="{Binding Initials}" FontWeight="Bold" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <Image Classes="fade" Opacity="0" Stretch="Uniform" c:ImageLoader.DecodeWidth="120" c:ImageLoader.Source="{Binding LogoUrl}" />
+                    </Grid>
+                  </Border>
+                  <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Number}" Classes="accent caption" FontWeight="Bold" />
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <ItemsControl Grid.Column="1" ItemsSource="{Binding Programs}" ClipToBounds="True">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:GuideProgramViewModel">
+                    <Button Classes="prog" Classes.now="{Binding IsNow}" Classes.gap="{Binding IsGap}" Width="{Binding Width}"
+                            Command="{Binding PlayCommand}"
+                            PointerEntered="OnProgramPointerEntered" GotFocus="OnProgramGotFocus">
+                      <StackPanel>
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Time}" Classes="muted caption" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsWide}" />
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- "Now" line -->
+      <Canvas IsHitTestVisible="False" Margin="200,0,0,0" IsVisible="{Binding NowVisible}" ClipToBounds="True">
+        <Border Canvas.Left="{Binding NowOffset}" Width="2" Height="4000" Background="{DynamicResource AccentBrush}" Opacity="0.85" />
+      </Canvas>
+    </Grid>
+
+    <Arc Grid.Row="2" Classes="spin" Width="44" Height="44" IsVisible="{Binding IsBusy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    <TextBlock Grid.Row="2" Text="{Binding Error}" Foreground="#FF6B6B" Margin="56,0" TextWrapping="Wrap" VerticalAlignment="Top"
+               IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+  </Grid>
+</UserControl>

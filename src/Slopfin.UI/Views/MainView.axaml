@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Slopfin.UI.ViewModels"
+             xmlns:v="using:Slopfin.UI.Views"
+             x:Class="Slopfin.UI.Views.MainView"
+             x:DataType="vm:MainViewModel"
+             Background="{DynamicResource BgBrush}">
+  <Grid>
+    <!-- Soft ambient glow behind everything -->
+    <Border Background="{DynamicResource AmbientGlowBrush}" IsHitTestVisible="False" />
+
+    <TransitioningContentControl Content="{Binding Root}" IsVisible="{Binding !IsPlayerOpen}">
+      <TransitioningContentControl.PageTransition>
+        <CrossFade Duration="0:0:0.28" />
+      </TransitioningContentControl.PageTransition>
+    </TransitioningContentControl>
+
+    <ContentControl Content="{Binding Player}" IsVisible="{Binding IsPlayerOpen}" />
+
+    <!-- Splash -->
+    <Grid IsVisible="{Binding IsStarting}" Background="{DynamicResource BgBrush}">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="22">
+        <v:BrandMark HorizontalAlignment="Center" Scale="1.6" />
+        <Arc Classes="spin" Width="34" Height="34" HorizontalAlignment="Center" />
+        <TextBlock Text="{Binding StartupText}" Classes="muted" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Grid>
+
+    <!-- Toast -->
+    <Border IsVisible="{Binding IsToastVisible}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,48"
+            Background="{DynamicResource SurfaceHighBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
+            CornerRadius="999" Padding="22,12" BoxShadow="0 10 30 0 #66000000">
+      <TextBlock Text="{Binding ToastText}" FontWeight="SemiBold" />
+    </Border>
+  </Grid>
+</UserControl>

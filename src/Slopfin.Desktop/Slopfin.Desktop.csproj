@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows head: window chrome, DPAPI secure storage, bundled libVLC binaries. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>Slopfin</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\slopfin.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <TieredPGO>true</TieredPGO>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- Only bundle the libVLC build matching our runtime (saves ~190 MB). -->
+    <VlcWindowsX86Enabled>false</VlcWindowsX86Enabled>
+    <VlcWindowsArm64Enabled>false</VlcWindowsArm64Enabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Slopfin.UI\Slopfin.UI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Slopfin's own icon (original artwork), embedded so the window/taskbar icon can't fail to load. -->
+    <EmbeddedResource Include="Assets\slopfin.ico" LogicalName="slopfin.ico" />
+  </ItemGroup>
+</Project>

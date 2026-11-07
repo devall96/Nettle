@@ -1,0 +1,249 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Slopfin.UI.ViewModels"
+             x:Class="Slopfin.UI.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+  <UserControl.Styles>
+    <Style Selector="Grid.row">
+      <Setter Property="Margin" Value="0,8" />
+    </Style>
+    <Style Selector="Border.theme">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.theme.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="56,40,56,60" Spacing="22" MaxWidth="1100" HorizontalAlignment="Left" Classes="page">
+      <TextBlock Classes="h1" Text="Settings" />
+
+      <!-- Appearance -->
+      <Border Classes="panel">
+        <StackPanel Spacing="14">
+          <TextBlock Classes="section" Text="APPEARANCE" />
+          <ItemsControl ItemsSource="{Binding Themes}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ThemeOptionViewModel">
+                <Button Classes="card" Command="{Binding ApplyCommand}" Margin="0,0,16,16" Width="220">
+                  <Border Classes="frame theme" Classes.selected="{Binding IsSelected}" CornerRadius="14" ClipToBounds="True" Background="{Binding Background}">
+                    <StackPanel Margin="14" Spacing="10">
+                      <Grid ColumnDefinitions="*,Auto" Height="64">
+                        <Border Background="{Binding Surface}" CornerRadius="8" Margin="0,0,8,0">
+                          <StackPanel Margin="10" Spacing="6">
+                            <Border Height="8" Width="70" CornerRadius="4" Background="{Binding Text}" HorizontalAlignment="Left" />
+                            <Border Height="6" Width="50" CornerRadius="3" Background="{Binding Muted}" HorizontalAlignment="Left" />
+                            <Border Height="14" Width="44" CornerRadius="7" Background="{Binding Accent}" HorizontalAlignment="Left" />
+                          </StackPanel>
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                          <Border Width="26" Height="26" CornerRadius="999" Background="{Binding Accent}" />
+                          <Border Width="26" Height="26" CornerRadius="999" Background="{Binding Accent2}" />
+                        </StackPanel>
+                      </Grid>
+                      <StackPanel>
+                        <TextBlock Text="{Binding Name}" FontWeight="Bold" Foreground="{Binding Text}" />
+                        <TextBlock Text="{Binding Tagline}" FontSize="12" Foreground="{Binding Muted}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- Playback -->
+      <Border Classes="panel">
+        <StackPanel Spacing="4">
+          <TextBlock Classes="section" Text="PLAYBACK" Margin="0,0,0,8" />
+          <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="10" Padding="14,10" Margin="0,0,0,8">
+            <TextBlock TextWrapping="Wrap" Text="Slopfin always direct-plays the original file with libVLC. It never asks your server to transcode or remux, so quality is untouched and server CPU stays idle." />
+          </Border>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel><TextBlock Text="Hardware decoding" FontWeight="SemiBold" /><TextBlock Text="Use the GPU (D3D11/DXVA) for smooth 4K/HDR playback" Classes="muted caption" /></StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding HardwareDecoding}" OnContent="" OffContent="" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel><TextBlock Text="Auto-play next episode" FontWeight="SemiBold" /><TextBlock Text="Shows an Up Next card during the credits" Classes="muted caption" /></StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoPlayNext}" OnContent="" OffContent="" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel><TextBlock Text="Intros" FontWeight="SemiBold" /><TextBlock Text="From the Intro Skipper plugin / Jellyfin media segments" Classes="muted caption" /></StackPanel>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding SegmentChoices}" SelectedItem="{Binding IntroChoice}" MinWidth="200" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Text="Recaps" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding SegmentChoices}" SelectedItem="{Binding RecapChoice}" MinWidth="200" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Text="Credits" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding SegmentChoices}" SelectedItem="{Binding CreditsChoice}" MinWidth="200" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Text="Previews" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding SegmentChoices}" SelectedItem="{Binding PreviewChoice}" MinWidth="200" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Text="Commercials" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding SegmentChoices}" SelectedItem="{Binding CommercialChoice}" MinWidth="200" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel><TextBlock Text="Preferred audio language" FontWeight="SemiBold" /><TextBlock Text="ISO code, e.g. eng, jpn (blank = file default)" Classes="muted caption" /></StackPanel>
+            <TextBox Grid.Column="1" Text="{Binding AudioLanguage}" Width="200" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel><TextBlock Text="Preferred subtitle language" FontWeight="SemiBold" /><TextBlock Text="ISO code (blank = file default)" Classes="muted caption" /></StackPanel>
+            <TextBox Grid.Column="1" Text="{Binding SubtitleLanguage}" Width="200" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel><TextBlock Text="Network buffer (ms)" FontWeight="SemiBold" /><TextBlock Text="Raise this if playback stutters over Wi-Fi" Classes="muted caption" /></StackPanel>
+            <NumericUpDown Grid.Column="1" Value="{Binding NetworkCaching}" Minimum="300" Maximum="20000" Increment="250" Width="200" FormatString="0" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Text="Seek step (seconds)" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Column="1" Value="{Binding SeekStep}" Minimum="5" Maximum="60" Increment="5" Width="200" FormatString="0" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Accounts -->
+      <Border Classes="panel">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="ACCOUNTS" />
+          <TextBlock Text="{Binding UserText}" Classes="h3" />
+          <TextBlock Text="{Binding ServerText}" Classes="muted" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel><TextBlock Text="Sign in automatically" FontWeight="SemiBold" /><TextBlock Text="Skip the profile picker and resume the last profile on launch" Classes="muted caption" /></StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoLogin}" OnContent="" OffContent="" />
+          </Grid>
+          <TextBlock Text="Saved profiles on this PC (tokens encrypted with Windows DPAPI):" Classes="muted caption" />
+          <ItemsControl ItemsSource="{Binding Accounts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:AccountTileViewModel">
+                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Server}" Classes="muted caption" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="Switch" Command="{Binding SelectCommand}" Margin="0,0,8,0" />
+                  <Button Grid.Column="2" Content="Forget" Classes="ghost" Command="{Binding ForgetCommand}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Content="Switch profile / add account" Command="{Binding SwitchUserCommand}" HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+
+      <!-- Seerr -->
+      <Border Classes="panel">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="SEERR (REQUESTS)" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="Use an API key, or sign in with your Jellyfin username and password (only the resulting session is saved, encrypted)." />
+          <TextBox Text="{Binding SeerrUrl}" Watermark="http://seerr.local:5055" />
+          <TextBox Text="{Binding SeerrApiKey}" Watermark="API key (optional)" PasswordChar="•" />
+          <Grid ColumnDefinitions="*,12,*">
+            <TextBox Text="{Binding SeerrUser}" Watermark="…or Jellyfin username" />
+            <TextBox Grid.Column="2" Text="{Binding SeerrPassword}" Watermark="Password" PasswordChar="•" />
+          </Grid>
+          <StackPanel Orientation="Horizontal" Spacing="14">
+            <Button Classes="primary" Content="Save &amp; test" Command="{Binding SaveSeerrCommand}" />
+            <TextBlock Text="{Binding SeerrStatus}" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" />
+          </StackPanel>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Text="Load posters directly from TMDB" FontWeight="SemiBold" />
+              <TextBlock Classes="muted caption" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                         Text="Off (recommended): posters come through your own Seerr server's image proxy, so TMDB never sees your IP or what you browse. Turn on only if posters don't show up." />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AllowDirectTmdbImages}" OnContent="" OffContent="" VerticalAlignment="Center" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- NostalgiaTV -->
+      <Border Classes="panel">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="NOSTALGIATV (LIVE TV)" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Slopfin reads the channel list and guide from NostalgiaTV (port 19850 by default). Only live channels are shown, never On Demand." />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Text="Play original files (full quality)" FontWeight="SemiBold" />
+              <TextBlock Classes="muted caption" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                         Text="Tunes each channel by playing the scheduled episode or movie straight from your Jellyfin server at the live position: nothing is re-encoded. Turn off to use NostalgiaTV's own broadcast feed, which NostalgiaTV re-encodes (e.g. 720p H.264). Channels with no Jellyfin item, like weather or external IPTV, always use the feed." />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding NtvDirectPlay}" OnContent="" OffContent="" VerticalAlignment="Center" />
+          </Grid>
+          <TextBox Text="{Binding NtvUrl}" Watermark="http://nostalgiatv.local:19850" />
+          <TextBox Text="{Binding NtvApiKey}" Watermark="API key (optional)" PasswordChar="•" />
+          <StackPanel Orientation="Horizontal" Spacing="14">
+            <Button Classes="primary" Content="Save &amp; test" Command="{Binding SaveNtvCommand}" />
+            <TextBlock Text="{Binding NtvStatus}" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Server plugins -->
+      <Border Classes="panel" IsVisible="{Binding PluginsLoaded}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="SERVER PLUGINS" />
+          <ItemsControl ItemsSource="{Binding Plugins}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:PluginRowViewModel">
+                <Grid ColumnDefinitions="*,Auto" Margin="0,6">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                    <TextBlock Classes="muted caption" Text="{Binding Version}" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="1" Text="{Binding Support}" Classes="muted caption" VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- Updates -->
+      <Border Classes="panel">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="UPDATES" />
+          <TextBlock Text="{Binding InstallKind}" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Slopfin never checks for updates on its own unless you turn that on. It only ever contacts the source you enter here: your GitHub repository's Releases, or a folder." />
+          <TextBox Text="{Binding UpdateSource}" Watermark="https://github.com/you/Slopfin  (or a folder path)" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Text="Check automatically when Slopfin starts" FontWeight="SemiBold" />
+              <TextBlock Classes="muted caption" Text="Off by default. You'll be asked before anything is installed." />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoCheckUpdates}" OnContent="" OffContent="" VerticalAlignment="Center" />
+          </Grid>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Button Content="Check now" Command="{Binding CheckUpdatesCommand}" IsEnabled="{Binding !IsUpdating}" />
+            <Button Classes="primary" Content="Install &amp; restart" Command="{Binding InstallUpdateCommand}" IsVisible="{Binding IsUpdateAvailable}" IsEnabled="{Binding !IsUpdating}" />
+            <TextBlock Text="{Binding UpdateStatus}" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- About -->
+      <Border Classes="panel">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="ABOUT" />
+          <TextBlock Text="{Binding VersionText}" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Slopfin is an independent client and is not affiliated with Jellyfin, VideoLAN, Seerr or NostalgiaTV. Playback is powered by libVLC (LGPL-2.1+). Open-source licenses are listed in THIRD_PARTY_NOTICES.md next to the app." />
+          <Button Content="Clear image cache" Command="{Binding ClearImageCacheCommand}" HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
