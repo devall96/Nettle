@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <b><a href="https://github.com/devall96/Slopfin/releases/latest">⬇ Download Nettle for Windows or Linux</a></b>
+  <b><a href="https://github.com/devall96/Nettle/releases/latest">⬇ Download Nettle for Windows or Linux</a></b>
   &nbsp;·&nbsp; <a href="#-testers-wanted">Testers wanted</a>
   &nbsp;·&nbsp; <a href="#features">Features</a>
   &nbsp;·&nbsp; <a href="#install">Install</a>
@@ -41,11 +41,11 @@ Nettle needs people to try it on hardware it hasn't seen yet: **NVIDIA and Intel
 laptops, other Linux distros and desktops (KDE, XFCE…), multi-monitor and HDR setups.** If you have a
 Jellyfin server and a few minutes, you'd help a lot:
 
-1. [Download](https://github.com/devall96/Slopfin/releases/latest) the Windows installer or the Linux AppImage.
+1. [Download](https://github.com/devall96/Nettle/releases/latest) the Windows installer or the Linux AppImage.
 2. Sign in and play a few different things: 4K / HDR / Dolby Vision files, older SD shows, surround
    audio, subtitles, and Live TV if you use NostalgiaTV.
 3. Tell us what broke, or that it worked, by
-   [opening an issue](https://github.com/devall96/Slopfin/issues/new?template=bug_report.md). Please include:
+   [opening an issue](https://github.com/devall96/Nettle/issues/new?template=bug_report.md). Please include:
    - Windows or Linux. On Linux, also the distro and desktop (e.g. *Fedora 41, KDE Plasma 6, Wayland*).
    - Your graphics card (e.g. *AMD RX 9070*, *NVIDIA RTX 3060*, *Intel Arc*).
    - What you played: resolution, HDR type and audio format. Nettle's format badges (press **I** while playing) show all of this.
@@ -121,7 +121,7 @@ Jellyfin server and a few minutes, you'd help a lot:
 
 ### Windows
 
-1. Download **`Nettle-win-Setup.exe`** from the [latest release](https://github.com/devall96/Slopfin/releases/latest).
+1. Download **`Nettle-win-Setup.exe`** from the [latest release](https://github.com/devall96/Nettle/releases/latest).
 2. Run it. It installs for your user account only, so no admin rights are needed, and adds Start-menu and Desktop shortcuts.
 3. **About the Windows warning:** Nettle isn't code-signed yet, so Windows SmartScreen may say *"Windows protected your PC"*. Click **More info → Run anyway**. You only see this on the first install; updates don't trigger it.
 
@@ -145,7 +145,7 @@ card. If you're on something else, please [report how it went](#-testers-wanted)
 > automated decode tests on clean Ubuntu, Debian, Fedora and Arch machines. Hands-on Linux testing
 > will follow soon.
 
-1. Download **`Nettle.AppImage`** from the [latest release](https://github.com/devall96/Slopfin/releases/latest) and put it wherever you keep apps, for example `~/Applications`.
+1. Download **`Nettle.AppImage`** from the [latest release](https://github.com/devall96/Nettle/releases/latest) and put it wherever you keep apps, for example `~/Applications`.
 2. Make it executable: right-click → Properties → *Allow executing file as program*, or run `chmod +x Nettle.AppImage`.
 3. Double-click it. On first run, Nettle offers to **add itself to your applications menu**, with its icon. This is also in **Settings → Desktop**. Nothing is installed system-wide and no root is needed.
 
@@ -191,7 +191,7 @@ Posters load through your Seerr server's image proxy, so TMDB never sees your IP
 ### Updates
 Updates are **off unless you use them**:
 
-1. Go to **Settings → Updates** and enter `https://github.com/devall96/Slopfin`.
+1. Go to **Settings → Updates** and enter `https://github.com/devall96/Nettle`.
 2. Press **Check now**, or turn on the once-per-launch check.
 3. Updates only download what changed, and install with **Install & restart**.
 
@@ -231,8 +231,8 @@ Other privacy details:
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/).
 
 ```bash
-git clone https://github.com/devall96/Slopfin.git
-cd Slopfin
+git clone https://github.com/devall96/Nettle.git
+cd Nettle
 ```
 
 **Windows:** fetch libmpv once (a pinned, hash-checked build), then run:
@@ -300,14 +300,16 @@ in the app and in the window and taskbar icon.
   would stop existing copies from updating.
 - The internal IDs that unlock saved sign-ins (the Windows encryption key and the Linux keyring
   entry). Changing them would sign everyone out.
-- This repository's address, for now. If it's renamed later, GitHub redirects the old links, so
-  updates keep working either way.
+
+**The repository moved too:** it's now `github.com/devall96/Nettle`. Old `devall96/Slopfin` links,
+clones and update addresses redirect here automatically, so a Slopfin install with the old address
+in **Settings → Updates** keeps getting updates.
 
 ## Code signing policy
 
 Release builds are **not yet code-signed**. The plan is to apply to the free SignPath Foundation
 programme for open-source projects. Until then, check that you downloaded Nettle from
-[this repository's Releases page](https://github.com/devall96/Slopfin/releases).
+[this repository's Releases page](https://github.com/devall96/Nettle/releases).
 
 **Team roles:** [@devall96](https://github.com/devall96) is the author, reviewer and release approver.
 
