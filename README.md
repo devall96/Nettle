@@ -4,6 +4,7 @@
 
 <p align="center">
   <b><a href="https://github.com/devall96/Slopfin/releases/latest">⬇ Download Slopfin for Windows or Linux</a></b>
+  &nbsp;·&nbsp; <a href="#-testers-wanted">Testers wanted</a>
   &nbsp;·&nbsp; <a href="#features">Features</a>
   &nbsp;·&nbsp; <a href="#install">Install</a>
   &nbsp;·&nbsp; <a href="#using-slopfin">Using Slopfin</a>
@@ -20,8 +21,32 @@ card for 4K and HDR. Slopfin never transcodes: it has no code path that asks the
 It also brings in a TV-style live guide for **NostalgiaTV**, **Seerr** requests, skippable intros
 and credits, multiple profiles, and eight hand-made themes. It has **no telemetry of any kind**.
 
-> **Slopfin 0.1.0 is the first tester preview.** It's ready for daily use, but expect rough edges.
-> Please [report anything odd](https://github.com/devall96/Slopfin/issues).
+> [!WARNING]
+> **Slopfin is in beta on both platforms.**
+> - **Windows (beta):** usable day to day, but expect rough edges.
+> - **Linux (early beta, VERY buggy):** it was added very recently and has only been tested on a
+>   handful of machines. Expect broken playback, display glitches and crashes, especially on
+>   setups that haven't been tested yet.
+
+## 🧪 Testers wanted
+
+Slopfin needs people to try it on real setups, **especially on Linux**. If you have a Jellyfin
+server and a few minutes, you'd help a lot:
+
+1. [Download](https://github.com/devall96/Slopfin/releases/latest) the Windows installer or the Linux AppImage.
+2. Sign in and play a few different things: 4K / HDR / Dolby Vision files, older SD shows, surround
+   audio, subtitles, and Live TV if you use NostalgiaTV.
+3. Tell us what broke, or that it worked, by
+   [opening an issue](https://github.com/devall96/Slopfin/issues/new?template=bug_report.md). Please include:
+   - Windows or Linux. On Linux, also the distro and desktop (e.g. *Fedora 41, KDE Plasma 6, Wayland*).
+   - Your graphics card (e.g. *AMD RX 9070*, *NVIDIA RTX 3060*, *Intel Arc*).
+   - What you played: resolution, HDR type and audio format. Slopfin's format badges (press **I** while playing) show all of this.
+   - A screenshot, if it's visual.
+   - The end of Slopfin's log: `%LOCALAPPDATA%\Slopfin\slopfin.log` on Windows, or
+     `~/.local/share/Slopfin/slopfin.log` on Linux. Server tokens in the log are already masked, but
+     you may want to blank out your server's address.
+
+"It worked fine on my setup" reports are just as useful, so they're welcome too.
 
 ## Screenshots
 
@@ -95,7 +120,13 @@ Prefer not to install? Download **`SlopfinApp-win-Portable.zip`**, extract it, a
 
 **Uninstall:** Windows Settings → Apps → Slopfin → Uninstall. Your settings and saved sign-ins stay in `%LOCALAPPDATA%\Slopfin`. Delete that folder too if you want everything gone.
 
-### Linux
+### Linux (early beta)
+
+> [!CAUTION]
+> The Linux version is **very buggy** right now. It has only been tested on a few machines (most
+> thoroughly on Ubuntu 26.04 with GNOME and an AMD graphics card). Other desktops (KDE, XFCE…),
+> NVIDIA and Intel graphics, and multi-monitor setups are untested. If you try it, please
+> [report how it went](#-testers-wanted).
 
 1. Download **`SlopfinApp.AppImage`** from the [latest release](https://github.com/devall96/Slopfin/releases/latest) and put it wherever you keep apps, for example `~/Applications`.
 2. Make it executable: right-click → Properties → *Allow executing file as program*, or run `chmod +x SlopfinApp.AppImage`.
@@ -166,7 +197,12 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.1.0)
+## Known limitations (0.1.0 beta)
+- **Both platforms are beta.** Expect bugs, and please report them.
+- **Linux is early beta and very buggy.** Known rough spots so far:
+  - It's untested on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
+  - The player's on-screen controls are a separate window drawn over the video. Some desktops may place it wrongly, especially when switching in and out of full screen.
+  - To avoid a garbled picture with newer graphics drivers, video frames are copied once after hardware decoding. This uses some extra CPU at 4K.
 - **Dolby Vision profile 5** files (no HDR10 fallback) show wrong colours in VLC 3. Slopfin warns you about these files.
 - **Atmos and DTS:X** are decoded to PCM. Height channels need a receiver, and audio passthrough isn't available yet.
 - Not code-signed yet, so SmartScreen shows a warning on first install.
