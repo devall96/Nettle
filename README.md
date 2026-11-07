@@ -33,6 +33,7 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > [!TIP]
 > **Nettle used to be called Slopfin.** If you installed Slopfin 0.1 or 0.2, **Settings → Updates**
 > brings you to Nettle, and your settings and saved sign-ins come along.
+> [More about the name change](#about-the-name).
 
 ## 🧪 Testers wanted
 
@@ -266,6 +267,41 @@ src/
   Nettle.Desktop   Windows + Linux app: window, secure storage (DPAPI / keyring), HDR detection,
                     libmpv loading, applications-menu entry, installer/updater hooks
 ```
+
+## About the name
+
+Nettle was called **Slopfin** for its first two releases (0.1 and 0.2). It was renamed in 0.3.0,
+partly because an unrelated project with a very similar name (a Jellyfin client for PS5 consoles)
+kept causing confusion.
+
+**Why "Nettle":** it's named after the **sea nettle** (*Chrysaora*), a jellyfish, as a nod to
+Jellyfin. The logo is a sea nettle silhouette, and it takes the colours of whichever theme you pick,
+in the app and in the window and taskbar icon.
+
+**If you used Slopfin:**
+- **Updating:** use **Settings → Updates → Check now** as usual. You don't need to reinstall.
+- **Your data comes along.** On first start, Nettle moves your settings, saved sign-ins and image
+  cache to the new folder:
+  - Windows: `%LOCALAPPDATA%\Slopfin` → `%LOCALAPPDATA%\Nettle`.
+  - Linux: `~/.local/share/Slopfin` → `~/.local/share/Nettle`, and `~/.cache/Slopfin` → `~/.cache/Nettle`.
+  - If the old folder can't be moved (for example, Slopfin is still open), it's copied instead and
+    the old one is left alone.
+- **Shortcuts:**
+  - **Windows:** the Start-menu and desktop shortcuts are renamed to Nettle by the update. A taskbar
+    pin made before the update still works.
+  - **Linux:** an applications-menu entry from Slopfin is updated in place, so a launcher pinned to
+    your dock stays pinned.
+- **Your Jellyfin server** now lists the app as "Nettle (Windows)" or "Nettle (Linux)". Your
+  existing sign-in keeps working.
+
+**What still says "Slopfin" (on purpose):**
+- The update files on the Releases page (`SlopfinApp-…nupkg`) and the Windows install folder
+  (`%LOCALAPPDATA%\SlopfinApp`). The updater finds your install by this internal ID, so changing it
+  would stop existing copies from updating.
+- The internal IDs that unlock saved sign-ins (the Windows encryption key and the Linux keyring
+  entry). Changing them would sign everyone out.
+- This repository's address, for now. If it's renamed later, GitHub redirects the old links, so
+  updates keep working either way.
 
 ## Code signing policy
 
