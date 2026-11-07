@@ -229,7 +229,7 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.3.1 beta)
+## Known limitations (0.3.2 beta)
 - **Both platforms are beta.** Expect some bugs, and please report them.
 - **Linux:**
   - It's untested so far on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
