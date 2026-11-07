@@ -21,8 +21,10 @@ internal static class LinuxMpv
         IntPtr lib;
         if (File.Exists(bundled))
         {
-            PreloadFallbacks(Path.Combine(dir, "fallback"));
-            lib = NativeLibrary.Load(bundled);
+            var missing = PreloadFallbacks(Path.Combine(dir, "fallback"));
+            if (!NativeLibrary.TryLoad(bundled, out lib))
+                throw new DllNotFoundException("The bundled libmpv couldn't be loaded" +
+                    (missing.Count > 0 ? ". These libraries couldn't be loaded on this system: " + string.Join(", ", missing) : "."));
             Slopfin.Core.Services.Log.Info("libmpv: bundled copy");
         }
         else if (NativeLibrary.TryLoad("libmpv.so.2", out lib))
@@ -47,9 +49,10 @@ internal static class LinuxMpv
         new("gpu-context", "x11egl"),
     ];
 
-    private static void PreloadFallbacks(string fallbackDir)
+    /// <summary>Returns the names of libraries that couldn't be loaded at all.</summary>
+    private static List<string> PreloadFallbacks(string fallbackDir)
     {
-        if (!Directory.Exists(fallbackDir)) return;
+        if (!Directory.Exists(fallbackDir)) return [];
         var pending = Directory.GetFiles(fallbackDir, "*.so*").ToList();
         int fromSystem = 0, bundled = 0;
 
@@ -78,5 +81,6 @@ internal static class LinuxMpv
 
         Slopfin.Core.Services.Log.Info($"libmpv dependencies: {fromSystem} from the system, {bundled} bundled, {pending.Count} unavailable"
             + (pending.Count > 0 ? " (" + string.Join(", ", pending.Select(Path.GetFileName)) + ")" : ""));
+        return pending.Select(p => Path.GetFileName(p)!).ToList();
     }
 }

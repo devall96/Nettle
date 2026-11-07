@@ -19,9 +19,11 @@ rm -rf "$DEST"
 mkdir -p "$DEST/fallback" "$DEST/licenses"
 cp -L "$LIB/libmpv.so.2" "$DEST/"
 
-# Never bundled: the C runtime, the C++ runtime and GPU driver entry points. These must always
-# come from the user's own system.
-EXCLUDE='^(linux-vdso|ld-linux|libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|libresolv\.so|libutil\.so|libanl\.so|libnsl\.so|libgcc_s\.so|libstdc\+\+\.so|libGL\.so|libGLX|libGLdispatch|libEGL|libOpenGL|libgbm\.so|libvulkan\.so)'
+# Never bundled: the C and C++ runtimes, which must always come from the user's own system.
+# Graphics dispatch libraries (libEGL, libGL, libvulkan, libgbm...) ARE included as fallbacks:
+# a system that has them always uses its own copy (matching its GPU drivers); the bundled one
+# only fills the gap on a system without them, so libmpv can still load.
+EXCLUDE='^(linux-vdso|ld-linux|libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|libresolv\.so|libutil\.so|libanl\.so|libnsl\.so|libgcc_s\.so|libstdc\+\+\.so)'
 
 mapfile -t DEPS < <(ldd "$DEST/libmpv.so.2" | awk '/=> \// { print $3 }' | sort -u)
 if ldd "$DEST/libmpv.so.2" | grep -q "not found"; then
