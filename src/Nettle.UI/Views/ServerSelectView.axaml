@@ -20,10 +20,17 @@
         <StackPanel Spacing="6">
           <TextBlock Classes="h2" Text="Connect to your server" />
           <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="Enter your Jellyfin address. We'll try https first, then http and the default ports." />
+                     Text="Pick http or https and type your server's IP address. Live TV (NostalgiaTV) and Requests (Seerr) on the same machine are set up for you after you sign in." />
         </StackPanel>
 
-        <TextBox x:Name="AddressBox" Text="{Binding Address}" Watermark="192.168.1.20:8096  or  https://jellyfin.example.com" />
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Button Classes="chip" Classes.selected="{Binding IsHttp}" Content="http" Command="{Binding UseHttpCommand}" Padding="14,7" />
+            <Button Classes="chip" Classes.selected="{Binding IsHttps}" Content="https" Command="{Binding UseHttpsCommand}" Padding="14,7" />
+          </StackPanel>
+          <TextBox Grid.Column="1" x:Name="AddressBox" Text="{Binding Address}" Watermark="192.168.1.20" />
+        </Grid>
+        <TextBlock Classes="muted caption" Text="{Binding PortHint}" TextWrapping="Wrap" Margin="0,-8,0,0" />
         <TextBlock Text="{Binding Error}" Foreground="#FF6B6B" TextWrapping="Wrap"
                    IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         <Grid ColumnDefinitions="*,Auto">

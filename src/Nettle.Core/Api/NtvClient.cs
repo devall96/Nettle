@@ -33,6 +33,24 @@ public sealed partial class NtvClient
         _guide = null; // different server or key: forget the cached guide
     }
 
+    /// <summary>True if a NostalgiaTV server answers at <paramref name="baseUrl"/> (its channel list is reachable).</summary>
+    public async Task<bool> ProbeAsync(string baseUrl, TimeSpan timeout, CancellationToken ct = default)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(timeout);
+            using var req = new HttpRequestMessage(HttpMethod.Get, baseUrl.TrimEnd('/') + "/channels.m3u");
+            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) return false;
+            await using var s = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+            var buf = new byte[16];
+            int n = await s.ReadAtLeastAsync(buf, 7, throwOnEndOfStream: false, cts.Token).ConfigureAwait(false);
+            return System.Text.Encoding.ASCII.GetString(buf, 0, n).TrimStart('﻿').StartsWith("#EXTM3U", StringComparison.Ordinal);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return false; }
+    }
+
     // The parsed guide is kept for a while: re-downloading and parsing several MB of XMLTV on
     // every visit to the Live TV page was the slowest part of opening it.
     private static readonly TimeSpan GuideMaxAge = TimeSpan.FromMinutes(10);

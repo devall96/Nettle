@@ -122,6 +122,9 @@ public sealed partial class MainViewModel : ViewModelBase
                 var item = await AppServices.Jellyfin.GetItemAsync(devPlay);
                 await Dispatcher.UIThread.InvokeAsync(() => PlayItem(item, resume: true));
             });
+        // NETTLE_DEV_AUTOSETUP=<jellyfin url> runs the Seerr / NostalgiaTV detection for that host (no password, so Seerr is only found, not signed in).
+        var devAuto = Environment.GetEnvironmentVariable("NETTLE_DEV_AUTOSETUP");
+        if (!string.IsNullOrEmpty(devAuto)) _ = Services.IntegrationAutoSetup.RunAsync(devAuto, null, null);
         // NETTLE_DEV_PAGE=livetv|settings|requests opens that page after sign-in.
         PageViewModel? devPage = Environment.GetEnvironmentVariable("NETTLE_DEV_PAGE") switch
         {

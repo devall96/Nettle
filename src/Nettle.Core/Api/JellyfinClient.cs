@@ -121,14 +121,22 @@ public sealed class JellyfinClient
 
     // ---------- Server / auth ----------
 
-    /// <summary>Normalizes user input ("myserver", "192.168.1.5:8096", "https://jf.example.com/") and probes it.</summary>
-    public async Task<(string url, PublicSystemInfo info)> ProbeServerAsync(string input, CancellationToken ct = default)
+    /// <summary>
+    /// Normalizes user input ("myserver", "192.168.1.5:8096", "https://jf.example.com/") and probes it.
+    /// With <paramref name="scheme"/> ("http" / "https") and no scheme typed, only that scheme is tried,
+    /// with Jellyfin's default port for it (8096 / 8920) unless a port was typed.
+    /// </summary>
+    public async Task<(string url, PublicSystemInfo info)> ProbeServerAsync(string input, CancellationToken ct = default, string? scheme = null)
     {
         input = input.Trim().TrimEnd('/');
         var candidates = new List<string>();
         if (input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || input.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             candidates.Add(input);
+        }
+        else if (scheme is "http" or "https")
+        {
+            candidates.AddRange(CandidatesFor(scheme, input));
         }
         else
         {
@@ -158,6 +166,22 @@ public sealed class JellyfinClient
             catch (JsonException) { last = new ApiException(c + " doesn't look like a Jellyfin server."); }
         }
         throw last ?? new ApiException("Couldn't find a Jellyfin server at that address.");
+    }
+
+    /// <summary>
+    /// Addresses to try for a host typed without a scheme. No port typed: an IP address most likely
+    /// runs Jellyfin on its default port; a name (e.g. behind a reverse proxy) most likely on 80 / 443.
+    /// </summary>
+    internal static IEnumerable<string> CandidatesFor(string scheme, string input)
+    {
+        var bare = scheme + "://" + input;
+        if (!Uri.TryCreate(bare, UriKind.Absolute, out var u)) { yield return bare; yield break; }
+        bool hasPort = input.Contains("]:") || (!input.StartsWith('[') && input.Contains(':'));
+        if (hasPort) { yield return bare; yield break; }
+        var withPort = bare + (scheme == "https" ? ":8920" : ":8096");
+        bool isIp = u.HostNameType is UriHostNameType.IPv4 or UriHostNameType.IPv6;
+        if (isIp) { yield return withPort; yield return bare; }
+        else { yield return bare; yield return withPort; }
     }
 
     /// <summary>LAN auto-discovery (UDP 7359), same mechanism the official clients use.</summary>

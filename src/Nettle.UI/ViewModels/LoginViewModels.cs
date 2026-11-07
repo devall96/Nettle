@@ -109,15 +109,36 @@ public sealed partial class ServerSelectViewModel : ViewModelBase
         IsScanning = false;
     }
 
-    [RelayCommand]
-    private Task Connect() => ConnectToAsync(Address);
-
-    public async Task ConnectToAsync(string address)
+    /// <summary>http or https for a typed address; the port is filled in automatically.</summary>
+    public bool IsHttps
     {
-        if (string.IsNullOrWhiteSpace(address)) { Error = "Enter your server address, e.g. 192.168.1.20:8096 or https://jellyfin.example.com"; return; }
+        get => AppServices.Settings.Current.ServerScheme == "https";
+        set
+        {
+            AppServices.Settings.Current.ServerScheme = value ? "https" : "http";
+            _ = AppServices.Settings.SaveAsync();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsHttp));
+            OnPropertyChanged(nameof(PortHint));
+        }
+    }
+    public bool IsHttp => !IsHttps;
+    public string PortHint => IsHttps
+        ? "Port 8920 is added for you (or 443 for a name like jellyfin.example.com). Type :port to use another."
+        : "Port 8096 is added for you. Type :port to use another.";
+
+    [RelayCommand] private void UseHttp() => IsHttps = false;
+    [RelayCommand] private void UseHttps() => IsHttps = true;
+
+    [RelayCommand]
+    private Task Connect() => ConnectToAsync(Address, AppServices.Settings.Current.ServerScheme);
+
+    public async Task ConnectToAsync(string address, string? scheme = null)
+    {
+        if (string.IsNullOrWhiteSpace(address)) { Error = "Enter your server's IP address, e.g. 192.168.1.20"; return; }
         await RunAsync(async () =>
         {
-            var (url, info) = await AppServices.Jellyfin.ProbeServerAsync(address);
+            var (url, info) = await AppServices.Jellyfin.ProbeServerAsync(address, scheme: scheme);
             _main.ShowLogin(url, info);
         });
     }
@@ -213,9 +234,11 @@ public sealed partial class LoginViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(Username)) { Error = "Enter your username."; return; }
         await RunAsync(async () =>
         {
-            var auth = await AppServices.Jellyfin.AuthenticateAsync(Username.Trim(), Password);
+            var user = Username.Trim();
+            var password = Password;
+            var auth = await AppServices.Jellyfin.AuthenticateAsync(user, password);
             Password = "";
-            await FinishAsync(auth);
+            await FinishAsync(auth, user, password);
         });
     }
 
@@ -253,12 +276,14 @@ public sealed partial class LoginViewModel : ViewModelBase
         QuickConnectCode = null;
     }
 
-    private async Task FinishAsync(AuthenticationResult auth)
+    private async Task FinishAsync(AuthenticationResult auth, string? user = null, string? password = null)
     {
         _info ??= new PublicSystemInfo { Id = auth.ServerId, ServerName = ServerName };
         _info.Id ??= auth.ServerId;
         await AppServices.Session.CompleteLoginAsync(_serverUrl, _info, auth, RememberMe);
         _main.ShowShell();
+        // Seerr and NostalgiaTV on the same machine get set up in the background.
+        _ = Services.IntegrationAutoSetup.RunAsync(_serverUrl, user ?? auth.User?.Name, password);
     }
 
     [RelayCommand] private void ShowManual() { ShowManualForm = true; Username = ""; }

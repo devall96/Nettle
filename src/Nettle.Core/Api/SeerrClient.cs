@@ -74,6 +74,22 @@ public sealed class SeerrClient
         }
     }
 
+    /// <summary>True if a Seerr server answers at <paramref name="url"/> (its public status endpoint).</summary>
+    public async Task<bool> ProbeAsync(string url, TimeSpan timeout, CancellationToken ct = default)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(timeout);
+            using var req = new HttpRequestMessage(HttpMethod.Get, NormalizeUrl(url) + "/api/v1/status");
+            using var resp = await _http.SendAsync(req, cts.Token).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) return false;
+            var body = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+            return body.Contains("\"version\"", StringComparison.Ordinal);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return false; }
+    }
+
     public async Task<SeerrUser> SignInWithJellyfinAsync(string url, string username, string password, CancellationToken ct = default)
     {
         BaseUrl = NormalizeUrl(url);

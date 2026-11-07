@@ -46,6 +46,9 @@ public sealed class AppSettings
     public string? SeerrUrl { get; set; }
     public string? NtvUrl { get; set; }
 
+    /// <summary>"http" or "https": picked on the Connect screen, where only the IP / name is typed.</summary>
+    public string ServerScheme { get; set; } = "http";
+
     public bool ReduceMotion { get; set; }
 
     /// <summary>Where updates come from (GitHub repo URL, web folder or local folder). Empty = updates off.</summary>

@@ -34,6 +34,19 @@ public class XmltvTests
     public void ConvertsXmltvNsEpisodeNumbers(string ns, string expected) => Assert.Equal(expected, NtvClient.FromXmltvNs(ns));
 }
 
+public class ServerAddressTests
+{
+    [Theory]
+    [InlineData("http", "192.168.1.20", "http://192.168.1.20:8096|http://192.168.1.20")]
+    [InlineData("https", "192.168.1.20", "https://192.168.1.20:8920|https://192.168.1.20")]
+    [InlineData("http", "192.168.1.20:9000", "http://192.168.1.20:9000")]
+    [InlineData("https", "jellyfin.example.com", "https://jellyfin.example.com|https://jellyfin.example.com:8920")]
+    [InlineData("http", "[fd00::5]", "http://[fd00::5]:8096|http://[fd00::5]")]
+    [InlineData("http", "[fd00::5]:8100", "http://[fd00::5]:8100")]
+    public void TypedAddressGetsTheChosenSchemeAndDefaultPort(string scheme, string input, string expected) =>
+        Assert.Equal(expected, string.Join("|", JellyfinClient.CandidatesFor(scheme, input)));
+}
+
 public class SettingsTests
 {
     private sealed class TempPlatform : IPlatformInfo, IDisposable
