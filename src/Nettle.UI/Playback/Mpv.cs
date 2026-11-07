@@ -84,6 +84,32 @@ internal static class Mpv
         }
     }
 
+    [DllImport(Lib)] private static extern int mpv_command_async(IntPtr ctx, ulong replyUserdata, IntPtr[] args);
+    [DllImport(Lib)] private static extern int mpv_set_property_async(IntPtr ctx, ulong replyUserdata, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, int format, ref IntPtr data);
+
+    /// <summary>Like <see cref="Command"/> but returns at once (mpv copies the arguments before returning).</summary>
+    public static int CommandAsync(IntPtr ctx, params string[] args)
+    {
+        var ptrs = new IntPtr[args.Length + 1];
+        try
+        {
+            for (int i = 0; i < args.Length; i++) ptrs[i] = Marshal.StringToCoTaskMemUTF8(args[i]);
+            return mpv_command_async(ctx, 0, ptrs);
+        }
+        finally
+        {
+            for (int i = 0; i < args.Length; i++) if (ptrs[i] != IntPtr.Zero) Marshal.FreeCoTaskMem(ptrs[i]);
+        }
+    }
+
+    /// <summary>Sets a property from a string without waiting for the core (mpv copies the value before returning).</summary>
+    public static int SetAsync(IntPtr ctx, string name, string value)
+    {
+        var p = Marshal.StringToCoTaskMemUTF8(value);
+        try { return mpv_set_property_async(ctx, 0, name, FormatString, ref p); }
+        finally { Marshal.FreeCoTaskMem(p); }
+    }
+
     public static string? GetString(IntPtr ctx, string name)
     {
         var p = mpv_get_property_string(ctx, name);

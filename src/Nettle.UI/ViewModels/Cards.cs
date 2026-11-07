@@ -27,14 +27,24 @@ public sealed partial class MediaCardViewModel : ObservableObject
 
     public double CardWidth => Shape switch { CardShape.Landscape => 300, CardShape.Square => 180, _ => 164 };
     public double ImageHeight => Shape switch { CardShape.Landscape => 169, CardShape.Square => 180, _ => 246 };
-    public int DecodeWidth => (int)(CardWidth * 1.6);
+    /// <summary>
+    /// Pixels to fetch and decode: the card's width at the screen's real scaling (sharp on a 4K
+    /// screen at 200%, no waste at 100%), rounded up to steps of 64 so sizes repeat and cache well.
+    /// </summary>
+    public int DecodeWidth { get; }
+
+    private static int ScaledWidth(double cardWidth) =>
+        (int)(Math.Ceiling(cardWidth * Math.Clamp(AppServices.UiScale, 1, 4) * 1.1 / 64) * 64);
+
+    /// <summary>Extras and trailers play straight away instead of opening a details page.</summary>
+    public bool PlayOnOpen { get; init; }
 
     public MediaCardViewModel(BaseItemDto item, CardShape shape, bool preferSeriesTitle = false)
     {
         Item = item;
         Shape = shape;
         var jf = AppServices.Jellyfin;
-        int w = (int)(CardWidth * 1.6);
+        int w = DecodeWidth = ScaledWidth(CardWidth);
 
         if (item.IsEpisode)
         {
@@ -89,7 +99,11 @@ public sealed partial class MediaCardViewModel : ObservableObject
     public string Signature => $"{Item.Id}|{Title}|{Subtitle}|{ImageUrl}|{Progress:0.000}|{IsPlayed}|{Badge}";
 
     [RelayCommand]
-    private void Open() => AppServices.Main.Shell?.OpenItem(Item);
+    private void Open()
+    {
+        if (PlayOnOpen) AppServices.Main.PlayItem(Item, resume: false);
+        else AppServices.Main.Shell?.OpenItem(Item);
+    }
 
     [RelayCommand]
     private void Play() => AppServices.Main.PlayItem(Item, resume: true);

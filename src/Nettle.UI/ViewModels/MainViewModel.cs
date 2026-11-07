@@ -23,6 +23,8 @@ public sealed partial class MainViewModel : ViewModelBase
     public MainViewModel()
     {
         AppServices.Main = this;
+        // Any request answered with 401 while signed in means the session is gone.
+        AppServices.Jellyfin.SessionRejected += () => Dispatcher.UIThread.Post(() => SessionExpired(null));
     }
 
     partial void OnPlayerChanged(PlayerViewModel? value) => OnPropertyChanged(nameof(IsPlayerOpen));
@@ -56,27 +58,51 @@ public sealed partial class MainViewModel : ViewModelBase
         var auto = AppServices.Session.AutoLoginCandidate;
         if (auto != null)
         {
-            StartupText = $"Signing in as {auto.UserName}…";
-            try
-            {
-                if (await AppServices.Session.ResumeAsync(auto))
-                {
-                    ShowShell();
-                    IsStarting = false;
-                    return;
-                }
-                ShowLogin(auto.ServerUrl, prefillUser: auto.UserName, message: "Your session expired. Please sign in again.");
-                IsStarting = false;
-                return;
-            }
-            catch
-            {
-                // Offline or server unreachable: fall through to the account picker.
-            }
+            // Instant start: show the home screen (from the last visit's cache) right away and
+            // check the saved session with the server meanwhile.
+            AppServices.Session.BeginResume(auto);
+            ShowShell();
+            IsStarting = false;
+            _ = ValidateSessionAsync(auto);
+            return;
         }
 
         ShowAccountPicker();
         IsStarting = false;
+    }
+
+    private async Task ValidateSessionAsync(SavedAccount account)
+    {
+        var check = await AppServices.Session.ValidateAsync();
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            switch (check)
+            {
+                case Nettle.Core.Services.SessionCheck.Valid:
+                    Shell?.RefreshAccount();
+                    break;
+                case Nettle.Core.Services.SessionCheck.Rejected:
+                    SessionExpired(account);
+                    break;
+                case Nettle.Core.Services.SessionCheck.Unreachable:
+                    Nettle.Core.Services.Log.Warn("server unreachable at startup; showing what was cached");
+                    Toast($"Can't reach {account.ServerName ?? "the server"} right now. Showing what was there last time.", 5000);
+                    break;
+            }
+        });
+    }
+
+    /// <summary>The server no longer accepts this sign-in (revoked or expired): back to the sign-in screen, once.</summary>
+    private void SessionExpired(SavedAccount? account)
+    {
+        if (Root is not ShellViewModel) return;
+        Nettle.Core.Services.Log.Warn("session rejected by the server (401): signing in again");
+        ClosePlayer();
+        AppServices.Remote.Stop();
+        account ??= AppServices.Session.Current;
+        AppServices.Session.SwitchUser();
+        if (account != null) ShowLogin(account.ServerUrl, prefillUser: account.UserName, message: "Your session expired. Please sign in again.");
+        else ShowAccountPicker();
     }
 
     /// <summary>Opt-in only: one quiet check per launch against the user's own update source.</summary>
@@ -96,6 +122,7 @@ public sealed partial class MainViewModel : ViewModelBase
 
     public void ShowAccountPicker()
     {
+        AppServices.Remote.Stop();
         if (AppServices.Session.SavedAccounts.Count == 0) Root = new ServerSelectViewModel(this);
         else Root = new AccountPickerViewModel(this);
     }
@@ -111,6 +138,8 @@ public sealed partial class MainViewModel : ViewModelBase
         Root = shell;
         OnPropertyChanged(nameof(Shell));
         _ = shell.InitializeAsync();
+        // Lets other Jellyfin apps control this one, and keeps the screen in step with changes made elsewhere.
+        AppServices.Remote.Start();
         MaybeOfferMenuEntry();
 #if DEBUG
         // Developer convenience: NETTLE_DEV_PLAY=<itemId> starts playing that item after sign-in.
@@ -190,6 +219,7 @@ public sealed partial class MainViewModel : ViewModelBase
     public void SwitchUser()
     {
         ClosePlayer();
+        AppServices.Remote.Stop();
         AppServices.Session.SwitchUser();
         ShowAccountPicker();
         OnPropertyChanged(nameof(Shell));
@@ -202,6 +232,14 @@ public sealed partial class MainViewModel : ViewModelBase
         ClosePlayer();
         long? start = resume && item.UserData?.PlaybackPositionTicks is > 0 ? item.UserData.PlaybackPositionTicks : null;
         Player = PlayerViewModel.ForItem(this, item, start, mediaSourceId);
+    }
+
+    /// <summary>Plays a list in order from <paramref name="index"/> (Play all, Shuffle, remote control).</summary>
+    public void PlayQueue(IReadOnlyList<BaseItemDto> items, int index = 0, long? startTicks = null)
+    {
+        if (items.Count == 0) return;
+        ClosePlayer();
+        Player = PlayerViewModel.ForQueue(this, items, index, startTicks);
     }
 
     public void PlayLive(IReadOnlyList<NtvChannel> channels, int index)

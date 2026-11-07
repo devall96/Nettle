@@ -57,28 +57,57 @@ public sealed partial class ShellViewModel : ViewModelBase
 
     public async Task InitializeAsync()
     {
+        // The last visit's libraries and home rows appear at once; fresh ones replace them.
+        var cached = Services.HomeCache.Load(AppServices.Session.Current?.Id);
+        if (cached is { Views.Count: > 0 })
+        {
+            SetNavLibraries(cached.Views);
+            _home.ShowCached(cached);
+        }
         NavigateRoot(_home);
         try
         {
             var views = await AppServices.Jellyfin.GetViewsAsync();
-            foreach (var v in views.Items)
-            {
-                var view = v;
-                var icon = v.CollectionType switch
-                {
-                    "movies" => "Icon.Movie",
-                    "tvshows" => "Icon.Tv",
-                    "music" => "Icon.Music",
-                    "livetv" => "Icon.Tv",
-                    _ => "Icon.Library"
-                };
-                if (v.CollectionType is "livetv" or "playlists") continue;
-                NavLibraries.Add(new NavItemViewModel("lib:" + v.Id, v.Name ?? "Library", icon, () => NavigateRoot(new LibraryViewModel(view))));
-            }
+            SetNavLibraries(views.Items);
             _home.SetLibraries(views.Items);
         }
-        catch { /* Home shows its own error state */ }
+        catch { /* Home shows its own error state (or keeps showing the cached rows) */ }
     }
+
+    private void SetNavLibraries(List<BaseItemDto> views)
+    {
+        var shown = views.Where(v => v.CollectionType is not ("livetv" or "playlists")).ToList();
+        if (NavLibraries.Select(n => n.Key).SequenceEqual(shown.Select(v => "lib:" + v.Id))) return;
+        NavLibraries.Clear();
+        foreach (var v in shown)
+        {
+            var view = v;
+            var icon = v.CollectionType switch
+            {
+                "movies" => "Icon.Movie",
+                "tvshows" => "Icon.Tv",
+                "music" => "Icon.Music",
+                _ => "Icon.Library"
+            };
+            NavLibraries.Add(new NavItemViewModel("lib:" + v.Id, v.Name ?? "Library", icon, () => NavigateRoot(new LibraryViewModel(view))));
+        }
+        var key = Current?.NavKey ?? "";
+        foreach (var n in NavLibraries) n.IsSelected = n.Key == key;
+    }
+
+    /// <summary>Name / picture may have changed on the server since the account was saved.</summary>
+    public void RefreshAccount()
+    {
+        OnPropertyChanged(nameof(UserName));
+        OnPropertyChanged(nameof(UserInitial));
+        OnPropertyChanged(nameof(AvatarUrl));
+        OnPropertyChanged(nameof(ServerName));
+    }
+
+    public void GoHome() => NavigateRoot(_home);
+
+    /// <summary>Everything in the libraries with this person in it (actor, director…).</summary>
+    public void OpenPerson(string personId, string name) => Navigate(LibraryViewModel.ForPerson(personId, name));
 
     partial void OnCurrentChanged(PageViewModel? oldValue, PageViewModel? newValue)
     {
@@ -151,7 +180,12 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         IsAccountMenuOpen = false;
         var acc = AppServices.Session.Current;
-        if (acc != null) await AppServices.Session.SignOutAndForgetAsync(acc);
+        AppServices.Remote.Stop();
+        if (acc != null)
+        {
+            await AppServices.Session.SignOutAndForgetAsync(acc);
+            Services.HomeCache.Delete(acc.Id);
+        }
         _main.ShowAccountPicker();
     }
 }

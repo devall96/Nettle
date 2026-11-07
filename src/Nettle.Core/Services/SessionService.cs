@@ -3,6 +3,8 @@ using Nettle.Core.Models;
 
 namespace Nettle.Core.Services;
 
+public enum SessionCheck { Valid, Rejected, Unreachable }
+
 /// <summary>Owns "who is signed in": resuming saved accounts, completing sign-ins, switching users.</summary>
 public sealed class SessionService
 {
@@ -14,7 +16,8 @@ public sealed class SessionService
 
     /// <summary>
     /// The signed-in user's playback preferences from their Jellyfin profile (languages, subtitle
-    /// mode). Per user, so each person in a household gets their own defaults on a shared device.
+    /// mode, libraries hidden from "Recently added"). Per user, so each person in a household gets
+    /// their own defaults on a shared device.
     /// </summary>
     public UserConfiguration? UserConfig { get; private set; }
 
@@ -26,9 +29,15 @@ public sealed class SessionService
     public string? PreferredSubtitleLanguage(string? deviceSetting) =>
         !string.IsNullOrWhiteSpace(deviceSetting) ? deviceSetting : NullIfEmpty(UserConfig?.SubtitleLanguagePreference);
 
-    /// <summary>The user chose "no subtitles" in Jellyfin (and this device doesn't ask for a subtitle language).</summary>
-    public bool SubtitlesOff(string? deviceSubtitleSetting) =>
-        string.IsNullOrWhiteSpace(deviceSubtitleSetting) && UserConfig?.SubtitleMode == "None";
+    /// <summary>
+    /// Subtitle mode: this device's setting if set, else the user's Jellyfin profile, else
+    /// "Default". One of Default, Always, OnlyForced, Smart, None.
+    /// </summary>
+    public string SubtitleMode(string? deviceSetting) =>
+        !string.IsNullOrWhiteSpace(deviceSetting) ? deviceSetting : NullIfEmpty(UserConfig?.SubtitleMode) ?? "Default";
+
+    /// <summary>Libraries this user hid from "Recently added".</summary>
+    public IReadOnlyCollection<string> LatestExcludes => UserConfig?.LatestItemsExcludes ?? (IReadOnlyCollection<string>)Array.Empty<string>();
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
     public event Action? SessionChanged;
@@ -46,25 +55,68 @@ public sealed class SessionService
     public SavedAccount? AutoLoginCandidate =>
         _settings.Current.AutoLogin ? _accounts.Find(_settings.Current.LastAccountId) : null;
 
-    /// <summary>Validates the stored token. Returns false if the server rejected it (needs re-login).</summary>
+    /// <summary>
+    /// Validates the stored token. Returns false if the server rejected it (needs re-login);
+    /// throws <see cref="ApiException"/> when the server can't be reached.
+    /// </summary>
     public async Task<bool> ResumeAsync(SavedAccount account, CancellationToken ct = default)
     {
         _client.Configure(account.ServerUrl, account.DeviceId, account.AccessToken, account.UserId);
-        try
-        {
-            var me = await _client.GetMeAsync(ct).ConfigureAwait(false);
-            account.UserName = me.Name ?? account.UserName;
-            account.AvatarTag = me.PrimaryImageTag;
-            account.IsAdmin = me.Policy?.IsAdministrator ?? account.IsAdmin;
-            UserConfig = me.Configuration;
-        }
-        catch (ApiException ex) when (ex.IsUnauthorized)
+        var check = await CheckAsync(account, ct).ConfigureAwait(false);
+        if (check == SessionCheck.Unreachable) throw new ApiException("Can't reach the server.");
+        if (check == SessionCheck.Rejected)
         {
             _client.ClearSession();
             return false;
         }
         await ActivateAsync(account).ConfigureAwait(false);
         return true;
+    }
+
+    /// <summary>
+    /// Instant start: uses the saved account straight away, with no network round trip, so the
+    /// home screen can appear at once. Follow with <see cref="ValidateAsync"/> to confirm the
+    /// token is still good.
+    /// </summary>
+    public void BeginResume(SavedAccount account)
+    {
+        _client.Configure(account.ServerUrl, account.DeviceId, account.AccessToken, account.UserId);
+        UserConfig = account.UserConfig;
+        Current = account;
+        SessionChanged?.Invoke();
+    }
+
+    /// <summary>Second half of <see cref="BeginResume"/>: asks the server who we are and saves what changed.</summary>
+    public async Task<SessionCheck> ValidateAsync(CancellationToken ct = default)
+    {
+        var account = Current;
+        if (account == null) return SessionCheck.Rejected;
+        var check = await CheckAsync(account, ct).ConfigureAwait(false);
+        if (check == SessionCheck.Valid && Current == account) await ActivateAsync(account).ConfigureAwait(false);
+        if (check == SessionCheck.Rejected && Current == account)
+        {
+            Current = null;
+            UserConfig = null;
+            _client.ClearSession();
+        }
+        return check;
+    }
+
+    private async Task<SessionCheck> CheckAsync(SavedAccount account, CancellationToken ct)
+    {
+        try
+        {
+            var me = await _client.GetMeAsync(ct).ConfigureAwait(false);
+            account.UserName = me.Name ?? account.UserName;
+            account.AvatarTag = me.PrimaryImageTag;
+            account.IsAdmin = me.Policy?.IsAdministrator ?? account.IsAdmin;
+            account.UserConfig = me.Configuration ?? account.UserConfig;
+            UserConfig = account.UserConfig;
+            return SessionCheck.Valid;
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized) { return SessionCheck.Rejected; }
+        catch (ApiException) { return SessionCheck.Unreachable; }
+        catch (System.Text.Json.JsonException) { return SessionCheck.Unreachable; }
     }
 
     /// <summary>Prepare the client for a fresh login against <paramref name="serverUrl"/>.</summary>
@@ -91,6 +143,7 @@ public sealed class SessionService
         account.AccessToken = auth.AccessToken;
         account.DeviceId = _client.DeviceId;
         account.IsAdmin = auth.User.Policy?.IsAdministrator ?? false;
+        account.UserConfig = auth.User.Configuration;
         UserConfig = auth.User.Configuration;
 
         if (remember) await ActivateAsync(account).ConfigureAwait(false);
@@ -108,8 +161,9 @@ public sealed class SessionService
         await _accounts.UpsertAsync(account).ConfigureAwait(false);
         _settings.Current.LastAccountId = account.Id;
         await _settings.SaveAsync().ConfigureAwait(false);
+        bool changed = Current != account;
         Current = account;
-        SessionChanged?.Invoke();
+        if (changed) SessionChanged?.Invoke();
     }
 
     /// <summary>Leave the current user but keep them in the saved list (quick switch back later).</summary>

@@ -24,6 +24,8 @@ internal static class Program
         IPlatformInfo platform = OperatingSystem.IsWindows() ? new WindowsPlatformInfo() : new LinuxPlatformInfo();
         Directory.CreateDirectory(platform.DataDirectory);
         var crashLog = Path.Combine(platform.DataDirectory, "crash.log");
+        // Kept small: the older half is rolled to crash.log.old once it passes 1 MB.
+        try { if (new FileInfo(crashLog) is { Exists: true, Length: > 1_000_000 }) File.Move(crashLog, crashLog + ".old", overwrite: true); } catch { }
         // Crash details are redacted the same way as the diagnostic log (no tokens / API keys).
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             File.AppendAllText(crashLog, Nettle.Core.Services.Log.Redact($"[{DateTime.Now:u}] {e.ExceptionObject}\n\n"));

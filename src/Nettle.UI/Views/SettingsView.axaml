@@ -125,8 +125,12 @@
             <TextBox Grid.Column="1" Text="{Binding AudioLanguage}" Width="200" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
-            <StackPanel><TextBlock Text="Preferred subtitle language" FontWeight="SemiBold" /><TextBlock Text="ISO code (blank = your Jellyfin profile's choice and subtitle mode, else the file default)" Classes="muted caption" /></StackPanel>
+            <StackPanel><TextBlock Text="Preferred subtitle language" FontWeight="SemiBold" /><TextBlock Text="ISO code (blank = your Jellyfin profile's choice, else the file default)" Classes="muted caption" /></StackPanel>
             <TextBox Grid.Column="1" Text="{Binding SubtitleLanguage}" Width="200" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel><TextBlock Text="Subtitles turn on" FontWeight="SemiBold" /><TextBlock Text="When a subtitle track is picked automatically. You can always choose one while watching." Classes="muted caption" /></StackPanel>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding SubtitleModes}" SelectedItem="{Binding SubtitleModeChoice}" MinWidth="200" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <StackPanel><TextBlock Text="Network buffer (seconds)" FontWeight="SemiBold" /><TextBlock Text="How far ahead Nettle downloads. Raise it if playback stutters over Wi-Fi" Classes="muted caption" /></StackPanel>

@@ -222,9 +222,15 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             {
                 IsBuffering = false;
                 LoadTracks();
+                LoadChapters();
                 _ = ShowFormatBadgesAsync(_tuneVersion, _mediaGeneration);
             });
         };
+        // Speed and subtitle size carry over between files and sessions.
+        _playbackSpeed = Math.Clamp(_settings.PlaybackSpeed, 0.25, 3);
+        _subtitleScale = Math.Clamp(_settings.SubtitleScale, 0.5, 2.5);
+        if (Math.Abs(_playbackSpeed - 1) > 0.001) Player.SetSpeed(_playbackSpeed);
+        if (Math.Abs(_subtitleScale - 1) > 0.001) Player.SetSubtitleScale(_subtitleScale);
 
         _tick = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => OnTick());
         _tick.Start();
@@ -247,6 +253,65 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         return vm;
     }
 
+    /// <summary>Plays a list in order (Play all, Shuffle, or a remote control's queue), from <paramref name="index"/>.</summary>
+    public static PlayerViewModel ForQueue(MainViewModel main, IReadOnlyList<BaseItemDto> items, int index, long? startTicks = null)
+    {
+        var vm = new PlayerViewModel(main);
+        vm._queue = items.ToList();
+        vm._queueIndex = Math.Clamp(index, 0, items.Count - 1);
+        _ = vm.StartItemAsync(vm._queue[vm._queueIndex], startTicks, null);
+        return vm;
+    }
+
+    // ===================== Play queue =====================
+
+    private List<BaseItemDto>? _queue;
+    private int _queueIndex;
+    public string NextTip => _queue != null ? "Next (N)" : "Next episode (N)";
+
+    /// <summary>Adds items right after the current one ("play next") or at the end (remote control).</summary>
+    public void Enqueue(IReadOnlyList<BaseItemDto> items, bool next)
+    {
+        if (items.Count == 0) return;
+        if (_queue == null)
+        {
+            _queue = _item != null ? new List<BaseItemDto> { _item } : new List<BaseItemDto>();
+            _queueIndex = 0;
+        }
+        _queue.InsertRange(next ? Math.Min(_queueIndex + 1, _queue.Count) : _queue.Count, items);
+        SetNextFromQueue();
+        OnPropertyChanged(nameof(NextTip));
+    }
+
+    private void SetNextFromQueue()
+    {
+        if (_queue == null) return;
+        _nextEpisode = _queueIndex + 1 < _queue.Count ? _queue[_queueIndex + 1] : null;
+        if (_nextEpisode is { } n)
+        {
+            UpNextTitle = n.IsEpisode ? $"{n.SeriesName}  S{n.ParentIndexNumber}:E{n.IndexNumber}  {n.Name}" : n.Name;
+            UpNextImage = n.Tag("Primary") is { } t && n.IsEpisode ? AppServices.Jellyfin.ImageUrl(n.Id, "Primary", t, 420)
+                : n.BackdropImageTags is { Count: > 0 } b ? AppServices.Jellyfin.ImageUrl(n.Id, "Backdrop", b[0], 420)
+                : n.Tag("Primary") is { } p ? AppServices.Jellyfin.ImageUrl(n.Id, "Primary", p, 420) : null;
+        }
+        OnPropertyChanged(nameof(HasNext));
+    }
+
+    /// <summary>Like a CD player: early in an item goes back one, otherwise restarts this one.</summary>
+    [RelayCommand]
+    public void PlayPrevious()
+    {
+        if (IsLive) return;
+        if (_queue != null && _queueIndex > 0 && Player.TimeMs < 5000)
+        {
+            _ = ReportStoppedAsync();
+            _queueIndex--;
+            _ = StartItemAsync(_queue[_queueIndex], null, null);
+            return;
+        }
+        SeekToMs(0);
+    }
+
     private async Task StartItemAsync(BaseItemDto item, long? startTicks, string? mediaSourceId)
     {
         // Until the new file is handed to mpv, the player is still on the previous one: no
@@ -262,7 +327,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         IsUpNextVisible = false;
         IsSkipVisible = false;
         IsBuffering = true;
+        IsSubtitleSearchOpen = false;
         Error = null;
+        if (_queue != null) SetNextFromQueue();
         OnPropertyChanged(nameof(HasNext));
 
         Title = item.IsEpisode ? item.SeriesName ?? item.Name ?? "" : item.Name ?? "";
@@ -275,8 +342,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         {
             // Ask the server for media sources with transcoding explicitly disabled.
             var info = await jf.GetPlaybackInfoAsync(item.Id, startTicks);
+            if (_item != item || _disposed) return; // something else was picked meanwhile
             var source = info.MediaSources.FirstOrDefault(s => s.Id == mediaSourceId) ?? info.MediaSources.FirstOrDefault();
-            if (source == null) { Error = "The server returned no playable media for this item."; return; }
+            if (source == null) { Error = "The server returned no playable media for this item."; IsBuffering = false; return; }
             _mediaSourceId = source.Id;
             var vs = source.MediaStreams.FirstOrDefault(s => s.Type == "Video");
             _sourceStreams = source.MediaStreams;
@@ -284,20 +352,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 .Where(x => !string.IsNullOrEmpty(x)));
             _playSessionId = info.PlaySessionId;
 
-            var url = jf.DirectStreamUrl(item.Id, source.Id, info.PlaySessionId);
             // External subtitle files are fetched as-is (no burn-in, no conversion) and handed to mpv.
             _externalSubs = ExternalSubs(item.Id, source);
             _lastPositionMs = startTicks is > 0 ? TimeSpan.FromTicks(startTicks.Value).TotalMilliseconds : 0;
-            SwapMedia(new MpvLoad
-            {
-                Url = url,
-                StartSeconds = startTicks is > 0 ? TimeSpan.FromTicks(startTicks.Value).TotalSeconds : null,
-                AudioLanguage = AudioLang,
-                SubtitleLanguage = SubLang,
-                SubtitlesOff = AppServices.Session.SubtitlesOff(_settings.PreferredSubtitleLanguage),
-                ExternalSubtitles = _externalSubs.Select(s => (s.Url, s.Title, s.Language)).ToList(),
-                CacheSeconds = BufferSeconds,
-            });
+            SwapMedia(LibraryLoad(item.Id, source, info.PlaySessionId, startTicks is > 0 ? TimeSpan.FromTicks(startTicks.Value).TotalSeconds : null));
             _sourcePending = false;
 
             await jf.ReportStartAsync(Progress(isPaused: false));
@@ -305,7 +363,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
             _ = LoadTrickplayAsync(item.Id, source.Id!);
             _segments = await AppServices.Segments.GetSegmentsAsync(item.Id);
-            if (item.IsEpisode && _settings.AutoPlayNextEpisode) _ = FindNextEpisodeAsync(item);
+            if (_queue == null && item.IsEpisode && _settings.AutoPlayNextEpisode) _ = FindNextEpisodeAsync(item);
         }
         catch (Exception ex)
         {
@@ -326,6 +384,45 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private string? AudioLang => AppServices.Session.PreferredAudioLanguage(_settings.PreferredAudioLanguage);
     private string? SubLang => AppServices.Session.PreferredSubtitleLanguage(_settings.PreferredSubtitleLanguage);
 
+    /// <summary>
+    /// Everything mpv needs for one file from the user's Jellyfin server: the original file, its
+    /// external subtitles, language / subtitle preferences, a read-ahead sized from its bitrate,
+    /// and the token as a header (never in the URL).
+    /// </summary>
+    private MpvLoad LibraryLoad(string itemId, MediaSourceInfo source, string? playSessionId, double? startSeconds)
+    {
+        var jf = AppServices.Jellyfin;
+        _sourceStreams = source.MediaStreams;
+        var audio = PickAudioStream();
+        return new MpvLoad
+        {
+            Url = jf.DirectStreamUrl(itemId, source.Id, playSessionId),
+            StartSeconds = startSeconds,
+            AudioLanguage = AudioLang,
+            SubtitleLanguage = SubLang,
+            SubtitleMode = AppServices.Session.SubtitleMode(_settings.SubtitleMode),
+            ExternalSubtitles = ExternalSubs(itemId, source).Select(s => (s.Url, s.Title, s.Language)).ToList(),
+            CacheSeconds = BufferSeconds,
+            CacheBytes = CacheBytesFor(source),
+            AuthHeader = jf.TokenHeaderValue,
+            ExclusiveAudio = _settings.AudioPassthrough && PlaybackEngine.NeedsExclusiveAudio(audio?.Codec, audio?.Profile),
+        };
+    }
+
+    /// <summary>
+    /// Memory for read-ahead: enough to really hold "Network buffer" seconds of this file (a 4K
+    /// remux needs far more than a 1080p encode), within 64 MiB – 1 GiB.
+    /// </summary>
+    private long? CacheBytesFor(MediaSourceInfo source)
+    {
+        long? bps = source.Bitrate;
+        if (bps is not > 0 && source.Size is > 0 && source.RunTimeTicks is > 0)
+            bps = (long)(source.Size.Value * 8 / TimeSpan.FromTicks(source.RunTimeTicks.Value).TotalSeconds);
+        if (bps is not > 0) return null;
+        long bytes = (long)(bps.Value / 8.0 * BufferSeconds * 1.5);
+        return Math.Clamp(bytes, 64L << 20, 1L << 30);
+    }
+
     private static List<ExternalSub> ExternalSubs(string itemId, MediaSourceInfo source) =>
         source.MediaStreams
             .Where(s => s.Type == "Subtitle" && s.IsExternal)
@@ -340,7 +437,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             // Only the neighbours of this episode, not the whole series with its media info.
             var near = await AppServices.Jellyfin.GetAdjacentEpisodesAsync(ep.SeriesId, ep.Id);
             var idx = near.Items.FindIndex(e => e.Id == ep.Id);
-            if (idx >= 0 && idx + 1 < near.Items.Count && _item?.Id == ep.Id)
+            if (idx >= 0 && idx + 1 < near.Items.Count && _item?.Id == ep.Id && _queue == null)
             {
                 _nextEpisode = near.Items[idx + 1];
                 UpNextTitle = $"S{_nextEpisode.ParentIndexNumber}:E{_nextEpisode.IndexNumber}  {_nextEpisode.Name}";
@@ -460,7 +557,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _sourceStreams = null; // feed: no file metadata, so only verified resolution is badged
         _feedWatchStart = DateTime.UtcNow;
         LiveSourceLabel = "NostalgiaTV broadcast feed";
-        SwapMedia(new MpvLoad { Url = ch.StreamUrl, CacheSeconds = Math.Max(20, BufferSeconds) });
+        // NostalgiaTV's own feed: no Jellyfin token goes to it (AuthHeader stays empty).
+        SwapMedia(new MpvLoad { Url = ch.StreamUrl, CacheSeconds = Math.Max(20, BufferSeconds), CacheBytes = 150L << 20 });
         UpdateLiveInfo();
     }
 
@@ -483,16 +581,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         var source = info.MediaSources.FirstOrDefault();
         if (source?.Id == null) throw new InvalidOperationException("No media source");
 
-        var load = new MpvLoad
-        {
-            Url = jf.DirectStreamUrl(itemId, source.Id, info.PlaySessionId),
-            StartSeconds = offsetMs > 500 ? offsetMs / 1000.0 : null,
-            AudioLanguage = AudioLang,
-            SubtitleLanguage = SubLang,
-            SubtitlesOff = AppServices.Session.SubtitlesOff(_settings.PreferredSubtitleLanguage),
-            ExternalSubtitles = ExternalSubs(itemId, source).Select(s => (s.Url, s.Title, s.Language)).ToList(),
-            CacheSeconds = BufferSeconds,
-        };
+        var load = LibraryLoad(itemId, source, info.PlaySessionId, offsetMs > 500 ? offsetMs / 1000.0 : null);
 
         _liveSlot = slot;
         IsLiveDirect = true;
@@ -575,7 +664,11 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _badgeHideCts?.Cancel();
         IsFormatBadgesVisible = false;
         FormatBadges.Clear();
-        Nettle.Core.Services.Log.Info($"play {(IsLive ? (IsLiveDirect ? "live-direct" : "live-feed") : "vod")}: {Redact(load.Url)}");
+        _chapters = new();
+        ChapterMarks = Array.Empty<double>();
+        ResetPerFileTuning();
+        Nettle.Core.Services.Log.Info($"play {(IsLive ? (IsLiveDirect ? "live-direct" : "live-feed") : "vod")}: {Redact(load.Url)}" +
+            (load.AuthHeader != null ? " (token sent as a header)" : ""));
         Player.Load(load);
     }
 
@@ -589,7 +682,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         IsPlaying = Player.IsPlaying;
         if (Error == null && LiveInterstitial == null) IsBuffering = Player.IsBuffering;
 
-        if (IsOsdVisible && IsPlaying && !IsTracksOpen && (DateTime.UtcNow - _lastInput).TotalSeconds > 3.5)
+        if (IsOsdVisible && IsPlaying && !IsTracksOpen && !IsSubtitleSearchOpen && (DateTime.UtcNow - _lastInput).TotalSeconds > 3.5)
             IsOsdVisible = false;
 
         if (IsLive)
@@ -693,6 +786,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         var next = _nextEpisode;
         IsUpNextVisible = false;
         _ = ReportStoppedAsync();
+        if (_queue != null && _queueIndex + 1 < _queue.Count) _queueIndex++;
         _ = StartItemAsync(next, null, null);
     }
 
@@ -800,6 +894,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
+            // Same credentials the player used (the URL itself carries no token); only to our own server.
+            var jf = AppServices.Jellyfin;
+            if (jf.IsServerUrl(url) && jf.TokenHeaderValue is { } auth) req.Headers.TryAddWithoutValidation("Authorization", auth);
             using var resp = await ProbeHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
             return (int)resp.StatusCode;
         }
@@ -870,7 +967,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             return;
         }
         if (IsStillWatchingVisible) return;
-        if (_nextEpisode != null && _settings.AutoPlayNextEpisode && !_upNextDismissed) { AutoPlayNext(); return; }
+        // A list the user started (Play all / Shuffle / remote) always moves on; single episodes follow the setting.
+        if (_nextEpisode != null && (_settings.AutoPlayNextEpisode || _queue != null) && !_upNextDismissed) { AutoPlayNext(); return; }
         Close();
     }
 
@@ -1045,8 +1143,24 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             case Key.S:
                 if (IsSkipVisible) Skip(); return true;
             case Key.N when HasNext:
+            case Key.MediaNextTrack when IsVod && HasNext:
                 PlayNext(); return true;
+            case Key.MediaPreviousTrack when IsVod:
+                PlayPrevious(); return true;
+            case Key.PageDown when IsVod:
+                NextChapter(); return true;
+            case Key.PageUp when IsVod:
+                PreviousChapter(); return true;
+            case Key.OemOpenBrackets when IsVod:
+                SlowerCommand.Execute(null); return true;
+            case Key.OemCloseBrackets when IsVod:
+                FasterCommand.Execute(null); return true;
+            case Key.Z:
+                SubtitleEarlierCommand.Execute(null); return true;
+            case Key.X:
+                SubtitleLaterCommand.Execute(null); return true;
             case Key.Escape or Key.Back or Key.BrowserBack or Key.MediaStop:
+                if (IsSubtitleSearchOpen) { IsSubtitleSearchOpen = false; return true; }
                 if (IsTracksOpen) { IsTracksOpen = false; return true; }
                 Close(); return true;
         }
@@ -1071,6 +1185,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private (string ItemId, string SourceId, TrickplayInfo Info)? _trick;
     private readonly Dictionary<int, Avalonia.Media.Imaging.Bitmap?> _trickSheets = new();
     private readonly HashSet<int> _trickLoading = new();
+    private readonly List<int> _trickOrder = new();
     private double _trickWantedMs = -1;
     [ObservableProperty] private bool _isTrickVisible;
     [ObservableProperty] private Avalonia.Media.IImage? _trickImage;
@@ -1084,6 +1199,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         _trick = null;
         _trickSheets.Clear();
+        _trickOrder.Clear();
         _trickLoading.Clear();
         HasTrickImage = false;
         var all = await AppServices.Jellyfin.GetTrickplayAsync(itemId);
@@ -1109,7 +1225,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         if (IsLive || LengthMs <= 1) return;
         ms = Math.Clamp(ms, 0, LengthMs);
-        TrickTime = Format.Clock(TimeSpan.FromMilliseconds(ms));
+        var chapter = ChapterAt(ms)?.Title;
+        TrickTime = Format.Clock(TimeSpan.FromMilliseconds(ms)) + (chapter != null ? "  ·  " + chapter : "");
         IsTrickVisible = true;
         _trickWantedMs = ms;
         if (_trick is not { } t) { HasTrickImage = false; return; }
@@ -1120,6 +1237,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         int sheet = n / perSheet, k = n % perSheet;
         if (_trickSheets.TryGetValue(sheet, out var bmp))
         {
+            if (_trickOrder.Count > 0 && _trickOrder[^1] != sheet) { _trickOrder.Remove(sheet); _trickOrder.Add(sheet); }
             if (bmp == null) { HasTrickImage = false; return; }
             int x = k % info.TileWidth * info.Width, y = k / info.TileWidth * info.Height;
             if (x + info.Width > bmp.PixelSize.Width || y + info.Height > bmp.PixelSize.Height) { HasTrickImage = false; return; }
@@ -1136,8 +1254,15 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         var bmp = await AppServices.Images.LoadUncachedAsync(url);
         if (_item?.Id != itemId || _disposed) return;
         // Keep only a few sheets in memory (each holds up to 100 thumbnails).
-        if (_trickSheets.Count >= 6) _trickSheets.Remove(_trickSheets.Keys.First());
+        // Least recently used first: the sheet around where you're scrubbing stays.
+        while (_trickSheets.Count >= 6 && _trickOrder.Count > 0)
+        {
+            _trickSheets.Remove(_trickOrder[0]);
+            _trickOrder.RemoveAt(0);
+        }
         _trickSheets[sheet] = bmp;
+        _trickOrder.Remove(sheet);
+        _trickOrder.Add(sheet);
         _trickLoading.Remove(sheet);
         if (IsTrickVisible && _trickWantedMs >= 0) ShowTrickplay(_trickWantedMs);
     }

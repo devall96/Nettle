@@ -103,8 +103,17 @@ public sealed partial class NtvClient
         var xmlTask = GetStreamAsync("/xmltv.xml", ct);
 
         List<NtvChannel> channels;
-        await using (var m3u = await m3uTask.ConfigureAwait(false))
-            channels = await ParseM3uAsync(m3u).ConfigureAwait(false);
+        try
+        {
+            await using (var m3u = await m3uTask.ConfigureAwait(false))
+                channels = await ParseM3uAsync(m3u).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The guide download is already under way: close it rather than leave it open.
+            try { await (await xmlTask.ConfigureAwait(false)).DisposeAsync().ConfigureAwait(false); } catch { }
+            throw;
+        }
 
         var now = DateTimeOffset.Now;
         await using (var xml = await xmlTask.ConfigureAwait(false))

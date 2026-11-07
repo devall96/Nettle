@@ -108,6 +108,8 @@ public partial class PlayerView : UserControl
     private void OnOverlayKey(object? sender, KeyEventArgs e)
     {
         if (e.Handled || Vm == null) return;
+        // Typing in a box (e.g. the subtitle language) isn't a player shortcut.
+        if (e.Source is TextBox && e.Key is not Key.Escape) return;
         if (Vm.HandleKey(e.Key)) e.Handled = true;
     }
 

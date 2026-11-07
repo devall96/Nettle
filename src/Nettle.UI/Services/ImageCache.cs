@@ -68,6 +68,12 @@ public sealed class ImageCache
     /// requested (e.g. a logo URL in a channel list pointing at some third-party site).
     /// </summary>
     public Func<Uri, bool>? IsAllowed { get; set; }
+
+    /// <summary>"Authorization" header to send to a host (the user's own Jellyfin server), so URLs never carry the token.</summary>
+    public Func<Uri, string?>? AuthHeaderFor { get; set; }
+
+    private int _writesSinceTrim;
+    private int _trimming;
     private readonly ConcurrentDictionary<string, byte> _blockedHosts = new();
 
     private bool Permitted(string url)
@@ -135,17 +141,32 @@ public sealed class ImageCache
         var file = Path.Combine(_dir, Hash(StripToken(url)));
         try
         {
-            if (File.Exists(file)) return await File.ReadAllBytesAsync(file, ct).ConfigureAwait(false);
+            if (File.Exists(file))
+            {
+                var cached = await File.ReadAllBytesAsync(file, ct).ConfigureAwait(false);
+                // Mark it as recently used (last-access times are often not kept by the OS).
+                try { File.SetLastWriteTimeUtc(file, DateTime.UtcNow); } catch { }
+                return cached;
+            }
             byte[] bytes;
             await _downloads.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                if (Uri.TryCreate(url, UriKind.Absolute, out var u) && AuthHeaderFor?.Invoke(u) is { } auth)
+                    req.Headers.TryAddWithoutValidation("Authorization", auth);
+                using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode) return null;
                 bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
             }
             finally { _downloads.Release(); }
             try { await File.WriteAllBytesAsync(file, bytes, CancellationToken.None).ConfigureAwait(false); } catch { /* cache is best-effort */ }
+            // Keep the folder within its budget while running, not only at startup.
+            if (Interlocked.Increment(ref _writesSinceTrim) >= 300 && Interlocked.Exchange(ref _trimming, 1) == 0)
+            {
+                _writesSinceTrim = 0;
+                _ = Task.Run(() => { try { TrimDisk(); } finally { _trimming = 0; } });
+            }
             return bytes;
         }
         catch { return null; }
@@ -211,7 +232,8 @@ public sealed class ImageCache
             var files = new DirectoryInfo(_dir).GetFiles();
             long total = files.Sum(f => f.Length);
             if (total <= DiskBudgetBytes) return;
-            foreach (var f in files.OrderBy(f => f.LastAccessTimeUtc))
+            // Oldest use first (every read refreshes a file's write time).
+            foreach (var f in files.OrderBy(f => f.LastWriteTimeUtc))
             {
                 total -= f.Length;
                 f.Delete();

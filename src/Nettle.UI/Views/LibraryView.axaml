@@ -5,13 +5,32 @@
              x:DataType="vm:LibraryViewModel">
   <Grid RowDefinitions="Auto,*" Classes="page">
     <Grid ColumnDefinitions="*,Auto" Margin="56,40,56,12">
-      <StackPanel Spacing="2">
+      <StackPanel Spacing="2" VerticalAlignment="Center">
         <TextBlock Classes="h1" Text="{Binding Title}" />
         <TextBlock Classes="muted" Text="{Binding CountText}" />
       </StackPanel>
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-        <ComboBox ItemsSource="{Binding FilterOptions}" SelectedItem="{Binding Filter}" MinWidth="140" />
-        <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Sort}" MinWidth="160" />
+      <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Center" HorizontalAlignment="Right">
+        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+          <Button Classes="primary" Command="{Binding PlayAllCommand}" ToolTip.Tip="Play everything here, in this order">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <PathIcon Data="{StaticResource Icon.Play}" Width="16" Height="16" Foreground="{DynamicResource OnAccentBrush}" />
+              <TextBlock Text="Play all" Foreground="{DynamicResource OnAccentBrush}" />
+            </StackPanel>
+          </Button>
+          <Button Command="{Binding ShuffleCommand}" ToolTip.Tip="Play everything here in random order">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <PathIcon Data="{StaticResource Icon.Shuffle}" Width="16" Height="16" />
+              <TextBlock Text="Shuffle" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+        <WrapPanel HorizontalAlignment="Right" ItemSpacing="10" LineSpacing="8">
+          <ComboBox ItemsSource="{Binding GenreOptions}" SelectedItem="{Binding Genre}" MinWidth="140" IsVisible="{Binding ShowExtraFilters}" />
+          <ComboBox ItemsSource="{Binding DecadeOptions}" SelectedItem="{Binding Decade}" MinWidth="120" IsVisible="{Binding ShowExtraFilters}" />
+          <ComboBox ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding Quality}" MinWidth="120" IsVisible="{Binding ShowExtraFilters}" />
+          <ComboBox ItemsSource="{Binding FilterOptions}" SelectedItem="{Binding Filter}" MinWidth="140" />
+          <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Sort}" MinWidth="160" />
+        </WrapPanel>
       </StackPanel>
     </Grid>
 
@@ -34,6 +53,17 @@
               <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
           </ItemsControl>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <!-- A–Z jump (when sorted by name) -->
+    <ItemsControl Grid.Row="1" ItemsSource="{Binding Letters}" IsVisible="{Binding ShowLetters}" HorizontalAlignment="Right"
+                  VerticalAlignment="Center" Margin="0,0,10,0">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="x:String">
+          <Button Content="{Binding}" Command="{Binding $parent[ItemsControl].((vm:LibraryViewModel)DataContext).JumpToCommand}" CommandParameter="{Binding}"
+                  Background="Transparent" Padding="6,1" FontSize="11" FontWeight="SemiBold" Opacity="0.7" HorizontalContentAlignment="Center" MinWidth="24" />
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>

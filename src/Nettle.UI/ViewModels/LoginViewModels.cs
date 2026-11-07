@@ -67,6 +67,7 @@ public sealed partial class AccountPickerViewModel : ViewModelBase
     {
         bool wasCurrent = AppServices.Session.Current?.Id == tile.Account.Id;
         await AppServices.Session.SignOutAndForgetAsync(tile.Account);
+        Services.HomeCache.Delete(tile.Account.Id);
         Accounts.Remove(tile);
         if (wasCurrent) _main.ShowAccountPicker();
         else if (Accounts.Count == 0 && AppServices.Session.Current == null) _main.ShowServerSelect();

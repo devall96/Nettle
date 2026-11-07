@@ -19,6 +19,12 @@ public sealed class PlaybackSettings
     public int UpNextCountdownSeconds { get; set; } = 10;
     public string PreferredAudioLanguage { get; set; } = "";
     public string PreferredSubtitleLanguage { get; set; } = "";
+    /// <summary>"" = follow the user's Jellyfin profile; else Default, Always, OnlyForced, Smart or None.</summary>
+    public string SubtitleMode { get; set; } = "";
+    /// <summary>Playback speed kept between files (1 = normal).</summary>
+    public double PlaybackSpeed { get; set; } = 1;
+    /// <summary>Subtitle size, as mpv's sub-scale (1 = normal).</summary>
+    public double SubtitleScale { get; set; } = 1;
     /// <summary>How many seconds of video mpv tries to keep downloaded ahead (its cache-secs).</summary>
     public int NetworkBufferSeconds { get; set; } = 10;
     public int SeekStepSeconds { get; set; } = 10;
@@ -90,6 +96,8 @@ public sealed class SavedAccount
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
     public bool IsAdmin { get; set; }
     public DateTimeOffset LastUsed { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>The user's Jellyfin playback preferences as last seen, so they apply before the server answers at startup.</summary>
+    public UserConfiguration? UserConfig { get; set; }
 }
 
 public sealed class AccountVault

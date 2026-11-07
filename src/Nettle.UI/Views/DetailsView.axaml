@@ -44,6 +44,13 @@
                 </StackPanel>
               </Button>
               <Button Content="From start" Command="{Binding PlayFromStartCommand}" IsVisible="{Binding HasProgress}" />
+              <Button Command="{Binding ShuffleSeriesCommand}" IsVisible="{Binding IsSeries}" ToolTip.Tip="Every episode of every season, in random order">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <PathIcon Data="{StaticResource Icon.Shuffle}" Width="16" Height="16" />
+                  <TextBlock Text="Shuffle" />
+                </StackPanel>
+              </Button>
+              <Button Content="Trailer" Command="{Binding PlayTrailerCommand}" IsVisible="{Binding HasTrailer}" />
               <Button Classes="icon" Classes.active="{Binding IsPlayed}" Command="{Binding TogglePlayedCommand}" ToolTip.Tip="Mark watched" Background="{DynamicResource SurfaceHighBrush}">
                 <PathIcon Data="{StaticResource Icon.Check}" />
               </Button>
@@ -126,6 +133,7 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:PersonViewModel">
+                  <Button Classes="card" Command="{Binding OpenCommand}" ToolTip.Tip="Everything with them in your libraries" Padding="0" Background="Transparent">
                   <StackPanel Width="112" Spacing="6">
                     <Border Width="104" Height="104" CornerRadius="999" ClipToBounds="True" Background="{DynamicResource SurfaceHighBrush}">
                       <Grid>
@@ -136,8 +144,21 @@
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{Binding Role}" Classes="muted caption" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,-4,0,0" />
                   </StackPanel>
+                  </Button>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </StackPanel>
+
+        <!-- Extras stored with the item -->
+        <StackPanel Spacing="10" IsVisible="{Binding HasExtras}" Margin="0,10,0,0">
+          <TextBlock Classes="h3" Text="Extras" />
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Extras}" Margin="0,10,0,26">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
             </ItemsControl>
           </ScrollViewer>
         </StackPanel>

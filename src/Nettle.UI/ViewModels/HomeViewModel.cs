@@ -3,6 +3,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Nettle.Core.Models;
+using Nettle.UI.Services;
 
 namespace Nettle.UI.ViewModels;
 
@@ -62,64 +63,90 @@ public sealed partial class HomeViewModel : PageViewModel
 
     partial void OnHeroChanged(HeroItemViewModel? value) => OnPropertyChanged(nameof(HasHero));
 
+    private bool _showingCache;
+
     public void SetLibraries(List<BaseItemDto> libs)
     {
         _libraries = libs;
-        _ = ReloadAsync();
+        _ = ReloadAsync(quiet: _showingCache);
     }
 
-    protected override Task LoadAsync() => _libraries == null ? Task.CompletedTask : ReloadAsync();
+    /// <summary>Paints the last visit's home screen at once (from the cache), before fresh data arrives.</summary>
+    public void ShowCached(HomeSnapshot snapshot)
+    {
+        if (Rows.Count > 0 || snapshot.Views.Count == 0) return;
+        _libraries ??= snapshot.Views;
+        _showingCache = true;
+        Render(snapshot, newHeroes: true);
+    }
+
+    protected override Task LoadAsync() => _libraries == null ? Task.CompletedTask : ReloadAsync(quiet: _showingCache);
     protected override Task RefreshAsync() => ReloadAsync(quiet: true);
     // Reduce motion: the banner doesn't rotate by itself (arrows still work).
     protected override void OnActivated() { if (!AppServices.Settings.Current.ReduceMotion) _heroTimer.Start(); }
     public override void OnDeactivated() => _heroTimer.Stop();
 
+    /// <summary>Libraries that get a "Recently added" row: video ones the user hasn't hidden from it in Jellyfin.</summary>
+    private static IEnumerable<BaseItemDto> LatestLibraries(IEnumerable<BaseItemDto> libs)
+    {
+        var hidden = AppServices.Session.LatestExcludes;
+        return libs.Where(l => l.CollectionType is "movies" or "tvshows" or "homevideos" or "musicvideos" or null or "mixed" or "boxsets"
+                               && !hidden.Contains(l.Id, StringComparer.OrdinalIgnoreCase));
+    }
+
     private async Task ReloadAsync(bool quiet = false)
     {
         if (_libraries == null) return;
+        var libraries = _libraries;
         await RunAsync(async () =>
         {
             var jf = AppServices.Jellyfin;
             var resumeT = jf.GetResumeAsync(16);
             var nextUpT = jf.GetNextUpAsync(16);
-            var latestTasks = _libraries
-                .Where(l => l.CollectionType is "movies" or "tvshows" or "homevideos" or "musicvideos" or null or "mixed" or "boxsets")
-                .Select(l => (lib: l, task: jf.GetLatestAsync(l.Id, 20)))
-                .ToList();
+            var latestTasks = LatestLibraries(libraries).Select(l => (lib: l, task: jf.GetLatestAsync(l.Id, 20))).ToList();
 
-            var rows = new List<CardRowViewModel>();
-            var resume = await resumeT;
-            if (resume.Items.Count > 0)
-                rows.Add(new CardRowViewModel("Continue Watching", resume.Items.Select(i => new MediaCardViewModel(i, CardShape.Landscape, true)).ToList()));
-            var next = await nextUpT;
-            if (next.Items.Count > 0)
-                rows.Add(new CardRowViewModel("Next Up", next.Items.Select(i => new MediaCardViewModel(i, CardShape.Landscape, true)).ToList()));
-
-            var heroPool = new List<BaseItemDto>();
+            var snapshot = new HomeSnapshot { Views = libraries, Resume = (await resumeT).Items, NextUp = (await nextUpT).Items };
             foreach (var (lib, task) in latestTasks)
             {
-                List<BaseItemDto> items;
-                try { items = await task; } catch { continue; }
-                if (items.Count == 0) continue;
-                rows.Add(new CardRowViewModel("Recently Added in " + lib.Name, items.Select(i => new MediaCardViewModel(i, CardShape.Poster, true)).ToList()));
-                heroPool.AddRange(items.Where(i => (i.IsMovie || i.IsSeries) && i.BackdropImageTags is { Count: > 0 }).Take(4));
+                try { snapshot.Latest[lib.Id] = await task; } catch { /* one library failing doesn't hide the rest */ }
             }
 
-            rows.Add(new CardRowViewModel("My Libraries", _libraries.Select(l => new MediaCardViewModel(l, CardShape.Landscape)).ToList()));
+            Render(snapshot, newHeroes: !quiet || Heroes.Count == 0 || _showingCache);
+            _showingCache = false;
+            HomeCache.Save(AppServices.Session.Current?.Id, snapshot);
+        }, showBusy: !quiet && Rows.Count == 0);
+    }
 
-            // Update in place (e.g. after closing the player), so the page and each row keep
-            // their scroll position and only changed cards are redrawn.
-            CardRowViewModel.SyncRows(Rows, rows);
+    private void Render(HomeSnapshot s, bool newHeroes)
+    {
+        var rows = new List<CardRowViewModel>();
+        if (s.Resume.Count > 0)
+            rows.Add(new CardRowViewModel("Continue Watching", s.Resume.Select(i => new MediaCardViewModel(i, CardShape.Landscape, true)).ToList()));
+        if (s.NextUp.Count > 0)
+            rows.Add(new CardRowViewModel("Next Up", s.NextUp.Select(i => new MediaCardViewModel(i, CardShape.Landscape, true)).ToList()));
 
-            if (!quiet || Heroes.Count == 0)
-            {
-                Heroes.Clear();
-                foreach (var h in heroPool.OrderBy(_ => Random.Shared.Next()).Take(8)) Heroes.Add(new HeroItemViewModel(h));
-                HeroIndex = 0;
-                Hero = Heroes.FirstOrDefault();
-            }
-            IsEmpty = rows.Count <= 1 && Heroes.Count == 0;
-        }, showBusy: !quiet);
+        var heroPool = new List<BaseItemDto>();
+        foreach (var lib in LatestLibraries(s.Views))
+        {
+            if (!s.Latest.TryGetValue(lib.Id, out var items) || items.Count == 0) continue;
+            rows.Add(new CardRowViewModel("Recently Added in " + lib.Name, items.Select(i => new MediaCardViewModel(i, CardShape.Poster, true)).ToList()));
+            heroPool.AddRange(items.Where(i => (i.IsMovie || i.IsSeries) && i.BackdropImageTags is { Count: > 0 }).Take(4));
+        }
+
+        rows.Add(new CardRowViewModel("My Libraries", s.Views.Select(l => new MediaCardViewModel(l, CardShape.Landscape)).ToList()));
+
+        // Update in place (e.g. after closing the player), so the page and each row keep
+        // their scroll position and only changed cards are redrawn.
+        CardRowViewModel.SyncRows(Rows, rows);
+
+        if (newHeroes)
+        {
+            Heroes.Clear();
+            foreach (var h in heroPool.OrderBy(_ => Random.Shared.Next()).Take(8)) Heroes.Add(new HeroItemViewModel(h));
+            HeroIndex = 0;
+            Hero = Heroes.FirstOrDefault();
+        }
+        IsEmpty = rows.Count <= 1 && Heroes.Count == 0;
     }
 
     [RelayCommand]

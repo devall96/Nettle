@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Nettle.UI.ViewModels"
+             xmlns:c="using:Nettle.UI.Controls"
              x:Class="Nettle.UI.Views.SearchView"
              x:DataType="vm:SearchViewModel">
   <Grid RowDefinitions="Auto,*" Classes="page">
@@ -19,6 +20,34 @@
         <StackPanel IsVisible="{Binding NoResults}" Margin="56,10" Spacing="12">
           <TextBlock Classes="h3" Text="Nothing in your library matches that." />
           <Button Classes="primary" Content="Search Seerr to request it" Command="{Binding RequestItCommand}" IsVisible="{Binding SeerrAvailable}" HorizontalAlignment="Left" />
+        </StackPanel>
+
+        <!-- Not in the library yet: request through Seerr -->
+        <StackPanel IsVisible="{Binding HasSeerrSuggestions}" Spacing="10" Margin="56,18,0,0">
+          <TextBlock Classes="h3" Text="Not in your library: request it" />
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding SeerrSuggestions}" Margin="0,4,0,12">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="16" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SeerrSuggestionViewModel">
+                  <Button Classes="card" Command="{Binding OpenCommand}" Padding="0" Background="Transparent" Width="150">
+                    <StackPanel Spacing="6">
+                      <Border Width="150" Height="225" CornerRadius="10" ClipToBounds="True" Background="{DynamicResource SurfaceHighBrush}">
+                        <Grid>
+                          <TextBlock Text="{Binding Title}" TextWrapping="Wrap" Margin="10" Classes="muted" VerticalAlignment="Center" TextAlignment="Center" />
+                          <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="300" c:ImageLoader.Source="{Binding PosterUrl}" />
+                        </Grid>
+                      </Border>
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Status}" Classes="muted caption" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

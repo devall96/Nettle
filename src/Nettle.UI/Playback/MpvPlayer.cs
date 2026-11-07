@@ -17,12 +17,24 @@ public sealed class MpvLoad
     public double? StartSeconds { get; init; }
     public string? AudioLanguage { get; init; }
     public string? SubtitleLanguage { get; init; }
-    /// <summary>Start with subtitles off (the user's Jellyfin profile says "None"); they can still pick one.</summary>
-    public bool SubtitlesOff { get; init; }
+    /// <summary>Default, Always, OnlyForced, Smart or None (Jellyfin's subtitle modes).</summary>
+    public string SubtitleMode { get; init; } = "Default";
     public IReadOnlyList<(string Url, string Title, string? Language)> ExternalSubtitles { get; init; } = [];
     /// <summary>Seconds of read-ahead to aim for (live feeds want a bit more).</summary>
     public int CacheSeconds { get; init; } = 10;
+    /// <summary>Read-ahead memory cap in bytes, sized from the file's bitrate (null = mpv's default from the options).</summary>
+    public long? CacheBytes { get; init; }
+    /// <summary>
+    /// "Authorization" header value sent with every request for this file and its subtitles
+    /// (the token stays out of the URL). Only ever set for the user's own Jellyfin server.
+    /// </summary>
+    public string? AuthHeader { get; init; }
+    /// <summary>Take the audio device exclusively (Windows: needed only to bitstream TrueHD / DTS-HD).</summary>
+    public bool ExclusiveAudio { get; init; }
 }
+
+/// <summary>A chapter of the playing file (from the file itself).</summary>
+public sealed record MpvChapter(double Seconds, string? Title);
 
 /// <summary>
 /// One libmpv instance driving one video surface. libmpv's API is thread-safe, so calls are
@@ -287,9 +299,17 @@ public sealed class MpvPlayer : IDisposable
             // them when the file starts), which works across all libmpv versions.
             Mpv.mpv_set_property_string(h, "start", load.StartSeconds is > 0.5 ? load.StartSeconds.Value.ToString("0.###", CultureInfo.InvariantCulture) : "none");
             Mpv.mpv_set_property_string(h, "alang", load.AudioLanguage ?? "");
-            Mpv.mpv_set_property_string(h, "slang", load.SubtitleLanguage ?? "");
-            Mpv.mpv_set_property_string(h, "sid", load.SubtitlesOff ? "no" : "auto");
+            ApplySubtitleMode(h, load.SubtitleMode, load.SubtitleLanguage);
             Mpv.mpv_set_property_string(h, "cache-secs", load.CacheSeconds.ToString(CultureInfo.InvariantCulture));
+            if (load.CacheBytes is { } bytes)
+                Mpv.mpv_set_property_string(h, "demuxer-max-bytes", bytes.ToString(CultureInfo.InvariantCulture));
+            // One header, no commas (mpv splits this list on commas). Empty for other hosts.
+            Mpv.mpv_set_property_string(h, "http-header-fields", load.AuthHeader != null ? "Authorization: " + load.AuthHeader : "");
+            if (OperatingSystem.IsWindows())
+                Mpv.mpv_set_property_string(h, "audio-exclusive", load.ExclusiveAudio ? "yes" : "no");
+            // Per-file fine tuning starts from zero again (speed and subtitle size carry over).
+            Mpv.mpv_set_property_string(h, "sub-delay", "0");
+            Mpv.mpv_set_property_string(h, "audio-delay", "0");
             Mpv.mpv_set_property_string(h, "pause", "no");
             int r = Mpv.Command(h, "loadfile", load.Url, "replace");
             if (r < 0) Error?.Invoke(Mpv.ErrorString(r));
@@ -303,22 +323,80 @@ public sealed class MpvPlayer : IDisposable
             Run(h => Mpv.Command(h, "sub-add", url, "auto", title, lang ?? ""));
     }
 
-    public void SetPause(bool pause) => Run(h => Mpv.mpv_set_property_string(h, "pause", pause ? "yes" : "no"));
+    /// <summary>
+    /// Jellyfin's subtitle modes in mpv terms. Options a given libmpv doesn't know are simply
+    /// rejected (older builds then behave as "Default").
+    /// </summary>
+    private static void ApplySubtitleMode(IntPtr h, string mode, string? language)
+    {
+        string sid = "auto", fallback = "default", forced = "yes", matching = "yes", slang = language ?? "";
+        switch (mode)
+        {
+            case "None": sid = "no"; break;
+            case "Always": fallback = "yes"; break;
+            // Only forced (foreign-dialogue) tracks: no language match, no default track, forced always.
+            case "OnlyForced": slang = ""; fallback = "no"; forced = "always"; break;
+            // Subtitles only when the audio is in another language than the subtitles.
+            case "Smart": matching = "no"; break;
+        }
+        Mpv.mpv_set_property_string(h, "slang", slang);
+        Mpv.mpv_set_property_string(h, "sid", sid);
+        Mpv.mpv_set_property_string(h, "subs-fallback", fallback);
+        Mpv.mpv_set_property_string(h, "subs-fallback-forced", forced);
+        Mpv.mpv_set_property_string(h, "subs-with-matching-audio", matching);
+    }
+
+    // UI actions use mpv's asynchronous calls: they return at once even while mpv is busy (e.g.
+    // waiting on the network), so a click or key press never stalls the interface.
+
+    public void SetPause(bool pause) => Run(h => Mpv.SetAsync(h, "pause", pause ? "yes" : "no"));
 
     public void SeekTo(long ms) =>
-        Run(h => Mpv.Command(h, "seek", (Math.Max(0, ms) / 1000.0).ToString("0.###", CultureInfo.InvariantCulture), "absolute"));
+        Run(h => Mpv.CommandAsync(h, "seek", (Math.Max(0, ms) / 1000.0).ToString("0.###", CultureInfo.InvariantCulture), "absolute"));
 
-    public void Stop() => Run(h => Mpv.Command(h, "stop"));
+    public void Stop() => Run(h => Mpv.CommandAsync(h, "stop"));
 
-    public void SetVolume(int volume) => Run(h => Mpv.mpv_set_property_string(h, "volume", Math.Clamp(volume, 0, 130).ToString(CultureInfo.InvariantCulture)));
+    public void SetVolume(int volume) => Run(h => Mpv.SetAsync(h, "volume", Math.Clamp(volume, 0, 130).ToString(CultureInfo.InvariantCulture)));
 
-    public void SetMute(bool mute) => Run(h => Mpv.mpv_set_property_string(h, "mute", mute ? "yes" : "no"));
+    public void SetMute(bool mute) => Run(h => Mpv.SetAsync(h, "mute", mute ? "yes" : "no"));
 
-    public void SetHardwareDecoding(bool on) => Run(h => Mpv.mpv_set_property_string(h, "hwdec", on ? "auto-safe" : "no"));
+    public void SetHardwareDecoding(bool on) => Run(h => Mpv.SetAsync(h, "hwdec", on ? "auto-safe" : "no"));
 
     /// <summary>Audio track id, or -1 to turn subtitles off for <paramref name="type"/> "sub".</summary>
     public void SelectTrack(string type, int id) =>
-        Run(h => Mpv.mpv_set_property_string(h, type == "audio" ? "aid" : "sid", id < 0 ? "no" : id.ToString(CultureInfo.InvariantCulture)));
+        Run(h => Mpv.SetAsync(h, type == "audio" ? "aid" : "sid", id < 0 ? "no" : id.ToString(CultureInfo.InvariantCulture)));
+
+    public void SetSpeed(double speed) => Run(h => Mpv.SetAsync(h, "speed", speed.ToString("0.###", CultureInfo.InvariantCulture)));
+
+    /// <summary>Subtitle timing offset in seconds (positive = later).</summary>
+    public void SetSubtitleDelay(double seconds) => Run(h => Mpv.SetAsync(h, "sub-delay", seconds.ToString("0.###", CultureInfo.InvariantCulture)));
+
+    /// <summary>Audio timing offset in seconds (positive = later).</summary>
+    public void SetAudioDelay(double seconds) => Run(h => Mpv.SetAsync(h, "audio-delay", seconds.ToString("0.###", CultureInfo.InvariantCulture)));
+
+    public void SetSubtitleScale(double scale) => Run(h => Mpv.SetAsync(h, "sub-scale", scale.ToString("0.###", CultureInfo.InvariantCulture)));
+
+    /// <summary>Adds a subtitle file while playing and selects it.</summary>
+    public void AddSubtitle(string url, string title, string? language) =>
+        Run(h => Mpv.CommandAsync(h, "sub-add", url, "select", title, language ?? ""));
+
+    /// <summary>The file's chapters (empty when it has none).</summary>
+    public IReadOnlyList<MpvChapter> GetChapters()
+    {
+        var list = new List<MpvChapter>();
+        lock (_gate)
+        {
+            if (!_initialized || _h == IntPtr.Zero || _terminating) return list;
+            if (!int.TryParse(Mpv.GetString(_h, "chapter-list/count"), out var n)) return list;
+            for (int i = 0; i < n; i++)
+            {
+                if (!double.TryParse(Mpv.GetString(_h, $"chapter-list/{i}/time"), NumberStyles.Float, CultureInfo.InvariantCulture, out var t)) continue;
+                var title = Mpv.GetString(_h, $"chapter-list/{i}/title");
+                list.Add(new MpvChapter(t, string.IsNullOrWhiteSpace(title) ? null : title));
+            }
+        }
+        return list;
+    }
 
     /// <summary>Saves the current frame (as decoded, before any overlay) to a PNG/JPG file.</summary>
     public bool Screenshot(string path)

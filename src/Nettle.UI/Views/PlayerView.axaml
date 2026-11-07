@@ -105,6 +105,8 @@
           <Grid ColumnDefinitions="Auto,*,Auto">
             <TextBlock Text="{Binding PositionText}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0" FontFeatures="tnum" />
             <Slider Grid.Column="1" x:Name="SeekBar" Minimum="0" Maximum="{Binding LengthMs}" Value="{Binding SeekValue}" VerticalAlignment="Center" />
+            <!-- Chapter starts (from the file); PgUp / PgDn jump between them -->
+            <c:ChapterTicks Grid.Column="1" Marks="{Binding ChapterMarks}" IsHitTestVisible="False" Height="12" VerticalAlignment="Center" />
             <TextBlock Grid.Column="2" Text="{Binding RemainingText}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="14,0,0,0" FontFeatures="tnum" />
             <!-- Scrubbing preview (Jellyfin trickplay thumbnails), positioned over the pointer in code-behind -->
             <Canvas Grid.Column="1" IsHitTestVisible="False" ClipToBounds="False">
@@ -137,7 +139,7 @@
               <Button Classes="osd" Command="{Binding SeekForwardCommand}" ToolTip.Tip="{Binding SeekForwardTip}"><PathIcon Data="{StaticResource Icon.Forward}" /></Button>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-              <Button Classes="osd" Command="{Binding PlayNextCommand}" IsVisible="{Binding HasNext}" ToolTip.Tip="Next episode (N)">
+              <Button Classes="osd" Command="{Binding PlayNextCommand}" IsVisible="{Binding HasNext}" ToolTip.Tip="{Binding NextTip}">
                 <PathIcon Data="{StaticResource Icon.SkipNext}" />
               </Button>
             </StackPanel>
@@ -181,6 +183,12 @@
           </StackPanel>
         </Grid>
       </Panel>
+
+      <!-- Brief messages (chapter names, speed, timing) -->
+      <Border IsVisible="{Binding OsdMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" HorizontalAlignment="Center" VerticalAlignment="Top"
+              Margin="0,120,0,0" Background="#CC000000" CornerRadius="12" Padding="20,10" IsHitTestVisible="False">
+        <TextBlock Text="{Binding OsdMessage}" FontSize="18" FontWeight="SemiBold" />
+      </Border>
 
       <!-- Between programs (file ended slightly before its slot) -->
       <TextBlock Text="{Binding LiveInterstitial}" IsVisible="{Binding LiveInterstitial, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -300,8 +308,77 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+            <Button Classes="track" Command="{Binding FindSubtitlesCommand}" IsVisible="{Binding IsVod}" Opacity="0.85">
+              <TextBlock Text="Find subtitles online…" />
+            </Button>
+
+            <!-- Fine-tuning (VOD) -->
+            <StackPanel Spacing="4" IsVisible="{Binding IsVod}">
+              <TextBlock Text="PLAYBACK" FontSize="12" FontWeight="Bold" Opacity="0.6" LetterSpacing="1.2" Margin="4,12,0,4" />
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,0">
+                <TextBlock Text="Speed  [ ]" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="−" Command="{Binding SlowerCommand}" Padding="10,2" />
+                <TextBlock Grid.Column="2" Text="{Binding SpeedText}" MinWidth="64" TextAlignment="Center" VerticalAlignment="Center" FontFeatures="tnum" />
+                <Button Grid.Column="3" Content="+" Command="{Binding FasterCommand}" Padding="10,2" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,0">
+                <TextBlock Text="Subtitle timing  Z X" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="−" Command="{Binding SubtitleEarlierCommand}" Padding="10,2" />
+                <TextBlock Grid.Column="2" Text="{Binding SubtitleDelayText}" MinWidth="64" TextAlignment="Center" VerticalAlignment="Center" FontFeatures="tnum" />
+                <Button Grid.Column="3" Content="+" Command="{Binding SubtitleLaterCommand}" Padding="10,2" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,0">
+                <TextBlock Text="Audio timing" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="−" Command="{Binding AudioEarlierCommand}" Padding="10,2" />
+                <TextBlock Grid.Column="2" Text="{Binding AudioDelayText}" MinWidth="64" TextAlignment="Center" VerticalAlignment="Center" FontFeatures="tnum" />
+                <Button Grid.Column="3" Content="+" Command="{Binding AudioLaterCommand}" Padding="10,2" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,0">
+                <TextBlock Text="Subtitle size" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="−" Command="{Binding SmallerSubtitlesCommand}" Padding="10,2" />
+                <TextBlock Grid.Column="2" Text="{Binding SubtitleScaleText}" MinWidth="64" TextAlignment="Center" VerticalAlignment="Center" FontFeatures="tnum" />
+                <Button Grid.Column="3" Content="+" Command="{Binding LargerSubtitlesCommand}" Padding="10,2" />
+              </Grid>
+              <Button Classes="track" Command="{Binding ResetTuningCommand}" Opacity="0.75">
+                <TextBlock Text="Reset to normal" />
+              </Button>
+            </StackPanel>
           </StackPanel>
         </ScrollViewer>
+      </Border>
+
+      <!-- Subtitles found by the server (its subtitle plugins search; Nettle only talks to your server) -->
+      <Border IsVisible="{Binding IsSubtitleSearchOpen}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,100,36,0"
+              Background="#F8141414" CornerRadius="16" Padding="16" Width="460" MaxHeight="600">
+        <Grid RowDefinitions="Auto,Auto,*">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="FIND SUBTITLES" FontSize="12" FontWeight="Bold" Opacity="0.6" LetterSpacing="1.2" VerticalAlignment="Center" Margin="4,0,0,0" />
+            <Button Grid.Column="1" Classes="osd" Padding="6" Command="{Binding CloseSubtitleSearchCommand}"><PathIcon Data="{StaticResource Icon.Close}" Width="16" Height="16" /></Button>
+          </Grid>
+          <StackPanel Grid.Row="1" Spacing="8" Margin="4,8,4,8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBox Text="{Binding SubtitleSearchLanguage}" Width="90" Watermark="eng" ToolTip.Tip="Language (ISO code, e.g. eng, spa, fra)" />
+              <Button Content="Search" Command="{Binding FindSubtitlesCommand}" />
+              <Arc Classes="spin" Width="22" Height="22" StrokeThickness="3" IsVisible="{Binding IsSubtitleSearching}" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Text="{Binding SubtitleSearchStatus}" TextWrapping="Wrap" Opacity="0.8"
+                       IsVisible="{Binding SubtitleSearchStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
+          <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding RemoteSubtitles}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:RemoteSubtitleViewModel">
+                  <Button Classes="track" Command="{Binding DownloadCommand}" IsEnabled="{Binding !IsDownloading}">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Detail}" FontSize="11.5" Opacity="0.6" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Grid>
       </Border>
     </Panel>
   </c:VideoHost>

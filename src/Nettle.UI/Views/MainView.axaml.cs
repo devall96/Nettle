@@ -56,6 +56,8 @@ public partial class MainView : UserControl
 
         if (vm.Player != null)
         {
+            // Typing in a box (e.g. the subtitle language) isn't a player shortcut.
+            if (e.Source is TextBox && e.Key is not (Key.Escape or Key.Enter)) return;
             if (vm.Player.HandleKey(e.Key)) e.Handled = true;
             return;
         }

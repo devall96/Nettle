@@ -23,10 +23,28 @@ public partial class LibraryView : UserControl
 
     private LibraryViewModel? Vm => DataContext as LibraryViewModel;
 
+    private LibraryViewModel? _hooked;
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
+        if (_hooked != null) _hooked.ScrollToRow -= OnScrollToRow;
+        _hooked = Vm;
+        if (_hooked != null) _hooked.ScrollToRow += OnScrollToRow;
         if (RowsHost.Bounds.Width > 0) UpdateColumns(RowsHost.Bounds.Width);
+    }
+
+    /// <summary>A–Z jump: bring the row into view, then line it up with the top.</summary>
+    private void OnScrollToRow(int row)
+    {
+        if (_scroll == null || row < 0 || row >= RowsHost.ItemCount) return;
+        RowsHost.ScrollIntoView(row);
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (_scroll == null || RowsHost.ContainerFromIndex(row) is not Control c) return;
+            var p = c.TranslatePoint(new Point(0, 0), _scroll.Content as Visual ?? _scroll);
+            if (p is { } pt) _scroll.Offset = new Vector(_scroll.Offset.X, Math.Max(0, pt.Y - 8));
+        }, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     private void UpdateColumns(double width)

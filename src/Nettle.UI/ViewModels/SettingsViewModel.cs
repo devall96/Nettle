@@ -113,11 +113,28 @@ public sealed partial class SettingsViewModel : PageViewModel
     public bool AutoPlayNext { get => P.AutoPlayNextEpisode; set { P.AutoPlayNextEpisode = value; Save(); OnPropertyChanged(); } }
     public string AudioLanguage { get => P.PreferredAudioLanguage; set { P.PreferredAudioLanguage = value.Trim(); Save(); OnPropertyChanged(); } }
     public string SubtitleLanguage { get => P.PreferredSubtitleLanguage; set { P.PreferredSubtitleLanguage = value.Trim(); Save(); OnPropertyChanged(); } }
+
+    /// <summary>When subtitles turn on by themselves (Jellyfin's subtitle modes).</summary>
+    public IReadOnlyList<ChoiceOption> SubtitleModes { get; } =
+    [
+        new("Same as my Jellyfin profile", ""),
+        new("Default (the file's default track)", "Default"),
+        new("Always on", "Always"),
+        new("Only forced (foreign dialogue)", "OnlyForced"),
+        new("Smart (when audio is in another language)", "Smart"),
+        new("Off", "None"),
+    ];
+
+    public ChoiceOption SubtitleModeChoice
+    {
+        get => SubtitleModes.FirstOrDefault(m => m.Value == P.SubtitleMode) ?? SubtitleModes[0];
+        set { P.SubtitleMode = value?.Value ?? ""; Save(); OnPropertyChanged(); }
+    }
     public decimal NetworkBuffer { get => P.NetworkBufferSeconds; set { P.NetworkBufferSeconds = (int)value; Save(); OnPropertyChanged(); } }
     public decimal SeekStep { get => P.SeekStepSeconds; set { P.SeekStepSeconds = (int)value; Save(); OnPropertyChanged(); } }
     public bool AudioPassthrough { get => P.AudioPassthrough; set { P.AudioPassthrough = value; Save(); OnPropertyChanged(); } }
     public string PassthroughHint => OperatingSystem.IsWindows()
-        ? "Sends Dolby (incl. Atmos and TrueHD) and DTS (incl. DTS-HD and DTS:X) untouched to your AV receiver or soundbar over HDMI / S/PDIF. While it plays, Nettle's volume control has no effect and other apps' sound is paused (Windows needs exclusive use of the device). Leave off for TV speakers and headphones."
+        ? "Sends Dolby (incl. Atmos and TrueHD) and DTS (incl. DTS-HD and DTS:X) untouched to your AV receiver or soundbar over HDMI / S/PDIF. While it plays, Nettle's volume control has no effect. For TrueHD and DTS-HD only, other apps' sound is paused (Windows needs exclusive use of the device for those). Leave off for TV speakers and headphones."
         : "Sends Dolby (incl. Atmos and TrueHD) and DTS (incl. DTS-HD and DTS:X) untouched to your AV receiver or soundbar over HDMI / S/PDIF. Your sound server must allow passthrough for that output. Nettle's volume control has no effect on it. Leave off for TV speakers and headphones.";
 
     public bool StillWatchingPrompt

@@ -5,8 +5,24 @@ using Nettle.Core.Api;
 
 namespace Nettle.UI.ViewModels;
 
+/// <summary>A Seerr search hit that isn't in the library yet; opens it on the Requests page.</summary>
+public sealed partial class SeerrSuggestionViewModel(Nettle.Core.Models.SeerrResult r)
+{
+    public string Title => r.DisplayTitle;
+    public string Subtitle => $"{(r.MediaType == "tv" ? "Series" : "Movie")}{(r.Year != null ? "  •  " + r.Year : "")}";
+    public string? PosterUrl => AppServices.Seerr.ImageUrl(r.PosterPath, 342);
+    public string Status => Nettle.Core.Models.SeerrMediaStatus.Describe(r.MediaInfo?.Status) is { Length: > 0 } s ? s : "Not in your library";
+
+    [RelayCommand]
+    private void Open() => AppServices.Main.Shell?.NavigateRoot(new RequestsViewModel { SearchText = r.DisplayTitle });
+}
+
 public sealed partial class SearchViewModel : PageViewModel
 {
+    /// <summary>Matching titles from Seerr that aren't available in the library (requestable).</summary>
+    public ObservableCollection<SeerrSuggestionViewModel> SeerrSuggestions { get; } = new();
+    [ObservableProperty] private bool _hasSeerrSuggestions;
+
     public override string NavKey => "search";
     public ObservableCollection<CardRowViewModel> Results { get; } = new();
     [ObservableProperty] private string _query = "";
@@ -38,10 +54,13 @@ public sealed partial class SearchViewModel : PageViewModel
         if (string.IsNullOrWhiteSpace(text))
         {
             Results.Clear();
+            SeerrSuggestions.Clear();
+            HasSeerrSuggestions = false;
             NoResults = false;
             return;
         }
 
+        _ = SearchSeerrAsync(text.Trim(), cts.Token);
         await RunAsync(async () =>
         {
             // One query per kind, in parallel: a single mixed query lets a common word fill the
@@ -77,6 +96,27 @@ public sealed partial class SearchViewModel : PageViewModel
             foreach (var r in built) Results.Add(r);
             NoResults = Results.Count == 0;
         }, showBusy: true);
+    }
+
+    /// <summary>Seerr's matches that aren't available yet, shown under the library results (only when Seerr is set up).</summary>
+    private async Task SearchSeerrAsync(string term, CancellationToken ct)
+    {
+        if (!AppServices.Seerr.IsConfigured) return;
+        try
+        {
+            var page = await AppServices.Seerr.SearchAsync(term, 1, ct);
+            if (ct.IsCancellationRequested) return;
+            var hits = page.Results
+                .Where(r => r.MediaType is "movie" or "tv" && r.MediaInfo?.Status is not Nettle.Core.Models.SeerrMediaStatus.Available)
+                .Take(12)
+                .Select(r => new SeerrSuggestionViewModel(r))
+                .ToList();
+            SeerrSuggestions.Clear();
+            foreach (var h in hits) SeerrSuggestions.Add(h);
+            HasSeerrSuggestions = SeerrSuggestions.Count > 0;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { Nettle.Core.Services.Log.Info("Seerr search failed: " + ex.Message); }
     }
 
     [RelayCommand]

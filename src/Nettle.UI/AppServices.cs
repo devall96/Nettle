@@ -33,6 +33,10 @@ public static class AppServices
     public static NtvClient Ntv { get; private set; } = null!;
     public static ImageCache Images { get; private set; } = null!;
     public static MainViewModel Main { get; set; } = null!;
+    /// <summary>The server WebSocket: remote control from other Jellyfin apps, live updates.</summary>
+    public static RemoteControl Remote { get; private set; } = null!;
+    /// <summary>Display scaling of the main window (2 on a 4K screen at 200%), for sizing images.</summary>
+    public static double UiScale { get; set; } = 1;
 
     public static void Initialize(IPlatformInfo platform, ISecureStore secure)
     {
@@ -47,7 +51,9 @@ public static class AppServices
         NtvItems = new NtvItemResolver(Jellyfin);
         Seerr = new SeerrClient();
         Ntv = new NtvClient();
-        Images = new ImageCache(Path.Combine(platform.CacheDirectory, "images")) { IsAllowed = IsAllowedHost };
+        Remote = new RemoteControl(Jellyfin);
+        Images = new ImageCache(Path.Combine(platform.CacheDirectory, "images")) { IsAllowed = IsAllowedHost,
+            AuthHeaderFor = u => Jellyfin.IsServerUrl(u.AbsoluteUri) ? Jellyfin.TokenHeaderValue : null };
     }
 
     /// <summary>

@@ -23,6 +23,9 @@ namespace Nettle.Core.Json;
 [JsonSerializable(typeof(PlaybackProgressInfo))]
 [JsonSerializable(typeof(List<PluginInfo>))]
 [JsonSerializable(typeof(DiscoveredServer))]
+[JsonSerializable(typeof(List<RemoteSubtitleInfo>))]
+[JsonSerializable(typeof(ClientCapabilitiesDto))]
+[JsonSerializable(typeof(HomeSnapshot))]
 [JsonSerializable(typeof(object))]
 public partial class JellyfinJson : JsonSerializerContext { }
 

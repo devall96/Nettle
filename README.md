@@ -84,13 +84,20 @@ Jellyfin server and a few minutes, you'd help a lot:
 - **Scrubbing previews.** Hover over or drag the seek bar to see thumbnails, using the trickplay images your Jellyfin server already generates.
 - **Audio passthrough** (optional): Dolby Digital, Dolby Digital Plus / Atmos, TrueHD, DTS and DTS-HD / DTS:X go to your AV receiver untouched, so it decodes them, height channels included.
 - Resume points, watched status and your audio / subtitle choices stay in sync with your server. Closing Nettle mid-episode still saves where you were.
-- Audio and subtitle track menu, including external subtitles. Adjustable network buffer for slow Wi-Fi.
+- Audio and subtitle track menu, including external subtitles. Adjustable network buffer for slow Wi-Fi, sized to each file's bitrate so even 4K remuxes really get that much read-ahead.
+- **Fine-tuning while you watch:** playback speed, subtitle and audio timing, and subtitle size. Speed and subtitle size are remembered.
+- **Chapters:** marks on the seek bar, chapter names in the scrubbing preview, and Page Up / Page Down to jump between them.
+- **Find subtitles online** from the player, through your server's subtitle plugins (such as Open Subtitles). Nettle itself only talks to your server.
+- **Subtitles turn on the way you like:** default track, always, only forced (foreign dialogue), smart (when the audio is in another language), or off. By default this, and your audio and subtitle languages, follow each person's own Jellyfin profile.
+- **Play all and Shuffle** for libraries and collections, and **Shuffle for a whole series** (every episode of every season, in random order).
+- **Play on Nettle from other Jellyfin apps.** Nettle shows up as a "Play on" target: your phone can start, queue, pause, seek, skip and change the volume or tracks.
 
 ### Browsing
-- **Home:** a spotlight carousel with logo art, plus Continue Watching, Next Up, and Recently Added for each library.
-- **Libraries:** a fast grid that only draws the posters on screen, with sort and filters (unwatched, in progress, favorites).
-- **Details:** backdrop, logo, ratings, file info, cast and crew, seasons and episodes, More Like This, and a version picker.
-- **Search** across your library. If something's missing, one click searches Seerr to request it.
+- **Home:** a spotlight carousel with logo art, plus Continue Watching, Next Up, and Recently Added for each library (except libraries you hid from it in Jellyfin). It appears instantly at startup, from your last visit, while fresh data loads.
+- **Libraries:** a fast grid that only draws the posters on screen, with sort and filters (unwatched, in progress, favorites, genre, decade, 4K / HD / SD), and an A–Z strip to jump through long libraries.
+- **Details:** backdrop, logo, ratings, file info, cast and crew, seasons and episodes, trailers and extras stored on your server, More Like This, and a version picker. Click anyone in the cast to see everything they're in.
+- **Search** across your library, by kind (movies, shows, episodes…). With Seerr set up, titles you don't have yet appear below, ready to request.
+- Stays current: watched status and new items from other devices show up without a refresh.
 
 ### Live TV: NostalgiaTV
 - A full cable-style **program guide** covering everything NostalgiaTV has scheduled (usually several days), with a live "now" line. Scroll through it, or jump ahead 90 minutes at a time. It opens instantly on later visits, and stays fast however far ahead NostalgiaTV schedules.
@@ -186,10 +193,13 @@ your Jellyfin server for NostalgiaTV (port 19850) and Seerr (port 5055), using t
 | Esc / Back | Go back (mouse back button too) | Close player | Close player |
 | F / F11 | Full screen | Full screen | Full screen |
 | S | | Skip intro/credits | |
-| N | | Next episode | |
+| N / Media next | | Next episode (or next in the queue) | |
+| Media previous | | Previous in the queue, or back to the start | |
 | M | | Mute | Mute |
 | I | | Show format badges | Show format badges |
-| Page Up / Page Down | | | Channel up / down |
+| Page Up / Page Down | | Previous / next chapter | Channel up / down |
+| [ / ] | | Slower / faster | |
+| Z / X | | Subtitles earlier / later | |
 
 ### Live TV (NostalgiaTV)
 Usually set up automatically when you sign in (see [First run](#first-run)). To do it by hand, go to **Settings → NostalgiaTV** and enter your NostalgiaTV address, for example `http://your-server:19850`. An API key is optional. Press **Save & test**, then open **Live TV**.
@@ -213,7 +223,7 @@ Updates are **off unless you use them**:
 
 Nettle contains **no telemetry, analytics, crash reporting, ads or tracking**. It only ever connects to:
 
-- the Jellyfin, NostalgiaTV and Seerr servers *you* enter;
+- the Jellyfin, NostalgiaTV and Seerr servers *you* enter (including a live connection to your Jellyfin server, so other Jellyfin apps can control Nettle and changes show up instantly);
 - right after you sign in, the NostalgiaTV and Seerr ports (19850 and 5055) on *your Jellyfin server's own machine*, to set them up for you (never any other machine);
 - your local network, when the sign-in screen looks for Jellyfin servers;
 - your chosen update source, and only when you check for updates;
@@ -229,7 +239,7 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.3.2 beta)
+## Known limitations (0.4.0 beta)
 - **Both platforms are beta.** Expect some bugs, and please report them.
 - **Linux:**
   - It's untested so far on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
@@ -237,7 +247,7 @@ Other privacy details:
   - Video is drawn through OpenGL inside Nettle's own window. If your graphics driver can't do that, Nettle falls back to mpv's own window, or you can force that with `NETTLE_VIDEO=window`.
   - The AppImage carries mpv 0.37 (from Ubuntu 24.04); Windows builds use mpv 0.42.
   - If your desktop has no keyring at all, sign-ins are kept in a file only your user can read.
-- **Audio passthrough** depends on your receiver and, on Linux, on your sound server allowing it for that output. It's off by default. On Windows it takes exclusive use of the audio device while playing.
+- **Audio passthrough** depends on your receiver and, on Linux, on your sound server allowing it for that output. It's off by default. On Windows, TrueHD and DTS-HD need exclusive use of the audio device while they play (other formats don't).
 - Not code-signed yet, so SmartScreen shows a warning on first install.
 - Windows and Linux for now. The code is structured for Android TV and iOS versions later.
 

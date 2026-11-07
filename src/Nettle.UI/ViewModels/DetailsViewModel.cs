@@ -48,12 +48,19 @@ public sealed partial class EpisodeViewModel : ObservableObject
     }
 }
 
-public sealed class PersonViewModel(BaseItemPerson p)
+public sealed partial class PersonViewModel(BaseItemPerson p) : ObservableObject
 {
     public string Name => p.Name ?? "";
     public string Role => p.Role ?? p.Type ?? "";
     public string Initial => string.IsNullOrEmpty(p.Name) ? "?" : p.Name[..1];
     public string? ImageUrl => p.PrimaryImageTag != null ? AppServices.Jellyfin.ImageUrl(p.Id, "Primary", p.PrimaryImageTag, 200) : null;
+
+    /// <summary>Opens everything in the libraries this person is in.</summary>
+    [RelayCommand]
+    private void Open()
+    {
+        if (!string.IsNullOrEmpty(p.Id)) AppServices.Main.Shell?.OpenPerson(p.Id, p.Name ?? "");
+    }
 }
 
 public sealed record MediaVersion(string Id, string Label)
@@ -94,7 +101,12 @@ public sealed partial class DetailsViewModel : PageViewModel
     public ObservableCollection<PersonViewModel> Cast { get; } = new();
     public ObservableCollection<MediaCardViewModel> Similar { get; } = new();
     public ObservableCollection<MediaVersion> Versions { get; } = new();
+    /// <summary>Extras stored with the item (behind the scenes, featurettes…); they play directly.</summary>
+    public ObservableCollection<MediaCardViewModel> Extras { get; } = new();
+    private List<BaseItemDto> _trailers = new();
 
+    public bool HasTrailer => _trailers.Count > 0;
+    public bool HasExtras => Extras.Count > 0;
     public bool HasLogo => LogoUrl != null;
     public bool HasCast => Cast.Count > 0;
     public bool HasSimilar => Similar.Count > 0;
@@ -123,6 +135,9 @@ public sealed partial class DetailsViewModel : PageViewModel
         var jf = AppServices.Jellyfin;
         var item = await jf.GetItemAsync(_itemId);
         var similarTask = item.IsEpisode || (refresh && Similar.Count > 0) ? null : jf.GetSimilarAsync(item.Id, 16);
+        // Local trailers and extras only (files on the server; online trailers are never fetched).
+        var trailersTask = refresh || item.IsEpisode ? null : jf.GetLocalTrailersAsync(item.Id);
+        var extrasTask = refresh ? null : jf.GetSpecialFeaturesAsync(item.Id);
         Item = item;
         IsSeries = item.IsSeries;
         IsEpisode = item.IsEpisode;
@@ -175,6 +190,18 @@ public sealed partial class DetailsViewModel : PageViewModel
             PlayLabel = pos > 0 ? "Resume " + Format.Clock(TimeSpan.FromTicks(pos)) : "Play";
         }
 
+        if (trailersTask != null)
+        {
+            _trailers = (await trailersTask).Where(t => t.IsPlayable || t.Type == "Trailer").ToList();
+            OnPropertyChanged(nameof(HasTrailer));
+        }
+        if (extrasTask != null)
+        {
+            Extras.Clear();
+            foreach (var x in await extrasTask) Extras.Add(new MediaCardViewModel(x, CardShape.Landscape) { PlayOnOpen = true });
+            OnPropertyChanged(nameof(HasExtras));
+        }
+
         if (similarTask != null)
         {
             try
@@ -186,6 +213,37 @@ public sealed partial class DetailsViewModel : PageViewModel
             catch { }
             OnPropertyChanged(nameof(HasSimilar));
         }
+    }
+
+    [RelayCommand]
+    private void PlayTrailer()
+    {
+        if (_trailers.Count == 0) return;
+        if (_trailers.Count == 1) AppServices.Main.PlayItem(_trailers[0], resume: false);
+        else AppServices.Main.PlayQueue(_trailers);
+    }
+
+    /// <summary>Every episode of every season, in random order.</summary>
+    [RelayCommand]
+    private async Task ShuffleSeries()
+    {
+        if (Item is not { IsSeries: true } series) return;
+        await RunAsync(async () =>
+        {
+            var res = await AppServices.Jellyfin.GetItemsAsync(new Nettle.Core.Api.ItemQuery
+            {
+                ParentId = series.Id,
+                IncludeItemTypes = "Episode",
+                Recursive = true,
+                SortBy = "Random",
+                IsMissing = false,
+                SortOrder = "Ascending",
+                Limit = 500,
+            });
+            var eps = res.Items.Where(e => e.IsEpisode).ToList();
+            if (eps.Count == 0) { AppServices.Main.Toast("No episodes to shuffle"); return; }
+            AppServices.Main.PlayQueue(eps);
+        }, showBusy: false);
     }
 
     private void BuildMediaInfo(BaseItemDto item)

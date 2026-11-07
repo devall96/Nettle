@@ -38,6 +38,8 @@ public sealed class UserConfiguration
     public string? SubtitleLanguagePreference { get; set; }
     /// <summary>"Default", "Always", "OnlyForced", "None" or "Smart".</summary>
     public string? SubtitleMode { get; set; }
+    /// <summary>Libraries the user hid from "Recently added" in their Jellyfin home settings.</summary>
+    public List<string>? LatestItemsExcludes { get; set; }
 }
 
 public sealed class AuthenticateUserByName
@@ -195,7 +197,7 @@ public sealed class BaseItemDto
     public bool IsEpisode => Type == "Episode";
     public bool IsSeason => Type == "Season";
     public bool IsMovie => Type == "Movie";
-    public bool IsPlayable => Type is "Movie" or "Episode" or "Video" or "MusicVideo" or "Audio" or "TvChannel";
+    public bool IsPlayable => Type is "Movie" or "Episode" or "Video" or "MusicVideo" or "Audio" or "TvChannel" or "Trailer";
 
     public string? Tag(string imageType) =>
         ImageTags != null && ImageTags.TryGetValue(imageType, out var t) ? t : null;
@@ -328,4 +330,43 @@ public sealed class DiscoveredServer
     public string? Id { get; set; }
     public string? Name { get; set; }
     public string? EndpointAddress { get; set; }
+}
+
+/// <summary>A subtitle the server's subtitle provider plugins found (GET /Items/{id}/RemoteSearch/Subtitles/{lang}).</summary>
+public sealed class RemoteSubtitleInfo
+{
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? ProviderName { get; set; }
+    public string? Format { get; set; }
+    public string? Author { get; set; }
+    public string? Comment { get; set; }
+    public string? ThreeLetterISOLanguageName { get; set; }
+    public int? DownloadCount { get; set; }
+    public float? CommunityRating { get; set; }
+    public bool? IsHashMatch { get; set; }
+    public bool? HearingImpaired { get; set; }
+    public bool? Forced { get; set; }
+}
+
+/// <summary>What this client can do when another Jellyfin app controls it (POST /Sessions/Capabilities/Full).</summary>
+public sealed class ClientCapabilitiesDto
+{
+    public List<string> PlayableMediaTypes { get; set; } = new();
+    public List<string> SupportedCommands { get; set; } = new();
+    public bool SupportsMediaControl { get; set; }
+    public bool SupportsPersistentIdentifier { get; set; } = true;
+}
+
+/// <summary>
+/// The last home screen this account saw, so the next start can paint it at once while fresh
+/// data loads. Kept in the cache folder and deleted when the account is removed.
+/// </summary>
+public sealed class HomeSnapshot
+{
+    public List<BaseItemDto> Views { get; set; } = new();
+    public List<BaseItemDto> Resume { get; set; } = new();
+    public List<BaseItemDto> NextUp { get; set; } = new();
+    /// <summary>Library id → its "recently added" items.</summary>
+    public Dictionary<string, List<BaseItemDto>> Latest { get; set; } = new();
 }

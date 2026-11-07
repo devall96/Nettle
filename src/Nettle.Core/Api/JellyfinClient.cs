@@ -16,8 +16,19 @@ namespace Nettle.Core.Api;
 public sealed class JellyfinClient
 {
     public const string ClientName = "Nettle";
+    /// <summary>For rows that feed the home banner (it shows the overview and genres).</summary>
     public const string ListFields = "PrimaryImageAspectRatio,Overview,Genres,MediaSourceCount";
-    public const string DetailFields = "Overview,Genres,People,Studios,Taglines,MediaSources,MediaStreams,Chapters,OriginalTitle,PrimaryImageAspectRatio";
+    /// <summary>For cards (grids, rows, search): no overview / genre text, which cards never show.</summary>
+    public const string CardFields = "PrimaryImageAspectRatio,MediaSourceCount";
+    /// <summary>Episode lists show each episode's overview, but never need its media streams.</summary>
+    public const string EpisodeFields = "PrimaryImageAspectRatio,Overview";
+    public const string DetailFields = "Overview,Genres,People,Studios,Taglines,MediaSources,MediaStreams,OriginalTitle,PrimaryImageAspectRatio";
+
+    /// <summary>
+    /// Raised (on a background thread) when the server rejects the saved session with 401, i.e.
+    /// the token was revoked or expired. Not raised for sign-in attempts.
+    /// </summary>
+    public event Action? SessionRejected;
 
     private readonly HttpClient _http;
     private readonly string _deviceName;
@@ -58,6 +69,18 @@ public sealed class JellyfinClient
         return sb.ToString();
     }
 
+    /// <summary>
+    /// "Authorization" header value that carries only the token (no commas, so it also fits
+    /// mpv's header list). Lets media URLs stay token-free, so the token never lands in
+    /// reverse-proxy access logs. Null when signed out.
+    /// </summary>
+    public string? TokenHeaderValue => string.IsNullOrEmpty(Token) ? null : $"MediaBrowser Token=\"{Token}\"";
+
+    /// <summary>True when <paramref name="url"/> points at the signed-in Jellyfin server.</summary>
+    public bool IsServerUrl(string? url) =>
+        BaseUrl != null && url != null && Uri.TryCreate(url, UriKind.Absolute, out var u) && Uri.TryCreate(BaseUrl, UriKind.Absolute, out var b)
+        && string.Equals(u.Host, b.Host, StringComparison.OrdinalIgnoreCase) && u.Port == b.Port && u.Scheme == b.Scheme;
+
     private string Url(string path) => BaseUrl + path;
 
     private HttpRequestMessage Req(HttpMethod m, string path)
@@ -79,6 +102,7 @@ public sealed class JellyfinClient
 
             using (resp)
             {
+                CheckRejected(req, resp);
                 await EnsureOk(resp).ConfigureAwait(false);
                 await using var s = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 return (await JsonSerializer.DeserializeAsync(s, type, ct).ConfigureAwait(false))!;
@@ -93,8 +117,22 @@ public sealed class JellyfinClient
             HttpResponseMessage resp;
             try { resp = await _http.SendAsync(req, ct).ConfigureAwait(false); }
             catch (HttpRequestException ex) { throw new ApiException("Can't reach the server. " + ex.Message, null, ex); }
-            using (resp) await EnsureOk(resp).ConfigureAwait(false);
+            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested) { throw new ApiException("The server took too long to respond.", null, ex); }
+            using (resp)
+            {
+                CheckRejected(req, resp);
+                await EnsureOk(resp).ConfigureAwait(false);
+            }
         }
+    }
+
+    /// <summary>A 401 on a request made with our token means the session is gone (not a wrong password).</summary>
+    private void CheckRejected(HttpRequestMessage req, HttpResponseMessage resp)
+    {
+        if (resp.StatusCode != HttpStatusCode.Unauthorized || string.IsNullOrEmpty(Token)) return;
+        var path = req.RequestUri?.AbsolutePath ?? "";
+        if (path.Contains("/Authenticate", StringComparison.OrdinalIgnoreCase) || path.EndsWith("/Sessions/Logout", StringComparison.OrdinalIgnoreCase)) return;
+        try { SessionRejected?.Invoke(); } catch { }
     }
 
     private static async Task EnsureOk(HttpResponseMessage resp)
@@ -150,22 +188,44 @@ public sealed class JellyfinClient
             }
         }
 
+        // All candidates are tried at once (worst case is one timeout, not one per address), but
+        // the answer is taken in preference order, so https still wins over http when both work.
+        using var all = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var attempts = candidates.Select(c => ProbeOneAsync(c, all.Token)).ToList();
         ApiException? last = null;
-        foreach (var c in candidates)
+        try
         {
-            try
+            foreach (var attempt in attempts)
             {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(6));
-                var req = new HttpRequestMessage(HttpMethod.Get, c + "/System/Info/Public");
-                var info = await SendAsync(req, JellyfinJson.Default.PublicSystemInfo, cts.Token).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(info.Id)) return (c, info);
+                var (url, info, error) = await attempt.ConfigureAwait(false);
+                if (info != null) return (url, info);
+                last = error ?? last;
             }
-            catch (ApiException ex) { last = ex; }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested) { last = new ApiException("Timed out connecting to " + c); }
-            catch (JsonException) { last = new ApiException(c + " doesn't look like a Jellyfin server."); }
         }
+        finally
+        {
+            all.Cancel();
+            // Let the rest finish quietly (each one catches its own errors).
+            try { await Task.WhenAll(attempts).ConfigureAwait(false); } catch { }
+        }
+        ct.ThrowIfCancellationRequested();
         throw last ?? new ApiException("Couldn't find a Jellyfin server at that address.");
+    }
+
+    private async Task<(string Url, PublicSystemInfo? Info, ApiException? Error)> ProbeOneAsync(string c, CancellationToken ct)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(6));
+            var req = new HttpRequestMessage(HttpMethod.Get, c + "/System/Info/Public");
+            var info = await SendAsync(req, JellyfinJson.Default.PublicSystemInfo, cts.Token).ConfigureAwait(false);
+            return !string.IsNullOrEmpty(info.Id) ? (c, info, null) : (c, null, new ApiException(c + " doesn't look like a Jellyfin server."));
+        }
+        catch (ApiException ex) { return (c, null, ex); }
+        catch (OperationCanceledException) { return (c, null, ct.IsCancellationRequested ? null : new ApiException("Timed out connecting to " + c)); }
+        catch (JsonException) { return (c, null, new ApiException(c + " doesn't look like a Jellyfin server.")); }
+        catch (Exception ex) { return (c, null, new ApiException("Can't reach " + c + ". " + ex.Message, null, ex)); }
     }
 
     /// <summary>
@@ -268,12 +328,12 @@ public sealed class JellyfinClient
     public Task<QueryResult<BaseItemDto>> GetResumeAsync(int limit = 16, CancellationToken ct = default) =>
         SendAsync(Req(HttpMethod.Get, "/UserItems/Resume" + new Query()
             .Add("userId", UserId).Add("limit", limit).Add("mediaTypes", "Video")
-            .Add("fields", ListFields).Add("enableImageTypes", "Primary,Backdrop,Thumb,Logo").Add("imageTypeLimit", 1)),
+            .Add("fields", CardFields).Add("enableImageTypes", "Primary,Backdrop,Thumb,Logo").Add("imageTypeLimit", 1)),
             JellyfinJson.Default.QueryResultBaseItemDto, ct);
 
     public Task<QueryResult<BaseItemDto>> GetNextUpAsync(int limit = 16, string? seriesId = null, CancellationToken ct = default) =>
         SendAsync(Req(HttpMethod.Get, "/Shows/NextUp" + new Query()
-            .Add("userId", UserId).Add("limit", limit).Add("seriesId", seriesId).Add("fields", ListFields)
+            .Add("userId", UserId).Add("limit", limit).Add("seriesId", seriesId).Add("fields", CardFields)
             .Add("enableImageTypes", "Primary,Backdrop,Thumb,Logo").Add("imageTypeLimit", 1).Add("enableResumable", false)),
             JellyfinJson.Default.QueryResultBaseItemDto, ct);
 
@@ -289,7 +349,9 @@ public sealed class JellyfinClient
             .Add("recursive", q.Recursive).Add("sortBy", q.SortBy).Add("sortOrder", q.SortOrder)
             .Add("startIndex", q.StartIndex).Add("limit", q.Limit).Add("filters", q.Filters)
             .Add("searchTerm", q.SearchTerm).Add("genres", q.Genres).Add("personIds", q.PersonIds)
-            .Add("fields", q.Fields ?? ListFields).Add("imageTypeLimit", 1)
+            .Add("ids", q.Ids).Add("years", q.Years).Add("is4K", q.Is4K).Add("isHd", q.IsHd).Add("nameLessThan", q.NameLessThan)
+            .Add("isMissing", q.IsMissing)
+            .Add("fields", q.Fields ?? CardFields).Add("imageTypeLimit", 1)
             .Add("enableImageTypes", "Primary,Backdrop,Thumb,Logo").Add("enableTotalRecordCount", true)),
             JellyfinJson.Default.QueryResultBaseItemDto, ct);
 
@@ -298,12 +360,12 @@ public sealed class JellyfinClient
             JellyfinJson.Default.BaseItemDto, ct);
 
     public Task<QueryResult<BaseItemDto>> GetSeasonsAsync(string seriesId, CancellationToken ct = default) =>
-        SendAsync(Req(HttpMethod.Get, $"/Shows/{seriesId}/Seasons" + new Query().Add("userId", UserId).Add("fields", ListFields)),
+        SendAsync(Req(HttpMethod.Get, $"/Shows/{seriesId}/Seasons" + new Query().Add("userId", UserId).Add("fields", CardFields)),
             JellyfinJson.Default.QueryResultBaseItemDto, ct);
 
     public Task<QueryResult<BaseItemDto>> GetEpisodesAsync(string seriesId, string? seasonId, CancellationToken ct = default) =>
         SendAsync(Req(HttpMethod.Get, $"/Shows/{seriesId}/Episodes" + new Query()
-            .Add("userId", UserId).Add("seasonId", seasonId).Add("fields", ListFields + ",MediaSources")),
+            .Add("userId", UserId).Add("seasonId", seasonId).Add("fields", EpisodeFields)),
             JellyfinJson.Default.QueryResultBaseItemDto, ct);
 
     /// <summary>
@@ -340,12 +402,78 @@ public sealed class JellyfinClient
         catch (JsonException) { return null; }
     }
 
-    /// <summary>One sheet of trickplay thumbnails (a JPEG holding TileWidth × TileHeight thumbnails).</summary>
+    /// <summary>
+    /// One sheet of trickplay thumbnails (a JPEG holding TileWidth × TileHeight thumbnails).
+    /// No token in the URL: the image cache sends <see cref="TokenHeaderValue"/> to this server.
+    /// </summary>
     public string TrickplayTileUrl(string itemId, string mediaSourceId, int width, int index) =>
-        $"{BaseUrl}/Videos/{itemId}/Trickplay/{width}/{index}.jpg" + new Query().Add("mediaSourceId", mediaSourceId).Add("ApiKey", Token);
+        $"{BaseUrl}/Videos/{itemId}/Trickplay/{width}/{index}.jpg" + new Query().Add("mediaSourceId", mediaSourceId);
+
+    /// <summary>Trailers stored next to the item (local files only; online trailers are never used).</summary>
+    public async Task<List<BaseItemDto>> GetLocalTrailersAsync(string id, CancellationToken ct = default)
+    {
+        try
+        {
+            return await SendAsync(Req(HttpMethod.Get, $"/Items/{id}/LocalTrailers" + new Query().Add("userId", UserId)),
+                JellyfinJson.Default.ListBaseItemDto, ct).ConfigureAwait(false);
+        }
+        catch (ApiException) { return new(); }
+    }
+
+    /// <summary>Extras (behind the scenes, deleted scenes, featurettes…) stored with the item.</summary>
+    public async Task<List<BaseItemDto>> GetSpecialFeaturesAsync(string id, CancellationToken ct = default)
+    {
+        try
+        {
+            return await SendAsync(Req(HttpMethod.Get, $"/Items/{id}/SpecialFeatures" + new Query().Add("userId", UserId)),
+                JellyfinJson.Default.ListBaseItemDto, ct).ConfigureAwait(false);
+        }
+        catch (ApiException) { return new(); }
+    }
+
+    /// <summary>Genres used in a library (names only).</summary>
+    public async Task<List<string>> GetGenresAsync(string? parentId, string? includeTypes, CancellationToken ct = default)
+    {
+        var r = await SendAsync(Req(HttpMethod.Get, "/Genres" + new Query()
+            .Add("userId", UserId).Add("parentId", parentId).Add("includeItemTypes", includeTypes).Add("sortBy", "SortName")
+            .Add("enableImages", false).Add("enableTotalRecordCount", false)),
+            JellyfinJson.Default.QueryResultBaseItemDto, ct).ConfigureAwait(false);
+        return r.Items.Select(g => g.Name).Where(n => !string.IsNullOrEmpty(n)).Select(n => n!).ToList();
+    }
+
+    // ---------- Subtitles found by the server (its subtitle provider plugins do the searching) ----------
+
+    public Task<List<RemoteSubtitleInfo>> SearchRemoteSubtitlesAsync(string itemId, string language, CancellationToken ct = default) =>
+        SendAsync(Req(HttpMethod.Get, $"/Items/{itemId}/RemoteSearch/Subtitles/{Uri.EscapeDataString(language)}"),
+            JellyfinJson.Default.ListRemoteSubtitleInfo, ct);
+
+    public Task DownloadRemoteSubtitleAsync(string itemId, string subtitleId, CancellationToken ct = default) =>
+        SendAsync(Req(HttpMethod.Post, $"/Items/{itemId}/RemoteSearch/Subtitles/{Uri.EscapeDataString(subtitleId)}"), ct);
+
+    // ---------- Session capabilities (remote control from other Jellyfin apps) ----------
+
+    public async Task PostCapabilitiesAsync(ClientCapabilitiesDto caps, CancellationToken ct = default)
+    {
+        var req = Req(HttpMethod.Post, "/Sessions/Capabilities/Full");
+        req.Content = Json(caps, JellyfinJson.Default.ClientCapabilitiesDto);
+        await SendAsync(req, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>ws(s):// address of the server's WebSocket, or null when not configured.</summary>
+    public Uri? SocketUri()
+    {
+        if (BaseUrl == null || !Uri.TryCreate(BaseUrl, UriKind.Absolute, out var b)) return null;
+        var ub = new UriBuilder(b) { Scheme = b.Scheme == "https" ? "wss" : "ws", Port = b.Port };
+        ub.Path = ub.Path.TrimEnd('/') + "/socket";
+        ub.Query = "deviceId=" + Uri.EscapeDataString(DeviceId);
+        return ub.Uri;
+    }
+
+    /// <summary>The headers the WebSocket handshake needs (full client identity + token).</summary>
+    public string AuthorizationHeaderValue => AuthHeader();
 
     public Task<QueryResult<BaseItemDto>> GetSimilarAsync(string id, int limit = 16, CancellationToken ct = default) =>
-        SendAsync(Req(HttpMethod.Get, $"/Items/{id}/Similar" + new Query().Add("userId", UserId).Add("limit", limit).Add("fields", ListFields)),
+        SendAsync(Req(HttpMethod.Get, $"/Items/{id}/Similar" + new Query().Add("userId", UserId).Add("limit", limit).Add("fields", CardFields)),
             JellyfinJson.Default.QueryResultBaseItemDto, ct);
 
     public Task SetPlayedAsync(string id, bool played) =>
@@ -368,16 +496,18 @@ public sealed class JellyfinClient
 
     /// <summary>
     /// The original file, byte-for-byte (static=true). This is the only video URL Nettle ever builds.
+    /// It carries no token: the player sends <see cref="TokenHeaderValue"/> as a header instead.
     /// </summary>
     public string DirectStreamUrl(string itemId, string? mediaSourceId, string? playSessionId) =>
         $"{BaseUrl}/Videos/{itemId}/stream" + new Query()
             .Add("static", true).Add("mediaSourceId", mediaSourceId).Add("playSessionId", playSessionId)
-            .Add("deviceId", DeviceId).Add("ApiKey", Token);
+            .Add("deviceId", DeviceId);
 
+    /// <summary>An external subtitle file as stored on the server (no conversion). Token goes in a header.</summary>
     public string ExternalSubtitleUrl(string itemId, string mediaSourceId, MediaStream s)
     {
         var codec = string.IsNullOrEmpty(s.Codec) ? "srt" : s.Codec.ToLowerInvariant() switch { "subrip" => "srt", "webvtt" => "vtt", var c => c };
-        return $"{BaseUrl}/Videos/{itemId}/{mediaSourceId}/Subtitles/{s.Index}/0/Stream.{codec}" + new Query().Add("ApiKey", Token);
+        return $"{BaseUrl}/Videos/{itemId}/{mediaSourceId}/Subtitles/{s.Index}/0/Stream.{codec}";
     }
 
     public Task ReportStartAsync(PlaybackProgressInfo p) => PostReport("/Sessions/Playing", p);
@@ -426,7 +556,8 @@ public sealed class JellyfinClient
     public string? ImageUrl(string? itemId, string type, string? tag, int maxWidth, int quality = 90)
     {
         if (itemId == null || BaseUrl == null) return null;
-        return $"{BaseUrl}/Items/{itemId}/Images/{type}" + new Query().Add("tag", tag).Add("maxWidth", maxWidth).Add("quality", quality);
+        // WebP: about a third smaller than JPEG at the same quality, and keeps logos' transparency.
+        return $"{BaseUrl}/Items/{itemId}/Images/{type}" + new Query().Add("tag", tag).Add("maxWidth", maxWidth).Add("quality", quality).Add("format", "Webp");
     }
 
     public string? UserImageUrl(string? userId, string? tag, int maxWidth = 200, string? baseUrl = null)
@@ -450,4 +581,17 @@ public sealed class ItemQuery
     public string? Genres { get; set; }
     public string? PersonIds { get; set; }
     public string? Fields { get; set; }
+    /// <summary>Comma-separated item ids (e.g. what a remote control asked to play).</summary>
+    public string? Ids { get; set; }
+    /// <summary>Comma-separated years.</summary>
+    public string? Years { get; set; }
+    public bool? Is4K { get; set; }
+    public bool? IsHd { get; set; }
+    /// <summary>Only items whose sort name comes before this (used to count where a letter starts).</summary>
+    public string? NameLessThan { get; set; }
+    /// <summary>false = leave out placeholder episodes that have no file.</summary>
+    public bool? IsMissing { get; set; }
+
+    /// <summary>A copy with the same filters (for counting / paging the same result set).</summary>
+    public ItemQuery Clone() => (ItemQuery)MemberwiseClone();
 }

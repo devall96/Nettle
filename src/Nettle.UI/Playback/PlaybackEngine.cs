@@ -71,8 +71,25 @@ public static class PlaybackEngine
     public static IEnumerable<KeyValuePair<string, string>> PassthroughOptions()
     {
         yield return new("audio-spdif", "ac3,eac3,dts,dts-hd,truehd");
-        // Windows only sends TrueHD / DTS-HD bitstreams with exclusive access to the device.
-        if (OperatingSystem.IsWindows()) yield return new("audio-exclusive", "yes");
+        // Windows only sends TrueHD / DTS-HD bitstreams with exclusive access to the device, so
+        // that's requested per file, only for those (see MpvLoad.ExclusiveAudio).
+    }
+
+    /// <summary>
+    /// True when this audio track can only be bitstreamed with exclusive device access (Windows):
+    /// Dolby TrueHD (incl. Atmos) and lossless / high-resolution DTS (DTS-HD MA, DTS:X).
+    /// </summary>
+    public static bool NeedsExclusiveAudio(string? codec, string? profile)
+    {
+        var c = codec?.ToLowerInvariant();
+        if (c is "truehd" or "mlp") return true;
+        if (c is "dts" or "dca")
+        {
+            var p = profile ?? "";
+            return p.Contains("MA", StringComparison.OrdinalIgnoreCase) || p.Contains("HRA", StringComparison.OrdinalIgnoreCase)
+                || p.Contains("HD", StringComparison.OrdinalIgnoreCase) || p.Contains("X", StringComparison.Ordinal);
+        }
+        return false;
     }
 
     public static MpvPlayer CreatePlayer(bool hardwareDecoding, bool passthrough = false) =>

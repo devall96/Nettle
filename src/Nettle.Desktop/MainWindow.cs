@@ -42,6 +42,9 @@ internal sealed class MainWindow : Window, IWindowHost
         this[!BackgroundProperty] = this.GetResourceObservable("BgBrush").ToBinding();
         AppServices.Window = this;
         PositionChanged += (_, _) => { if (WindowState == WindowState.Normal) _normalPos = Position; };
+        // Images are fetched at the screen's real pixel size (e.g. 200% on a 4K display).
+        Opened += (_, _) => AppServices.UiScale = RenderScaling;
+        ScalingChanged += (_, _) => AppServices.UiScale = RenderScaling;
     }
 
     // ---------- Remember the window's size and place ----------

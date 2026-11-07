@@ -16,9 +16,8 @@ public static class Log
         {
             var fi = new FileInfo(_path);
             if (fi.Exists && fi.Length > 1_000_000) File.Move(_path, _path + ".old", overwrite: true);
-            // Scrub any secrets an older build may have written.
-            foreach (var p in new[] { _path, _path + ".old" })
-                if (File.Exists(p)) { var t = File.ReadAllText(p); var r = Redact(t); if (r != t) File.WriteAllText(p, r); }
+            // (Older builds also re-read and scrubbed the whole log here on every start; every
+            // line has been redacted as it's written for several releases, so that's gone.)
         }
         catch { }
         Info($"---- Nettle start ({Environment.OSVersion}, .NET {Environment.Version})");
