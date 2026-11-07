@@ -60,7 +60,6 @@ internal sealed class MainWindow : Window, IWindowHost
     // dock / top-bar area, so in full screen GNOME pushed that overlay right and down by the dock
     // and bar size, cutting the controls off at the right edge. Fix: while the main window is
     // full screen, the overlay is made full screen too (shells allow that), and restored after.
-    // Also, if the shell moved our window without telling Avalonia, re-sync its position.
 
     private Avalonia.Threading.DispatcherTimer? _linuxSync;
 
@@ -83,13 +82,6 @@ internal sealed class MainWindow : Window, IWindowHost
 
     private void SyncLinuxWindows()
     {
-        var handle = TryGetPlatformHandle();
-        if (handle?.HandleDescriptor == "XID" && Linux.X11.TryGetRootPosition(handle.Handle) is { } real && real != Position)
-        {
-            Slopfin.Core.Services.Log.Info($"window position resync {Position} -> {real}");
-            Position = real;
-        }
-
         var wanted = IsFullScreen ? WindowState.FullScreen : WindowState.Normal;
         foreach (var overlay in OwnedWindows)
         {
