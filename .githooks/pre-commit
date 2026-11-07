@@ -1,5 +1,5 @@
 #!/bin/sh
-# Slopfin pre-commit guard. Blocks commits that would publish:
+# Nettle pre-commit guard. Blocks commits that would publish:
 #   1) files outside the project allowlist (e.g. another project living in this folder)
 #   2) anything that looks like a secret (Jellyfin tokens, API keys, private server addresses)
 # Enabled with:  git config core.hooksPath .githooks
@@ -7,10 +7,10 @@
 fail=0
 
 # 1) Path allowlist (mirrors .gitignore).
-allowed='^(\.gitignore|\.githooks/.*|\.github/.*|src/.*|tests/.*|docs/.*|README\.md|LICENSE|THIRD_PARTY_NOTICES\.md|Slopfin\.slnx|Directory\.Build\.(props|targets)|dotnet-tools\.json|build-release\.ps1|get-libmpv\.ps1)$'
+allowed='^(\.gitignore|\.githooks/.*|\.github/.*|src/.*|tests/.*|docs/.*|README\.md|LICENSE|THIRD_PARTY_NOTICES\.md|Nettle\.slnx|Directory\.Build\.(props|targets)|dotnet-tools\.json|build-release\.ps1|get-libmpv\.ps1)$'
 bad_paths=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ev "$allowed")
 if [ -n "$bad_paths" ]; then
-  echo "pre-commit: refusing to commit files outside Slopfin's allowlist:" >&2
+  echo "pre-commit: refusing to commit files outside Nettle's allowlist:" >&2
   echo "$bad_paths" | sed 's/^/  - /' >&2
   echo "  (unstage them with: git restore --staged <file>)" >&2
   fail=1

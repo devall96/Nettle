@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Nettle.UI.ViewModels"
+             x:Class="Nettle.UI.Views.SearchView"
+             x:DataType="vm:SearchViewModel">
+  <Grid RowDefinitions="Auto,*" Classes="page">
+    <StackPanel Margin="56,40,56,16" Spacing="16">
+      <TextBlock Classes="h1" Text="Search" />
+      <TextBox x:Name="SearchBox" Text="{Binding Query}" Watermark="Movies, shows, episodes…" FontSize="20" Padding="20,14" MaxWidth="760" HorizontalAlignment="Left" Width="760">
+        <TextBox.InnerLeftContent>
+          <PathIcon Data="{StaticResource Icon.Search}" Width="20" Height="20" Margin="16,0,0,0" Foreground="{DynamicResource TextMutedBrush}" />
+        </TextBox.InnerLeftContent>
+      </TextBox>
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="0,0,0,40">
+        <ItemsControl ItemsSource="{Binding Results}" />
+        <StackPanel IsVisible="{Binding NoResults}" Margin="56,10" Spacing="12">
+          <TextBlock Classes="h3" Text="Nothing in your library matches that." />
+          <Button Classes="primary" Content="Search Seerr to request it" Command="{Binding RequestItCommand}" IsVisible="{Binding SeerrAvailable}" HorizontalAlignment="Left" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+    <Arc Grid.Row="1" Classes="spin" Width="40" Height="40" IsVisible="{Binding IsBusy}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,40,0,0" />
+  </Grid>
+</UserControl>

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Nettle.Core: platform-neutral logic (API clients, models, settings, playback rules).
+    No UI or OS-specific dependencies so it can be shared by future Android TV / iOS heads.
+  -->
+  <PropertyGroup>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Nettle.Tests" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,91 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Nettle.UI.ViewModels"
+             xmlns:v="using:Nettle.UI.Views"
+             xmlns:c="using:Nettle.UI.Controls"
+             x:Class="Nettle.UI.App"
+             RequestedThemeVariant="Dark"
+             Name="Nettle">
+
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://Nettle.UI/Styles/Controls.axaml" />
+  </Application.Styles>
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://Nettle.UI/Styles/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <FontFamily x:Key="ContentControlThemeFontFamily">fonts:Inter#Inter, $Default</FontFamily>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.DataTemplates>
+    <!-- Screens -->
+    <DataTemplate DataType="vm:AccountPickerViewModel"><v:AccountPickerView /></DataTemplate>
+    <DataTemplate DataType="vm:ServerSelectViewModel"><v:ServerSelectView /></DataTemplate>
+    <DataTemplate DataType="vm:LoginViewModel"><v:LoginView /></DataTemplate>
+    <DataTemplate DataType="vm:ShellViewModel"><v:ShellView /></DataTemplate>
+    <DataTemplate DataType="vm:HomeViewModel"><v:HomeView /></DataTemplate>
+    <DataTemplate DataType="vm:LibraryViewModel"><v:LibraryView /></DataTemplate>
+    <DataTemplate DataType="vm:DetailsViewModel"><v:DetailsView /></DataTemplate>
+    <DataTemplate DataType="vm:SearchViewModel"><v:SearchView /></DataTemplate>
+    <DataTemplate DataType="vm:LiveTvViewModel"><v:LiveTvView /></DataTemplate>
+    <DataTemplate DataType="vm:RequestsViewModel"><v:RequestsView /></DataTemplate>
+    <DataTemplate DataType="vm:SettingsViewModel"><v:SettingsView /></DataTemplate>
+    <DataTemplate DataType="vm:PlayerViewModel"><v:PlayerView /></DataTemplate>
+
+    <!-- Media card (used by every row and grid) -->
+    <DataTemplate DataType="vm:MediaCardViewModel">
+      <Button Classes="card" Command="{Binding OpenCommand}" Width="{Binding CardWidth}" Margin="0,0,18,0" VerticalAlignment="Top"
+              ToolTip.Tip="{Binding TooltipText}" ToolTip.ShowDelay="700">
+        <StackPanel Spacing="8">
+          <Border Classes="frame" Height="{Binding ImageHeight}" CornerRadius="12" ClipToBounds="True" Background="{DynamicResource SurfaceBrush}">
+            <Grid>
+              <TextBlock Text="{Binding FallbackText}" Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                         VerticalAlignment="Center" HorizontalAlignment="Center" Margin="12" />
+              <Image Classes="fade" Stretch="UniformToFill" Opacity="0"
+                     c:ImageLoader.DecodeWidth="{Binding DecodeWidth}"
+                     c:ImageLoader.Source="{Binding ImageUrl}" />
+              <Border Classes="playhint" Background="#55000000">
+                <Button Classes="glass icon" Command="{Binding PlayCommand}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        IsVisible="{Binding Item.IsPlayable}" Focusable="False" Padding="14">
+                  <PathIcon Data="{StaticResource Icon.Play}" Width="26" Height="26" />
+                </Button>
+              </Border>
+              <Border IsVisible="{Binding IsPlayed}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                      Background="{DynamicResource AccentBrush}" CornerRadius="999" Width="26" Height="26">
+                <PathIcon Data="{StaticResource Icon.Check}" Width="14" Height="14" Foreground="{DynamicResource OnAccentBrush}" />
+              </Border>
+              <Border IsVisible="{Binding HasBadge}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                      Background="{DynamicResource AccentBrush}" CornerRadius="999" MinWidth="26" Height="26" Padding="7,0">
+                <TextBlock Text="{Binding Badge}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource OnAccentBrush}"
+                           VerticalAlignment="Center" HorizontalAlignment="Center" />
+              </Border>
+              <ProgressBar Classes="thin" IsVisible="{Binding HasProgress}" VerticalAlignment="Bottom" Margin="10,0,10,10"
+                           Minimum="0" Maximum="1" Value="{Binding Progress}" />
+            </Grid>
+          </Border>
+          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="2,0" LineHeight="19" />
+          <TextBlock Text="{Binding Subtitle}" Classes="muted caption" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                     LineHeight="17" Margin="2,-6,2,2" IsVisible="{Binding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+      </Button>
+    </DataTemplate>
+
+    <!-- Horizontal row of cards -->
+    <DataTemplate DataType="vm:CardRowViewModel">
+      <StackPanel Spacing="6" Margin="0,0,0,22">
+        <TextBlock Classes="h3" Text="{Binding Title}" Margin="56,0,0,0" />
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Items}" Margin="56,10,56,26">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+        </ScrollViewer>
+      </StackPanel>
+    </DataTemplate>
+  </Application.DataTemplates>
+</Application>

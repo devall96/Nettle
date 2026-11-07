@@ -1,7 +1,7 @@
 <Project>
   <!--
     Privacy: Avalonia's packages pull in Avalonia.BuildServices, which uploads anonymous build
-    statistics to avaloniaui.net during every compile. Slopfin does not phone home, and neither
+    statistics to avaloniaui.net during every compile. Nettle does not phone home, and neither
     does its build. Redefining the target here (imported after NuGet package targets) makes it a
     no-op, regardless of whether AVALONIA_TELEMETRY_OPTOUT is set on the machine.
   -->

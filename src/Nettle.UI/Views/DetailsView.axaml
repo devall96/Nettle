@@ -1,0 +1,163 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Nettle.UI.ViewModels"
+             xmlns:c="using:Nettle.UI.Controls"
+             x:Class="Nettle.UI.Views.DetailsView"
+             x:DataType="vm:DetailsViewModel">
+  <Grid>
+    <!-- Backdrop stays fixed while content scrolls over it -->
+    <Image Classes="fade" Opacity="0" Stretch="UniformToFill" VerticalAlignment="Top" Height="720"
+           c:ImageLoader.DecodeWidth="1920" c:ImageLoader.Source="{Binding BackdropUrl}" />
+    <Border Background="{DynamicResource HeroFadeLeftBrush}" Height="720" VerticalAlignment="Top" />
+    <Border Background="{DynamicResource HeroFadeBottomBrush}" Height="720" VerticalAlignment="Top" />
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="56,120,56,48" Spacing="18" Classes="page">
+        <Grid ColumnDefinitions="Auto,*">
+          <!-- Poster (not for episodes, which show a wide still) -->
+          <Border Width="240" Height="360" CornerRadius="16" ClipToBounds="True" Margin="0,0,40,0" VerticalAlignment="Top"
+                  Background="{DynamicResource SurfaceBrush}" IsVisible="{Binding !IsEpisode}" BoxShadow="0 18 50 0 #80000000">
+            <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="400" c:ImageLoader.Source="{Binding PosterUrl}" />
+          </Border>
+
+          <StackPanel Grid.Column="1" Spacing="14" VerticalAlignment="Bottom" MaxWidth="900" HorizontalAlignment="Left">
+            <Image Classes="fade" Opacity="0" MaxHeight="140" MaxWidth="520" HorizontalAlignment="Left" Stretch="Uniform"
+                   c:ImageLoader.DecodeWidth="700" c:ImageLoader.Source="{Binding LogoUrl}" IsVisible="{Binding HasLogo}" />
+            <TextBlock Classes="display" Text="{Binding TitleText}" TextWrapping="Wrap" IsVisible="{Binding !HasLogo}" />
+            <TextBlock Classes="h3" Text="{Binding SubtitleText}" IsVisible="{Binding SubtitleText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <TextBlock Text="{Binding Meta}" FontWeight="SemiBold" Classes="muted" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Border IsVisible="{Binding HdrBadge, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" CornerRadius="6" Padding="8,2"
+                      Background="{DynamicResource AccentGradientBrush}" VerticalAlignment="Center" ToolTip.Tip="{Binding HdrWarning}">
+                <TextBlock Text="{Binding HdrBadge}" FontSize="12" FontWeight="ExtraBold" Foreground="{DynamicResource OnAccentBrush}" />
+              </Border>
+              <TextBlock Text="{Binding MediaInfo}" Classes="muted caption" VerticalAlignment="Center" IsVisible="{Binding MediaInfo, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+            <TextBlock Text="{Binding HdrWarning}" Foreground="#FCD34D" FontSize="12.5" TextWrapping="Wrap" MaxWidth="700" HorizontalAlignment="Left"
+                       IsVisible="{Binding HdrWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
+              <Button Classes="primary" Command="{Binding PlayCommand}" x:Name="PlayButton">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <PathIcon Data="{StaticResource Icon.Play}" Width="18" Height="18" Foreground="{DynamicResource OnAccentBrush}" />
+                  <TextBlock Text="{Binding PlayLabel}" Foreground="{DynamicResource OnAccentBrush}" />
+                </StackPanel>
+              </Button>
+              <Button Content="From start" Command="{Binding PlayFromStartCommand}" IsVisible="{Binding HasProgress}" />
+              <Button Classes="icon" Classes.active="{Binding IsPlayed}" Command="{Binding TogglePlayedCommand}" ToolTip.Tip="Mark watched" Background="{DynamicResource SurfaceHighBrush}">
+                <PathIcon Data="{StaticResource Icon.Check}" />
+              </Button>
+              <Button Classes="icon" Classes.active="{Binding IsFavorite}" Command="{Binding ToggleFavoriteCommand}" ToolTip.Tip="Favorite" Background="{DynamicResource SurfaceHighBrush}">
+                <PathIcon Data="{StaticResource Icon.Heart}" />
+              </Button>
+              <Button Content="Go to series" Command="{Binding GoToSeriesCommand}" IsVisible="{Binding IsEpisode}" />
+              <ComboBox ItemsSource="{Binding Versions}" SelectedItem="{Binding SelectedVersion}" IsVisible="{Binding HasVersions}" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <ProgressBar Classes="thin" Width="320" HorizontalAlignment="Left" Minimum="0" Maximum="1" Value="{Binding Progress}" IsVisible="{Binding HasProgress}" />
+            <TextBlock Text="{Binding EndsAt}" Classes="muted caption" IsVisible="{Binding EndsAt, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+            <TextBlock Text="{Binding Tagline}" FontStyle="Italic" Classes="muted" IsVisible="{Binding Tagline, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <TextBlock Text="{Binding Overview}" TextWrapping="Wrap" FontSize="15" LineHeight="24" MaxWidth="820" HorizontalAlignment="Left" />
+            <TextBlock Text="{Binding Genres}" Classes="muted" />
+          </StackPanel>
+        </Grid>
+
+        <!-- Episode still for episode pages -->
+        <Border Width="480" Height="270" CornerRadius="14" ClipToBounds="True" HorizontalAlignment="Left" IsVisible="{Binding IsEpisode}"
+                Background="{DynamicResource SurfaceBrush}">
+          <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="640" c:ImageLoader.Source="{Binding PosterUrl}" />
+        </Border>
+
+        <!-- Seasons & episodes -->
+        <StackPanel Spacing="16" IsVisible="{Binding IsSeries}" Margin="0,18,0,0">
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Seasons}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SeasonTabViewModel">
+                  <Button Classes="chip" Classes.selected="{Binding IsSelected}" Content="{Binding Name}" Command="{Binding SelectCommand}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+          <ItemsControl ItemsSource="{Binding Episodes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:EpisodeViewModel">
+                <Button Classes="card" Command="{Binding PlayCommand}" Margin="0,0,0,14" HorizontalAlignment="Stretch">
+                  <Border Classes="frame" CornerRadius="14" Background="{DynamicResource SurfaceTranslucentBrush}" Padding="12">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Border Width="260" Height="146" CornerRadius="10" ClipToBounds="True" Background="{DynamicResource SurfaceHighBrush}">
+                        <Grid>
+                          <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="420" c:ImageLoader.Source="{Binding ThumbUrl}" />
+                          <ProgressBar Classes="thin" VerticalAlignment="Bottom" Margin="8" Minimum="0" Maximum="1" Value="{Binding Progress}" IsVisible="{Binding HasProgress}" />
+                          <Border Classes="playhint" Background="#55000000">
+                            <PathIcon Data="{StaticResource Icon.Play}" Width="34" Height="34" Foreground="White" />
+                          </Border>
+                        </Grid>
+                      </Border>
+                      <StackPanel Grid.Column="1" Margin="20,4,12,4" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" Classes="h3" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Meta}" Classes="muted caption" />
+                        <TextBlock Text="{Binding Overview}" TextWrapping="Wrap" MaxLines="3" TextTrimming="WordEllipsis" Classes="muted" />
+                      </StackPanel>
+                      <Button Grid.Column="2" Classes="icon" Classes.active="{Binding IsPlayed}" Command="{Binding TogglePlayedCommand}"
+                              VerticalAlignment="Center" ToolTip.Tip="Mark watched">
+                        <PathIcon Data="{StaticResource Icon.Check}" />
+                      </Button>
+                    </Grid>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- Cast -->
+        <StackPanel Spacing="10" IsVisible="{Binding HasCast}" Margin="0,18,0,0">
+          <TextBlock Classes="h3" Text="Cast &amp; Crew" />
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Cast}" Margin="0,4,0,12">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="18" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:PersonViewModel">
+                  <StackPanel Width="112" Spacing="6">
+                    <Border Width="104" Height="104" CornerRadius="999" ClipToBounds="True" Background="{DynamicResource SurfaceHighBrush}">
+                      <Grid>
+                        <TextBlock Text="{Binding Initial}" FontSize="32" FontWeight="Bold" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="200" c:ImageLoader.Source="{Binding ImageUrl}" />
+                      </Grid>
+                    </Border>
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Role}" Classes="muted caption" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,-4,0,0" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </StackPanel>
+
+        <!-- More like this -->
+        <StackPanel Spacing="10" IsVisible="{Binding HasSimilar}" Margin="0,10,0,0">
+          <TextBlock Classes="h3" Text="More Like This" />
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Similar}" Margin="0,10,0,26">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+            </ItemsControl>
+          </ScrollViewer>
+        </StackPanel>
+
+        <TextBlock Text="{Binding Error}" Foreground="#FF6B6B" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <Arc Classes="spin" Width="44" Height="44" IsVisible="{Binding IsBusy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+  </Grid>
+</UserControl>

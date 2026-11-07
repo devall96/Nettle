@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Nettle.UI.ViewModels"
+             xmlns:c="using:Nettle.UI.Controls"
+             x:Class="Nettle.UI.Views.HomeView"
+             x:DataType="vm:HomeViewModel">
+  <Grid>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+        <!-- Spotlight hero -->
+        <Grid Height="560" IsVisible="{Binding HasHero}" ClipToBounds="True">
+          <Image Classes="fade" Opacity="0" Stretch="UniformToFill" VerticalAlignment="Top"
+                 c:ImageLoader.DecodeWidth="1920" c:ImageLoader.Source="{Binding Hero.BackdropUrl}" />
+          <Border Background="{DynamicResource HeroFadeLeftBrush}" />
+          <Border Background="{DynamicResource HeroFadeBottomBrush}" />
+
+          <StackPanel VerticalAlignment="Bottom" Margin="56,0,56,56" MaxWidth="640" HorizontalAlignment="Left" Spacing="14">
+            <Image Classes="fade" Opacity="0" MaxHeight="130" MaxWidth="460" HorizontalAlignment="Left" Stretch="Uniform"
+                   c:ImageLoader.DecodeWidth="700" c:ImageLoader.Source="{Binding Hero.LogoUrl}" IsVisible="{Binding Hero.HasLogo}" />
+            <TextBlock Classes="display" Text="{Binding Hero.Title}" TextWrapping="Wrap" IsVisible="{Binding !Hero.HasLogo}" />
+            <TextBlock Text="{Binding Hero.Meta}" Classes="muted" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Hero.Overview}" TextWrapping="Wrap" MaxLines="3" TextTrimming="WordEllipsis" FontSize="15" LineHeight="23" Opacity="0.9" />
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
+              <Button Classes="primary" Command="{Binding Hero.PlayCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <PathIcon Data="{StaticResource Icon.Play}" Width="18" Height="18" Foreground="{DynamicResource OnAccentBrush}" />
+                  <TextBlock Text="Play" Foreground="{DynamicResource OnAccentBrush}" />
+                </StackPanel>
+              </Button>
+              <Button Classes="glass" Content="More info" Command="{Binding Hero.InfoCommand}" Padding="22,12" />
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,56,60" Spacing="8">
+            <Button Classes="glass icon" Command="{Binding PrevHeroCommand}" Focusable="False"><PathIcon Data="{StaticResource Icon.ChevronLeft}" /></Button>
+            <Button Classes="glass icon" Command="{Binding NextHeroCommand}" Focusable="False"><PathIcon Data="{StaticResource Icon.ChevronRight}" /></Button>
+          </StackPanel>
+        </Grid>
+
+        <Border Height="48" IsVisible="{Binding !HasHero}" />
+
+        <TextBlock Classes="h1" Text="Home" Margin="56,0,0,24" IsVisible="{Binding !HasHero}" />
+
+        <TextBlock Text="{Binding Error}" Foreground="#FF6B6B" Margin="56,0" TextWrapping="Wrap"
+                   IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <ItemsControl ItemsSource="{Binding Rows}" Margin="0,-8,0,40" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <Arc Classes="spin" Width="44" Height="44" IsVisible="{Binding IsBusy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+  </Grid>
+</UserControl>

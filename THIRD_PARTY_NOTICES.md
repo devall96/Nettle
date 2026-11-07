@@ -1,9 +1,9 @@
 # Third-party notices
 
-Slopfin is built on the following open-source components. Each remains under its own license;
+Nettle is built on the following open-source components. Each remains under its own license;
 this file is shipped next to the application.
 
-| Component | Use in Slopfin | License | Source |
+| Component | Use in Nettle | License | Source |
 |---|---|---|---|
 | mpv (libmpv) | Video/audio decoding and playback | GPL-2.0-or-later as built here (parts LGPL-2.1-or-later) | https://github.com/mpv-player/mpv |
 | FFmpeg, libplacebo, libass, dav1d and other libraries inside libmpv | Demuxing, decoding, rendering, subtitles | LGPL-2.1-or-later / GPL-2.0-or-later / BSD-style (per library) | see below |
@@ -15,7 +15,7 @@ this file is shipped next to the application.
 | Velopack (runtime + `vpk` build tool) | Installer and opt-in updates | MIT | https://github.com/velopack/velopack |
 | libsecret (used from the system, not bundled) | Linux: saving sign-ins in the desktop keyring | LGPL-2.1-or-later | https://gitlab.gnome.org/GNOME/libsecret |
 
-Slopfin itself is GPL-3.0, which is compatible with mpv's GPL-2.0-or-later licensing.
+Nettle itself is GPL-3.0, which is compatible with mpv's GPL-2.0-or-later licensing.
 
 ### Windows: libmpv-2.dll
 
@@ -36,14 +36,14 @@ and others), taken unmodified from Ubuntu 24.04's packages. Inside the AppImage:
 
 The corresponding source code is available from Ubuntu at
 `https://launchpad.net/ubuntu/+source/<source package>/<version>` (or `apt-get source`). Each of
-these libraries is loaded dynamically and can be replaced: Slopfin uses the system's own copy of
+these libraries is loaded dynamically and can be replaced: Nettle uses the system's own copy of
 a library whenever one is installed.
 
-The Slopfin app icon (gradient tile with fin) is original artwork made for this project.
+The Nettle app icon (gradient tile with fin) is original artwork made for this project.
 
 ## Services and trademarks
 
-Slopfin is an independent project. It is not affiliated with or endorsed by the Jellyfin project,
+Nettle is an independent project. It is not affiliated with or endorsed by the Jellyfin project,
 the mpv project, Seerr, The Movie Database (TMDB) or NostalgiaTV. Those names are used only to
 describe compatibility. Poster images shown on the Requests page are served by TMDB through the
 user's own Seerr server.

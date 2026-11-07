@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Bundles libmpv into a Slopfin linux-x64 publish folder, for the AppImage.
+# Bundles libmpv into a Nettle linux-x64 publish folder, for the AppImage.
 #
 #   bundle-libmpv.sh <publish-dir>/mpv
 #
-# Layout produced (see src/Slopfin.Desktop/Linux/LinuxMpv.cs):
+# Layout produced (see src/Nettle.Desktop/Linux/LinuxMpv.cs):
 #   mpv/libmpv.so.2     libmpv
 #   mpv/fallback/       every library it needs; at runtime the system's copy is preferred,
 #                       these are only used when the system doesn't have one
@@ -38,7 +38,7 @@ echo "bundled libmpv + $(ls "$DEST/fallback" | wc -l) fallback libraries ($(du -
 
 # Licenses: copyright file of every Ubuntu package we took files from, and their source packages.
 {
-  echo "Libraries bundled with Slopfin for Linux, taken unmodified from Ubuntu $(. /etc/os-release && echo "$VERSION_ID") packages."
+  echo "Libraries bundled with Nettle for Linux, taken unmodified from Ubuntu $(. /etc/os-release && echo "$VERSION_ID") packages."
   echo "Corresponding source code: https://launchpad.net/ubuntu/+source/<source package>/<version>"
   echo "(or: apt-get source <source package>=<version>)."
   echo
@@ -49,12 +49,12 @@ for f in "$DEST/libmpv.so.2" "$DEST"/fallback/*; do
   name="$(basename "$f")"
   owner="$(dpkg -S "*/$name" 2>/dev/null | grep -v diversion | head -n1 | cut -d: -f1 || true)"
   if [ -n "$owner" ]; then echo "$owner"; fi
-done | sort -u > /tmp/slopfin-pkgs.txt
+done | sort -u > /tmp/nettle-pkgs.txt
 
 while read -r pkg; do
   base="${pkg%%:*}"
   src="$(dpkg-query -W -f='${source:Package} ${source:Version}' "$pkg" 2>/dev/null || true)"
   printf '%-40s %-40s %s\n' "$base" "${src% *}" "${src##* }" >> "$DEST/licenses/SOURCES.txt"
   if [ -f "/usr/share/doc/$base/copyright" ]; then cp "/usr/share/doc/$base/copyright" "$DEST/licenses/$base.copyright"; fi
-done < /tmp/slopfin-pkgs.txt
+done < /tmp/nettle-pkgs.txt
 echo "license files: $(ls "$DEST/licenses" | wc -l)"

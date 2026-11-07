@@ -1,0 +1,102 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Nettle.UI.ViewModels"
+             xmlns:v="using:Nettle.UI.Views"
+             xmlns:c="using:Nettle.UI.Controls"
+             x:Class="Nettle.UI.Views.LoginView"
+             x:DataType="vm:LoginViewModel">
+  <Grid Classes="page" RowDefinitions="Auto,*" Margin="48,40">
+    <Grid ColumnDefinitions="*,Auto">
+      <v:BrandMark HorizontalAlignment="Left" Scale="0.9" />
+      <Button Grid.Column="1" Classes="ghost" Command="{Binding ChangeServerCommand}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource Icon.Swap}" Width="16" Height="16" />
+          <TextBlock Text="Change server" />
+        </StackPanel>
+      </Button>
+    </Grid>
+
+    <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="26" MaxWidth="900">
+      <StackPanel Spacing="4" HorizontalAlignment="Center">
+        <TextBlock Classes="h1" Text="{Binding ServerName}" HorizontalAlignment="Center" />
+        <TextBlock Classes="muted caption" Text="{Binding ServerDetail}" HorizontalAlignment="Center" />
+      </StackPanel>
+
+      <Border IsVisible="{Binding IsInsecureConnection}" Background="#33F59E0B" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="12"
+              Padding="16,12" HorizontalAlignment="Center" MaxWidth="620">
+        <TextBlock TextWrapping="Wrap" Foreground="#FCD34D"
+                   Text="This server uses plain http:// over the internet, so your password and session would be sent unencrypted. Use an https:// address (or connect over your LAN / Tailscale) if you can." />
+      </Border>
+
+      <Border Classes="panel" IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Padding="16,12" HorizontalAlignment="Center">
+        <TextBlock Text="{Binding Message}" Classes="accent" />
+      </Border>
+
+      <!-- Public user tiles -->
+      <StackPanel Spacing="18" IsVisible="{Binding !ShowManualForm}">
+        <ItemsControl ItemsSource="{Binding Users}" HorizontalAlignment="Center">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center" /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:PublicUserViewModel">
+              <StackPanel Margin="14" Spacing="10" Width="124">
+                <Button Classes="card" Command="{Binding SelectCommand}" HorizontalAlignment="Center">
+                  <Border Classes="frame" Width="108" Height="108" CornerRadius="999" ClipToBounds="True" Background="{DynamicResource AccentGradientBrush}">
+                    <Grid>
+                      <TextBlock Text="{Binding Initial}" FontSize="42" FontWeight="Bold" Foreground="{DynamicResource OnAccentBrush}"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="216" c:ImageLoader.Source="{Binding AvatarUrl}" />
+                    </Grid>
+                  </Border>
+                </Button>
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button HorizontalAlignment="Center" Content="Sign in with a different user" Command="{Binding ShowManualCommand}" />
+      </StackPanel>
+
+      <!-- Username / password -->
+      <Border Classes="panel" Width="440" Padding="32" IsVisible="{Binding ShowManualForm}" HorizontalAlignment="Center">
+        <StackPanel Spacing="14">
+          <TextBlock Classes="h3" Text="Sign in" />
+          <TextBox Text="{Binding Username}" Watermark="Username" x:Name="UserBox" />
+          <TextBox Text="{Binding Password}" Watermark="Password" PasswordChar="•" RevealPassword="False" x:Name="PasswordBox" />
+          <CheckBox IsChecked="{Binding RememberMe}" Content="Remember me and sign in automatically" />
+          <TextBlock Text="{Binding Error}" Foreground="#FF6B6B" TextWrapping="Wrap"
+                     IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Button Classes="ghost" Content="Back" Command="{Binding ShowUsersCommand}" IsVisible="{Binding HasUsers}" />
+            <Arc Grid.Column="1" Classes="spin" Width="22" Height="22" StrokeThickness="3" IsVisible="{Binding IsBusy}" HorizontalAlignment="Right" Margin="0,0,12,0" />
+            <Button Grid.Column="2" Classes="primary" Content="Sign in" Command="{Binding SignInCommand}" IsDefault="True" />
+          </Grid>
+          <TextBlock Classes="muted caption" TextWrapping="Wrap"
+                     Text="Your password is never stored. Nettle keeps only the session token Jellyfin issues, encrypted with your Windows account." />
+        </StackPanel>
+      </Border>
+
+      <!-- Quick Connect -->
+      <StackPanel HorizontalAlignment="Center" Spacing="10" IsVisible="{Binding QuickConnectAvailable}">
+        <Button HorizontalAlignment="Center" Classes="ghost" Command="{Binding StartQuickConnectCommand}" IsVisible="{Binding !IsQuickConnectActive}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource Icon.Key}" Width="18" Height="18" Foreground="{DynamicResource AccentBrush}" />
+            <TextBlock Text="Use Quick Connect" />
+          </StackPanel>
+        </Button>
+        <Border Classes="panel" IsVisible="{Binding IsQuickConnectActive}" Padding="28,20">
+          <StackPanel Spacing="10" HorizontalAlignment="Center">
+            <TextBlock Text="Enter this code in Quick Connect on a signed-in device" Classes="muted" HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding QuickConnectCode}" FontSize="44" FontWeight="ExtraBold" LetterSpacing="8" HorizontalAlignment="Center" Classes="accent" />
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+              <Arc Classes="spin" Width="18" Height="18" StrokeThickness="3" />
+              <TextBlock Text="Waiting for approval…" Classes="muted" />
+            </StackPanel>
+            <Button Content="Cancel" Classes="ghost" HorizontalAlignment="Center" Command="{Binding CancelQuickConnectCommand}" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</UserControl>

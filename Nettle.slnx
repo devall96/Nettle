@@ -1,0 +1,10 @@
+﻿<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Nettle.Core/Nettle.Core.csproj" />
+    <Project Path="src/Nettle.Desktop/Nettle.Desktop.csproj" />
+    <Project Path="src/Nettle.UI/Nettle.UI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Nettle.Tests/Nettle.Tests.csproj" />
+  </Folder>
+</Solution>

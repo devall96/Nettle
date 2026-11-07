@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Desktop head for Windows (win-x64) and Linux (linux-x64): window chrome, secure storage, libmpv loading. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>Nettle</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\nettle.ico</ApplicationIcon>
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+    <!-- Default to the machine we're building on; `-r linux-x64` / `-r win-x64` overrides. -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <TieredPGO>true</TieredPGO>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <!-- Windows: libmpv is a pinned, hash-checked download (get-libmpv.ps1), copied next to the app.
+       Linux: the AppImage build bundles libmpv (see .github/linux); source builds use the system's. -->
+  <PropertyGroup>
+    <LibmpvWin>$(MSBuildThisFileDirectory)..\..\deps\libmpv\win-x64\libmpv-2.dll</LibmpvWin>
+  </PropertyGroup>
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <None Include="$(LibmpvWin)" Link="libmpv-2.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('$(LibmpvWin)')" />
+  </ItemGroup>
+  <Target Name="CheckLibmpv" BeforeTargets="Build" Condition="$(RuntimeIdentifier.StartsWith('win')) and !Exists('$(LibmpvWin)')">
+    <Error Text="libmpv isn't downloaded yet. Run once from the repository root:  powershell -ExecutionPolicy Bypass -File get-libmpv.ps1" />
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nettle.UI\Nettle.UI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Nettle's own icon (original artwork), embedded so the window/taskbar icon can't fail to load. -->
+    <EmbeddedResource Include="Assets\nettle.ico" LogicalName="nettle.ico" />
+    <!-- 256px PNG of the same icon: Linux window icon + applications-menu icon. -->
+    <EmbeddedResource Include="Assets\nettle.png" LogicalName="nettle.png" />
+  </ItemGroup>
+</Project>

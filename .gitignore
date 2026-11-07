@@ -1,5 +1,5 @@
 ﻿# ------------------------------------------------------------------
-# ALLOWLIST: only Slopfin's own files are ever tracked.
+# ALLOWLIST: only Nettle's own files are ever tracked.
 # Everything else in this folder (other projects, notes, scratch files,
 # build output) is ignored automatically. To add a NEW top-level file
 # or folder to the repo, add a "!/name" line below.
@@ -15,7 +15,7 @@
 !/README.md
 !/LICENSE
 !/THIRD_PARTY_NOTICES.md
-!/Slopfin.slnx
+!/Nettle.slnx
 !/Directory.Build.props
 !/Directory.Build.targets
 !/dotnet-tools.json

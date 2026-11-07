@@ -1,4 +1,4 @@
-# Every push to main and every pull request: build Slopfin for Windows and Linux and run the
+# Every push to main and every pull request: build Nettle for Windows and Linux and run the
 # tests (including the "never transcode" guard). Releases are still built separately.
 name: CI
 
@@ -27,9 +27,9 @@ jobs:
         shell: pwsh
         run: ./get-libmpv.ps1
       - name: Build
-        run: dotnet build src/Slopfin.Desktop -c Release -r win-x64
+        run: dotnet build src/Nettle.Desktop -c Release -r win-x64
       - name: Unit tests
-        run: dotnet test tests/Slopfin.Tests -c Release --logger "console;verbosity=normal"
+        run: dotnet test tests/Nettle.Tests -c Release --logger "console;verbosity=normal"
 
   linux:
     runs-on: ubuntu-24.04
@@ -43,11 +43,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libmpv2 ffmpeg
       - name: Build
-        run: dotnet build src/Slopfin.Desktop -c Release -r linux-x64 -o out
+        run: dotnet build src/Nettle.Desktop -c Release -r linux-x64 -o out
       - name: Unit tests
-        run: dotnet test tests/Slopfin.Tests -c Release --logger "console;verbosity=normal"
+        run: dotnet test tests/Nettle.Tests -c Release --logger "console;verbosity=normal"
       - name: Playback self-test (decodes a clip with libmpv, no window)
         run: |
           ffmpeg -loglevel error -f lavfi -i testsrc2=size=1280x720:rate=24 -f lavfi -i sine=frequency=440 -t 3 \
             -c:v libx264 -pix_fmt yuv420p -c:a aac clip.mp4
-          ./out/Slopfin --selftest clip.mp4
+          ./out/Nettle --selftest clip.mp4

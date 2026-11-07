@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Nettle.UI: all screens, view models, themes and the mpv player.
+    Avalonia and libmpv both run on Windows, Linux, macOS, Android (incl. Android TV) and iOS,
+    so platform "heads" (Nettle.Desktop today) stay tiny.
+  -->
+  <PropertyGroup>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <RootNamespace>Nettle.UI</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nettle.Core\Nettle.Core.csproj" />
+  </ItemGroup>
+</Project>

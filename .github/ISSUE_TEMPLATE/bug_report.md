@@ -1,6 +1,6 @@
 ---
 name: Bug report / test report
-about: Something broke, or you tested Slopfin and want to share how it went
+about: Something broke, or you tested Nettle and want to share how it went
 title: ""
 labels: ""
 ---
@@ -12,7 +12,7 @@ labels: ""
 - OS: <!-- Windows 11 / Ubuntu 24.04 / Fedora 41 / Arch ... -->
 - Linux only, desktop and session: <!-- GNOME / KDE Plasma 6 / XFCE ..., Wayland or X11 -->
 - Graphics card: <!-- e.g. AMD RX 9070, NVIDIA RTX 3060, Intel Arc A750, laptop iGPU -->
-- Slopfin version: <!-- Settings → About -->
+- Nettle version: <!-- Settings → About -->
 
 **What were you playing?**
 <!-- Resolution, HDR type, audio format. Press I during playback to see the format badges. Movie/show, Live TV (NostalgiaTV), etc. -->
@@ -22,8 +22,8 @@ labels: ""
 
 **Log**
 <!-- Paste the last ~50 lines of the log:
-     Windows: %LOCALAPPDATA%\Slopfin\slopfin.log
-     Linux:   ~/.local/share/Slopfin/slopfin.log
+     Windows: %LOCALAPPDATA%\Nettle\nettle.log
+     Linux:   ~/.local/share/Nettle/nettle.log
      Tokens are masked automatically; you may want to blank out your server's address. -->
 ```
 paste here

@@ -29,7 +29,7 @@ if ((Test-Path $dll) -and (Test-Path $stamp) -and ((Get-Content $stamp -Raw).Tri
 }
 
 New-Item -ItemType Directory -Force $dest | Out-Null
-$tmp = Join-Path ([IO.Path]::GetTempPath()) ("slopfin-libmpv-" + [Guid]::NewGuid().ToString('N'))
+$tmp = Join-Path ([IO.Path]::GetTempPath()) ("nettle-libmpv-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $tmp | Out-Null
 try {
     $file = Join-Path $tmp $Archive
@@ -38,7 +38,7 @@ try {
         try {
             Write-Host "Downloading $url"
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing -UserAgent 'Slopfin-build'
+            Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing -UserAgent 'Nettle-build'
             $hash = (Get-FileHash $file -Algorithm SHA256).Hash
             if ($hash -ne $Sha256) { Write-Warning "Hash mismatch from $url ($hash)"; continue }
             $ok = $true; break

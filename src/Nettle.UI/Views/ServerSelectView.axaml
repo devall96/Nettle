@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Nettle.UI.ViewModels"
+             xmlns:v="using:Nettle.UI.Views"
+             x:Class="Nettle.UI.Views.ServerSelectView"
+             x:DataType="vm:ServerSelectViewModel">
+  <Grid Classes="page" RowDefinitions="Auto,*" Margin="48,40">
+    <Grid ColumnDefinitions="*,Auto">
+      <v:BrandMark HorizontalAlignment="Left" Scale="0.9" />
+      <Button Grid.Column="1" Classes="ghost" Command="{Binding BackCommand}" IsVisible="{Binding CanGoBack}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource Icon.Back}" Width="16" Height="16" />
+          <TextBlock Text="Profiles" />
+        </StackPanel>
+      </Button>
+    </Grid>
+
+    <Border Grid.Row="1" Classes="panel" Width="520" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="36">
+      <StackPanel Spacing="18">
+        <StackPanel Spacing="6">
+          <TextBlock Classes="h2" Text="Connect to your server" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Enter your Jellyfin address. We'll try https first, then http and the default ports." />
+        </StackPanel>
+
+        <TextBox x:Name="AddressBox" Text="{Binding Address}" Watermark="192.168.1.20:8096  or  https://jellyfin.example.com" />
+        <TextBlock Text="{Binding Error}" Foreground="#FF6B6B" TextWrapping="Wrap"
+                   IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsBusy}" VerticalAlignment="Center">
+            <Arc Classes="spin" Width="20" Height="20" StrokeThickness="3" />
+            <TextBlock Text="Connecting…" Classes="muted" VerticalAlignment="Center" />
+          </StackPanel>
+          <Button Grid.Column="1" Classes="primary" Content="Connect" Command="{Binding ConnectCommand}" IsDefault="True" />
+        </Grid>
+
+        <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" Margin="0,6" />
+
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="section" Text="ON YOUR NETWORK" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Classes="icon" Command="{Binding ScanCommand}" ToolTip.Tip="Scan again">
+            <PathIcon Data="{StaticResource Icon.Refresh}" Width="18" Height="18" />
+          </Button>
+        </Grid>
+        <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsScanning}">
+          <Arc Classes="spin" Width="18" Height="18" StrokeThickness="3" />
+          <TextBlock Text="Looking for servers…" Classes="muted" />
+        </StackPanel>
+        <ItemsControl ItemsSource="{Binding Discovered}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:DiscoveredServerViewModel">
+              <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding ConnectCommand}" Margin="0,2">
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                  <PathIcon Data="{StaticResource Icon.Server}" Width="22" Height="22" Foreground="{DynamicResource AccentBrush}" />
+                  <StackPanel>
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Address}" Classes="muted caption" />
+                  </StackPanel>
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

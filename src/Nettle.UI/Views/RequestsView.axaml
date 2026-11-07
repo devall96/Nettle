@@ -1,0 +1,160 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Nettle.UI.ViewModels"
+             xmlns:c="using:Nettle.UI.Controls"
+             x:Class="Nettle.UI.Views.RequestsView"
+             x:DataType="vm:RequestsViewModel">
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="vm:SeerrCardViewModel">
+      <Button Classes="card" Width="164" Margin="0,0,18,0" Command="{Binding RequestCommand}" VerticalAlignment="Top">
+        <StackPanel Spacing="8">
+          <Border Classes="frame" Height="246" CornerRadius="12" ClipToBounds="True" Background="{DynamicResource SurfaceBrush}">
+            <Grid>
+              <TextBlock Text="{Binding Title}" Classes="muted" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="12" />
+              <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="260" c:ImageLoader.Source="{Binding PosterUrl}" />
+              <Border Classes="playhint" Background="#88000000" IsVisible="{Binding CanRequest}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                  <PathIcon Data="{StaticResource Icon.Request}" Width="34" Height="34" Foreground="White" />
+                  <TextBlock Text="Request" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" />
+                </StackPanel>
+              </Border>
+              <Border IsVisible="{Binding HasStatus}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8"
+                      Background="{DynamicResource AccentBrush}" CornerRadius="999" Padding="10,3">
+                <TextBlock Text="{Binding Status}" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource OnAccentBrush}" />
+              </Border>
+              <Border Background="#99000000" IsVisible="{Binding IsRequesting}">
+                <Arc Classes="spin" Width="32" Height="32" />
+              </Border>
+            </Grid>
+          </Border>
+          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding Subtitle}" Classes="muted caption" Margin="0,-4,0,0" />
+        </StackPanel>
+      </Button>
+    </DataTemplate>
+    <DataTemplate DataType="vm:SeerrRowViewModel">
+      <StackPanel Spacing="6" Margin="0,0,0,22">
+        <TextBlock Classes="h3" Text="{Binding Title}" Margin="56,0,0,0" />
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Items}" Margin="56,10,56,26">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+        </ScrollViewer>
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <Grid Classes="page">
+    <StackPanel IsVisible="{Binding NotConfigured}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14" MaxWidth="520">
+      <PathIcon Data="{StaticResource Icon.Request}" Width="64" Height="64" Foreground="{DynamicResource AccentBrush}" />
+      <TextBlock Classes="h2" Text="Request movies &amp; shows" HorizontalAlignment="Center" />
+      <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                 Text="Connect your Seerr server to browse what's trending and request anything that isn't in your library yet." />
+      <Button Classes="primary" Content="Set up in Settings" Command="{Binding OpenSettingsCommand}" HorizontalAlignment="Center" />
+    </StackPanel>
+
+    <ScrollViewer IsVisible="{Binding !NotConfigured}" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="0,40,0,40">
+        <StackPanel Margin="56,0,56,24" Spacing="16">
+          <TextBlock Classes="h1" Text="Requests" />
+          <Grid ColumnDefinitions="*,Auto" MaxWidth="760" HorizontalAlignment="Left" Width="760">
+            <TextBox Text="{Binding SearchText}" Watermark="Search TMDB for a movie or show to request…" FontSize="17">
+              <TextBox.InnerLeftContent>
+                <PathIcon Data="{StaticResource Icon.Search}" Width="18" Height="18" Margin="14,0,0,0" Foreground="{DynamicResource TextMutedBrush}" />
+              </TextBox.InnerLeftContent>
+            </TextBox>
+            <Button Grid.Column="1" Classes="icon" Command="{Binding ClearSearchCommand}" IsVisible="{Binding IsSearching}" Margin="8,0,0,0">
+              <PathIcon Data="{StaticResource Icon.Close}" />
+            </Button>
+          </Grid>
+        </StackPanel>
+
+        <TextBlock Text="{Binding Error}" Foreground="#FF6B6B" Margin="56,0,56,12" TextWrapping="Wrap"
+                   IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <!-- Search results -->
+        <ItemsControl ItemsSource="{Binding SearchResults}" Margin="56,0,40,0" IsVisible="{Binding IsSearching}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.Styles>
+            <Style Selector="ContentPresenter">
+              <Setter Property="Margin" Value="0,0,0,22" />
+            </Style>
+          </ItemsControl.Styles>
+        </ItemsControl>
+
+        <!-- Discover -->
+        <StackPanel IsVisible="{Binding !IsSearching}">
+          <StackPanel IsVisible="{Binding HasMyRequests}" Spacing="8" Margin="0,0,0,24">
+            <TextBlock Classes="h3" Text="My Requests" Margin="56,0,0,0" />
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+              <ItemsControl ItemsSource="{Binding MyRequests}" Margin="56,6,56,10">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="14" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:MyRequestViewModel">
+                    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="12" Padding="8" Width="300">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <Border Width="56" Height="84" CornerRadius="8" ClipToBounds="True" Background="{DynamicResource SurfaceHighBrush}">
+                          <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="112" c:ImageLoader.Source="{Binding PosterUrl}" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="4">
+                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Status}" Classes="accent caption" FontWeight="Bold" />
+                          <TextBlock Text="{Binding When}" Classes="muted caption" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </StackPanel>
+          <ItemsControl ItemsSource="{Binding Rows}" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Arc Classes="spin" Width="44" Height="44" IsVisible="{Binding IsBusy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    <Arc Classes="spin" Width="44" Height="44" IsVisible="{Binding IsLoadingSeasons}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+    <!-- Season picker (series requests) -->
+    <Panel IsVisible="{Binding SeasonPicker, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource ScrimBrush}">
+      <Border DataContext="{Binding SeasonPicker}" x:DataType="vm:SeasonPickerViewModel" Classes="panel"
+              HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" MaxHeight="640" BoxShadow="0 20 60 0 #99000000">
+        <Grid RowDefinitions="Auto,Auto,*,Auto">
+          <TextBlock Classes="h2" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+          <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,6,0,10">
+            <TextBlock Text="Which seasons do you want?" Classes="muted" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="ghost" Content="Select all" Command="{Binding SelectAllCommand}" IsVisible="{Binding HasSelectable}" />
+          </Grid>
+          <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Seasons}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SeasonOptionViewModel">
+                  <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanSelect}" Margin="0,4">
+                    <StackPanel Margin="4,0,0,0">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding Detail}" Classes="muted caption"
+                                 IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </CheckBox>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0" HorizontalAlignment="Right">
+            <Button Content="Cancel" Command="{Binding CancelCommand}" />
+            <Button Classes="primary" Command="{Binding RequestCommand}">
+              <TextBlock Text="{Binding RequestText}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" />
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Panel>
+  </Grid>
+</UserControl>

@@ -46,7 +46,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends libmpv2 ffmpeg
 
       - name: Publish
-        run: dotnet publish src/Slopfin.Desktop -c Release -r linux-x64 --self-contained -p:DebugType=none -o publish
+        run: dotnet publish src/Nettle.Desktop -c Release -r linux-x64 --self-contained -p:DebugType=none -o publish
 
       - name: Bundle libmpv
         run: bash .github/linux/bundle-libmpv.sh publish/mpv
@@ -67,12 +67,15 @@ jobs:
           dotnet tool restore
           dotnet vpk download github --repoUrl "https://github.com/${{ github.repository }}" --channel linux -o releases || echo "no previous Linux release"
 
+      # packId stays SlopfinApp (the app's name before 0.3.0): installed copies find their updates by it.
+      # The AppImage people download is renamed to Nettle.AppImage; the updater only uses the .nupkg / .json files.
       - name: Pack AppImage
         run: |
           dotnet tool restore
           dotnet vpk pack --packId SlopfinApp --packVersion "${{ steps.ver.outputs.version }}" --packDir publish \
-            --mainExe Slopfin --packTitle Slopfin --packAuthors "Slopfin contributors" \
-            --icon src/Slopfin.Desktop/Assets/slopfin.png --categories "AudioVideo;Video;Player;TV" -o releases
+            --mainExe Nettle --packTitle Nettle --packAuthors "Nettle contributors" \
+            --icon src/Nettle.Desktop/Assets/nettle.png --categories "AudioVideo;Video;Player;TV" -o releases
+          mv releases/SlopfinApp.AppImage releases/Nettle.AppImage
           ls -la releases
 
       - uses: actions/upload-artifact@v4
@@ -97,31 +100,31 @@ jobs:
         run: |
           chmod +x releases-linux/*.AppImage
           releases-linux/*.AppImage --appimage-extract > /dev/null
-          echo "SLOPFIN=$(find "$PWD/squashfs-root" -name Slopfin -type f -perm -u+x | head -n1)" >> "$GITHUB_ENV"
+          echo "NETTLE=$(find "$PWD/squashfs-root" -name Nettle -type f -perm -u+x | head -n1)" >> "$GITHUB_ENV"
           du -sh squashfs-root; ls -la releases-linux
       - name: mpv is not installed on this machine
         run: "! ldconfig -p | grep -q libmpv"
       - name: Decode test (bundled libmpv)
         run: |
-          "$SLOPFIN" --selftest testmedia/*
-          grep "libmpv" ~/.local/share/Slopfin/slopfin.log || true
+          "$NETTLE" --selftest testmedia/*
+          grep "libmpv" ~/.local/share/Nettle/nettle.log || true
       - name: Applications menu entry
         run: |
-          export APPIMAGE="$PWD/My Apps/Slopfin.AppImage"
-          "$SLOPFIN" --add-to-menu
-          cat ~/.local/share/applications/slopfin.desktop
-          desktop-file-validate ~/.local/share/applications/slopfin.desktop
-          test -s ~/.local/share/icons/hicolor/256x256/apps/slopfin.png
-          "$SLOPFIN" --remove-from-menu
-          test ! -e ~/.local/share/applications/slopfin.desktop
+          export APPIMAGE="$PWD/My Apps/Nettle.AppImage"
+          "$NETTLE" --add-to-menu
+          cat ~/.local/share/applications/nettle.desktop
+          desktop-file-validate ~/.local/share/applications/nettle.desktop
+          test -s ~/.local/share/icons/hicolor/256x256/apps/nettle.png
+          "$NETTLE" --remove-from-menu
+          test ! -e ~/.local/share/applications/nettle.desktop
       - name: UI screenshot
         run: |
           xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
-            "$SLOPFIN" & pid=$!
+            "$NETTLE" & pid=$!
             sleep 15
             import -window root screenshot.png
             kill $pid || true'
-          grep -iE "error|exception" ~/.local/share/Slopfin/slopfin.log || echo "no errors in log"
+          grep -iE "error|exception" ~/.local/share/Nettle/nettle.log || echo "no errors in log"
       - uses: actions/upload-artifact@v4
         with:
           name: screenshot-ubuntu
@@ -150,9 +153,9 @@ jobs:
         run: |
           chmod +x releases-linux/*.AppImage
           releases-linux/*.AppImage --appimage-extract > /dev/null
-          SLOPFIN="$(find "$PWD/squashfs-root" -name Slopfin -type f -perm -u+x | head -n1)"
-          "$SLOPFIN" --selftest testmedia/*
-          grep "libmpv" ~/.local/share/Slopfin/slopfin.log || true
+          NETTLE="$(find "$PWD/squashfs-root" -name Nettle -type f -perm -u+x | head -n1)"
+          "$NETTLE" --selftest testmedia/*
+          grep "libmpv" ~/.local/share/Nettle/nettle.log || true
 
   publish:
     needs: [build, test-ubuntu, test-distros]
