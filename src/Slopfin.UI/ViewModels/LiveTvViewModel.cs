@@ -45,14 +45,27 @@ public sealed partial class TimeSlotViewModel(string label, double width)
 }
 
 /// <summary>
-/// NostalgiaTV live guide: a classic cable-style grid, paged in 30-minute steps.
-/// Only the visible time window is laid out; rows are virtualized by the view.
+/// NostalgiaTV live guide: a classic cable-style grid covering everything NostalgiaTV publishes
+/// (from a little before now to the end of its schedule), scrolled horizontally. Rows are
+/// virtualized by the view, so only visible channels are realized.
 /// </summary>
 public sealed partial class LiveTvViewModel : PageViewModel
 {
     public const double PxPerMinute = 7;
-    public const int WindowMinutes = 180;
     public const double ChannelColumnWidth = 200;
+    /// <summary>
+    /// How much of the past the guide shows. NostalgiaTV's XMLTV only lists programs that haven't
+    /// ended yet, so earlier time would just be empty; the current half hour is enough (programs
+    /// already on air still show from their start).
+    /// </summary>
+    private const int PastMinutes = 0;
+
+    /// <summary>Total minutes covered by the laid-out guide.</summary>
+    public int TotalMinutes { get; private set; } = 180;
+
+    /// <summary>Asks the view to scroll the grid so this x offset (px from guide start) is at the left edge.</summary>
+    public event Action<double>? ScrollRequested;
+    private double _scrollX;
 
     public override string NavKey => "livetv";
     public ObservableCollection<GuideRowViewModel> Rows { get; } = new();
@@ -75,7 +88,7 @@ public sealed partial class LiveTvViewModel : PageViewModel
     [ObservableProperty] private string? _infoImage;
     [ObservableProperty] private double _infoProgress;
 
-    public double GridWidth => WindowMinutes * PxPerMinute;
+    public double GridWidth => TotalMinutes * PxPerMinute;
 
     public LiveTvViewModel()
     {
@@ -92,7 +105,8 @@ public sealed partial class LiveTvViewModel : PageViewModel
             _channels = await LoadChannelsWithContentAsync();
             Rows.Clear();
             for (int i = 0; i < _channels.Count; i++) Rows.Add(new GuideRowViewModel(_channels[i], i));
-            JumpToNow();
+            Layout();
+            ScrollRequested?.Invoke(NowScrollX);
         });
     }
 
@@ -102,7 +116,8 @@ public sealed partial class LiveTvViewModel : PageViewModel
     /// </summary>
     private static async Task<List<NtvChannel>> LoadChannelsWithContentAsync()
     {
-        var all = await AppServices.Ntv.LoadGuideAsync(3);
+        // Everything NostalgiaTV publishes (it usually schedules a few days ahead).
+        var all = await AppServices.Ntv.LoadGuideAsync(14);
         return all.Where(c => c.Programs.Count > 0).ToList();
     }
 
@@ -112,36 +127,49 @@ public sealed partial class LiveTvViewModel : PageViewModel
     private static DateTimeOffset AlignDown(DateTimeOffset t) =>
         new DateTimeOffset(t.Year, t.Month, t.Day, t.Hour, t.Minute >= 30 ? 30 : 0, 0, t.Offset);
 
+    /// <summary>X offset of the current half hour, so "now" sits near the left of the view.</summary>
+    private double NowScrollX => Math.Max(0, ((AlignDown(DateTimeOffset.Now) - WindowStart).TotalMinutes) * PxPerMinute);
+
     [RelayCommand]
     private void JumpToNow()
     {
-        WindowStart = AlignDown(DateTimeOffset.Now);
-        Layout();
+        if (Slots.Count == 0) Layout();
+        ScrollRequested?.Invoke(NowScrollX);
     }
 
-    [RelayCommand]
-    private void Later()
-    {
-        WindowStart = WindowStart.AddMinutes(90);
-        Layout();
-    }
+    [RelayCommand] private void Later() => ScrollRequested?.Invoke(_scrollX + 90 * PxPerMinute);
+    [RelayCommand] private void Earlier() => ScrollRequested?.Invoke(Math.Max(0, _scrollX - 90 * PxPerMinute));
 
-    [RelayCommand]
-    private void Earlier()
+    /// <summary>The view reports its horizontal scroll position (px from guide start).</summary>
+    public void OnScrolled(double x)
     {
-        var min = AlignDown(DateTimeOffset.Now).AddHours(-2);
-        WindowStart = WindowStart.AddMinutes(-90) < min ? min : WindowStart.AddMinutes(-90);
-        Layout();
+        _scrollX = x;
+        var t = WindowStart.AddMinutes(x / PxPerMinute + 1);
+        DayLabel = t.LocalDateTime.Date == DateTime.Today ? "Today"
+            : t.LocalDateTime.Date == DateTime.Today.AddDays(1) ? "Tomorrow"
+            : t.LocalDateTime.ToString("dddd, MMM d");
     }
 
     private void Layout()
     {
-        var start = WindowStart;
-        var end = start.AddMinutes(WindowMinutes);
+        // From a little before now to the last program NostalgiaTV has scheduled.
+        var start = AlignDown(DateTimeOffset.Now.AddMinutes(-PastMinutes));
+        var lastStop = _channels.SelectMany(c => c.Programs).Select(p => p.Stop).DefaultIfEmpty(start.AddHours(3)).Max();
+        var end = AlignDown(lastStop.AddMinutes(29));
+        if (end <= start.AddHours(3)) end = start.AddHours(3);
+        WindowStart = start;
+        TotalMinutes = (int)(end - start).TotalMinutes;
+        OnPropertyChanged(nameof(GridWidth));
+
         Slots.Clear();
-        for (int m = 0; m < WindowMinutes; m += 30)
-            Slots.Add(new TimeSlotViewModel(start.AddMinutes(m).LocalDateTime.ToString("h:mm tt"), 30 * PxPerMinute));
-        DayLabel = start.Date == DateTimeOffset.Now.Date ? "Today" : start.LocalDateTime.ToString("dddd, MMM d");
+        for (int m = 0; m < TotalMinutes; m += 30)
+        {
+            var t = start.AddMinutes(m).LocalDateTime;
+            // Midnight gets the date so it's clear when the day changes.
+            var label = t.Hour == 0 && t.Minute == 0 ? t.ToString("ddd MMM d") : t.ToString("h:mm tt");
+            Slots.Add(new TimeSlotViewModel(label, 30 * PxPerMinute));
+        }
+        OnScrolled(_scrollX);
 
         var now = DateTimeOffset.Now;
         foreach (var row in Rows)
@@ -174,8 +202,8 @@ public sealed partial class LiveTvViewModel : PageViewModel
     private void UpdateNow()
     {
         var mins = (DateTimeOffset.Now - WindowStart).TotalMinutes;
-        NowVisible = mins >= 0 && mins <= WindowMinutes;
-        NowOffset = Math.Clamp(mins, 0, WindowMinutes) * PxPerMinute;
+        NowVisible = mins >= 0 && mins <= TotalMinutes;
+        NowOffset = Math.Clamp(mins, 0, TotalMinutes) * PxPerMinute;
     }
 
     public void Inspect(GuideProgramViewModel vm)
@@ -214,6 +242,7 @@ public sealed partial class LiveTvViewModel : PageViewModel
             Rows.Clear();
             for (int i = 0; i < _channels.Count; i++) Rows.Add(new GuideRowViewModel(_channels[i], i));
             Layout();
+            ScrollRequested?.Invoke(NowScrollX);
         });
     }
 }

@@ -84,6 +84,14 @@ public sealed class VideoSurface : NativeControlHost
             Title = "Slopfin player controls",
             Content = Content,
         };
+        // Window managers can resize/move the overlay themselves (e.g. restoring its old size when
+        // leaving full screen). Re-check whenever that happens.
+        _overlay.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == Window.ClientSizeProperty || e.Property == Window.WindowStateProperty)
+                Avalonia.Threading.Dispatcher.UIThread.Post(UpdateOverlay, Avalonia.Threading.DispatcherPriority.Background);
+        };
+        _overlay.PositionChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(UpdateOverlay, Avalonia.Threading.DispatcherPriority.Background);
         UpdateOverlay();
     }
 
@@ -122,8 +130,13 @@ public sealed class VideoSurface : NativeControlHost
         {
             var pos = this.PointToScreen(new Point(0, 0));
             if (overlay.Position != pos) overlay.Position = pos;
-            if (Math.Abs(overlay.Width - Bounds.Width) > 0.5) overlay.Width = Bounds.Width;
-            if (Math.Abs(overlay.Height - Bounds.Height) > 0.5) overlay.Height = Bounds.Height;
+            // Compare with the window's REAL size: if the window manager changed it behind our back,
+            // the Width/Height properties still hold the old request and setting them again would be
+            // a no-op, so nudge by a hair to force a real resize.
+            if (Math.Abs(overlay.ClientSize.Width - Bounds.Width) > 1)
+                overlay.Width = Math.Abs(overlay.Width - Bounds.Width) < 0.01 ? Bounds.Width + 0.01 : Bounds.Width;
+            if (Math.Abs(overlay.ClientSize.Height - Bounds.Height) > 1)
+                overlay.Height = Math.Abs(overlay.Height - Bounds.Height) < 0.01 ? Bounds.Height + 0.01 : Bounds.Height;
         }
         if (!overlay.IsVisible) overlay.Show(_owner);
     }

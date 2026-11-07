@@ -122,6 +122,9 @@ public sealed partial class MainViewModel : ViewModelBase
                 var item = await AppServices.Jellyfin.GetItemAsync(devPlay);
                 await Dispatcher.UIThread.InvokeAsync(() => PlayItem(item, resume: true));
             });
+        // SLOPFIN_DEV_PAGE=livetv opens the guide after sign-in.
+        if (Environment.GetEnvironmentVariable("SLOPFIN_DEV_PAGE") == "livetv")
+            Dispatcher.UIThread.Post(() => shell.NavigateRoot(new LiveTvViewModel()), DispatcherPriority.Background);
         // SLOPFIN_DEV_LIVE=<channel number> tunes that NostalgiaTV channel after sign-in.
         var devLive = Environment.GetEnvironmentVariable("SLOPFIN_DEV_LIVE");
         if (!string.IsNullOrEmpty(devLive))

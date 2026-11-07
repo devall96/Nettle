@@ -72,17 +72,29 @@ internal sealed class MainWindow : Window, IWindowHost
             Avalonia.Threading.DispatcherTimer.RunOnce(SyncLinuxWindows, TimeSpan.FromMilliseconds(120));
             Avalonia.Threading.DispatcherTimer.RunOnce(SyncLinuxWindows, TimeSpan.FromMilliseconds(600));
         }
-        if (change.Property == WindowStateProperty)
-        {
-            // The overlay can appear after the state change (player opening), so keep checking while full screen.
-            _linuxSync ??= new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(700), Avalonia.Threading.DispatcherPriority.Background, (_, _) => SyncLinuxWindows());
-            if (IsFullScreen) _linuxSync.Start(); else _linuxSync.Stop();
-        }
+        // Overlays appear and window states change from outside (keyboard shortcuts, the shell),
+        // so keep a cheap periodic check running while any overlay is around.
+        _linuxSync ??= new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(700), Avalonia.Threading.DispatcherPriority.Background, (_, _) => SyncLinuxWindows());
+        if (!_linuxSync.IsEnabled) _linuxSync.Start();
+    }
+
+    /// <summary>
+    /// True when the window really covers its whole screen. Avalonia reports "Maximized" for a
+    /// window that is both maximized and full screen (GNOME keeps both flags), so the state
+    /// alone can't be trusted on Linux.
+    /// </summary>
+    private bool CoversScreen()
+    {
+        if (WindowState == WindowState.FullScreen) return true;
+        var screen = Screens.ScreenFromWindow(this);
+        if (screen == null) return false;
+        var size = PixelSize.FromSize(ClientSize, RenderScaling);
+        return size.Width >= screen.Bounds.Width && size.Height >= screen.Bounds.Height;
     }
 
     private void SyncLinuxWindows()
     {
-        var wanted = IsFullScreen ? WindowState.FullScreen : WindowState.Normal;
+        var wanted = CoversScreen() ? WindowState.FullScreen : WindowState.Normal;
         foreach (var overlay in OwnedWindows)
         {
             if (!overlay.IsVisible) continue;
@@ -93,7 +105,7 @@ internal sealed class MainWindow : Window, IWindowHost
         }
     }
 
-    public bool IsFullScreen => WindowState == WindowState.FullScreen;
+    public bool IsFullScreen => WindowState == WindowState.FullScreen || (OperatingSystem.IsLinux() && CoversScreen());
 
     public void SetFullScreen(bool on)
     {
@@ -105,6 +117,9 @@ internal sealed class MainWindow : Window, IWindowHost
         }
         else
         {
+            // Linux: a window can be full screen while Avalonia reports "Maximized"; pass through
+            // FullScreen first so the change back actually clears the full-screen flag.
+            if (WindowState != WindowState.FullScreen) WindowState = WindowState.FullScreen;
             WindowState = _restoreState == WindowState.FullScreen ? WindowState.Normal : _restoreState;
         }
     }

@@ -73,35 +73,32 @@
         <Button Classes="chip" Content="{Binding DayLabel}" Command="{Binding JumpToNowCommand}" ToolTip.Tip="Jump to now" />
         <Button Classes="icon" Command="{Binding LaterCommand}" ToolTip.Tip="Later"><PathIcon Data="{StaticResource Icon.ChevronRight}" /></Button>
       </StackPanel>
-      <ItemsControl Grid.Column="1" ItemsSource="{Binding Slots}" ClipToBounds="True">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="vm:TimeSlotViewModel">
-            <TextBlock Text="{Binding Label}" Width="{Binding Width}" Classes="muted" FontWeight="SemiBold" VerticalAlignment="Center" Padding="4,0" />
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+      <!-- Scrolls in step with the grid below (synced in code-behind). -->
+      <ScrollViewer x:Name="HeaderScroll" Grid.Column="1" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" IsHitTestVisible="False">
+        <ItemsControl ItemsSource="{Binding Slots}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:TimeSlotViewModel">
+              <TextBlock Text="{Binding Label}" Width="{Binding Width}" Classes="muted" FontWeight="SemiBold" VerticalAlignment="Center" Padding="4,0" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
     </Grid>
 
-    <!-- Guide grid (rows virtualized) -->
-    <Grid Grid.Row="2" Margin="56,0,56,24" IsVisible="{Binding !NotConfigured}">
-      <ItemsControl ItemsSource="{Binding Rows}">
-        <ItemsControl.Template>
-          <ControlTemplate>
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-              <ItemsPresenter />
-            </ScrollViewer>
-          </ControlTemplate>
-        </ItemsControl.Template>
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="vm:GuideRowViewModel">
-            <Grid ColumnDefinitions="200,*" Height="68" Margin="0,0,0,4">
-              <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Margin="0,0,6,0" Padding="10,0">
+    <!-- Guide: fixed channel column on the left, the whole schedule scrolling on the right.
+         Both lists are virtualized and kept in vertical sync (code-behind). -->
+    <Grid Grid.Row="2" Margin="56,0,56,24" ColumnDefinitions="200,*" IsVisible="{Binding !NotConfigured}">
+      <ScrollViewer x:Name="ChannelScroll" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Rows}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:GuideRowViewModel">
+              <Border Height="68" Margin="0,0,6,4" Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="10,0">
                 <Grid ColumnDefinitions="Auto,*">
                   <Border Width="60" Height="44" CornerRadius="6" ClipToBounds="True" VerticalAlignment="Center">
                     <Grid>
@@ -115,32 +112,46 @@
                   </StackPanel>
                 </Grid>
               </Border>
-              <ItemsControl Grid.Column="1" ItemsSource="{Binding Programs}" ClipToBounds="True">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:GuideProgramViewModel">
-                    <Button Classes="prog" Classes.now="{Binding IsNow}" Classes.gap="{Binding IsGap}" Width="{Binding Width}"
-                            Command="{Binding PlayCommand}"
-                            PointerEntered="OnProgramPointerEntered" GotFocus="OnProgramGotFocus">
-                      <StackPanel>
-                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding Time}" Classes="muted caption" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsWide}" />
-                      </StackPanel>
-                    </Button>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </Grid>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
 
-      <!-- "Now" line -->
-      <Canvas IsHitTestVisible="False" Margin="200,0,0,0" IsVisible="{Binding NowVisible}" ClipToBounds="True">
-        <Border Canvas.Left="{Binding NowOffset}" Width="2" Height="4000" Background="{DynamicResource AccentBrush}" Opacity="0.85" />
-      </Canvas>
+      <ScrollViewer x:Name="GridScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+        <Panel>
+          <ItemsControl ItemsSource="{Binding Rows}" Width="{Binding GridWidth}" HorizontalAlignment="Left">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:GuideRowViewModel">
+                <ItemsControl ItemsSource="{Binding Programs}" Height="68" Margin="0,0,0,4" ClipToBounds="True">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GuideProgramViewModel">
+                      <Button Classes="prog" Classes.now="{Binding IsNow}" Classes.gap="{Binding IsGap}" Width="{Binding Width}"
+                              Command="{Binding PlayCommand}"
+                              PointerEntered="OnProgramPointerEntered" GotFocus="OnProgramGotFocus">
+                        <StackPanel>
+                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Time}" Classes="muted caption" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsWide}" />
+                        </StackPanel>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- "Now" line (scrolls with the schedule) -->
+          <Canvas IsHitTestVisible="False" IsVisible="{Binding NowVisible}">
+            <Border Canvas.Left="{Binding NowOffset}" Width="2" Height="100000" Background="{DynamicResource AccentBrush}" Opacity="0.85" />
+          </Canvas>
+        </Panel>
+      </ScrollViewer>
     </Grid>
 
     <Arc Grid.Row="2" Classes="spin" Width="44" Height="44" IsVisible="{Binding IsBusy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
