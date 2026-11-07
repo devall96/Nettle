@@ -1,0 +1,29 @@
+#!/bin/sh
+# Slopfin pre-commit guard. Blocks commits that would publish:
+#   1) files outside the project allowlist (e.g. another project living in this folder)
+#   2) anything that looks like a secret (Jellyfin tokens, API keys, private server addresses)
+# Enabled with:  git config core.hooksPath .githooks
+
+fail=0
+
+# 1) Path allowlist (mirrors .gitignore).
+allowed='^(\.gitignore|\.githooks/.*|src/.*|docs/.*|README\.md|LICENSE|THIRD_PARTY_NOTICES\.md|Slopfin\.slnx|Directory\.Build\.(props|targets)|dotnet-tools\.json|build-release\.ps1)$'
+bad_paths=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ev "$allowed")
+if [ -n "$bad_paths" ]; then
+  echo "pre-commit: refusing to commit files outside Slopfin's allowlist:" >&2
+  echo "$bad_paths" | sed 's/^/  - /' >&2
+  echo "  (unstage them with: git restore --staged <file>)" >&2
+  fail=1
+fi
+
+# 2) Secret patterns in added lines.
+secrets=$(git diff --cached -U0 --diff-filter=ACMR -- . ':(exclude).githooks/pre-commit' \
+  | grep -E '^\+' \
+  | grep -Ei 'api_?key=[0-9a-f]{32}|"accesstoken"[[:space:]]*:[[:space:]]*"[0-9a-f]{20,}|x-emby-token[=:][[:space:]]*[0-9a-f]{20,}|token="[0-9a-f]{20,}"|gh[pousr]_[A-Za-z0-9]{30,}|[a-z0-9-]+\.ts\.net|\b100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]{1,3}\.[0-9]{1,3}\b')
+if [ -n "$secrets" ]; then
+  echo "pre-commit: refusing to commit something that looks like a secret or private address:" >&2
+  echo "$secrets" | cut -c1-160 | sed 's/^/  /' >&2
+  fail=1
+fi
+
+exit $fail

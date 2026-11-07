@@ -174,6 +174,8 @@ To build a release (installer, portable zip and update packages in `releases\`):
 powershell -ExecutionPolicy Bypass -File build-release.ps1
 ```
 
+**Contributing:** run `git config core.hooksPath .githooks` once after cloning. A pre-commit check then blocks commits that contain files outside the project or anything that looks like a token or a private server address. The `.gitignore` is an allowlist, so only Slopfin's own files can be tracked.
+
 `build-release.ps1` reads the version from `Directory.Build.props`. The app draws the installer splash art itself during the build.
 
 **Project layout**
