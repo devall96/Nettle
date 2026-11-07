@@ -20,7 +20,7 @@ card for 4K and HDR. Slopfin never transcodes: it has no code path that asks the
 It also brings in a TV-style live guide for **NostalgiaTV**, **Seerr** requests, skippable intros
 and credits, multiple profiles, and eight hand-made themes. It has **no telemetry of any kind**.
 
-> **Slopfin 0.1 is the first tester preview.** It's ready for daily use, but expect rough edges.
+> **Slopfin 0.1.0 is the first tester preview.** It's ready for daily use, but expect rough edges.
 > Please [report anything odd](https://github.com/devall96/Slopfin/issues).
 
 ## Screenshots
@@ -152,7 +152,7 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.1)
+## Known limitations (0.1.0)
 - **Dolby Vision profile 5** files (no HDR10 fallback) show wrong colours in VLC 3. Slopfin warns you about these files.
 - **Atmos and DTS:X** are decoded to PCM. Height channels need a receiver, and audio passthrough isn't available yet.
 - Not code-signed yet, so SmartScreen shows a warning on first install.
