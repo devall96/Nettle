@@ -142,7 +142,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                     ? new FormatBadgeViewModel("DOLBY VISION", $"Output as {signal} (base layer) to your HDR display", true)
                     : new FormatBadgeViewModel(hdr.ToUpperInvariant(), "HDR output active on this display", true));
             else if (display == HdrDisplayState.Sdr)
-                badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), "Display is in SDR, so this is tone-mapped. Turn on Windows HDR for true HDR.", false));
+                badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), OperatingSystem.IsWindows()
+                    ? "Display is in SDR, so this is tone-mapped. Turn on Windows HDR for true HDR."
+                    : "Tone-mapped to SDR (HDR output isn't available on Linux yet)", false));
             else
                 badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), "Couldn't confirm your display's HDR mode", false));
         }

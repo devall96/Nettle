@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="docs/images/banner.png" alt="Slopfin: a fast, beautiful Jellyfin client for Windows, built on VLC" width="100%">
+  <img src="docs/images/banner.png" alt="Slopfin: a fast, beautiful Jellyfin client for Windows and Linux, built on VLC" width="100%">
 </p>
 
 <p align="center">
-  <b><a href="https://github.com/devall96/Slopfin/releases/latest">⬇ Download Slopfin for Windows</a></b>
+  <b><a href="https://github.com/devall96/Slopfin/releases/latest">⬇ Download Slopfin for Windows or Linux</a></b>
   &nbsp;·&nbsp; <a href="#features">Features</a>
   &nbsp;·&nbsp; <a href="#install">Install</a>
   &nbsp;·&nbsp; <a href="#using-slopfin">Using Slopfin</a>
@@ -13,7 +13,7 @@
 
 ---
 
-**Slopfin** is a Jellyfin client for Windows that plays everything in **original quality**. Instead of
+**Slopfin** is a Jellyfin client for Windows and Linux that plays everything in **original quality**. Instead of
 asking your server to transcode, it plays the actual file with the VLC engine, using your graphics
 card for 4K and HDR. Slopfin never transcodes: it has no code path that asks the server to.
 
@@ -71,7 +71,7 @@ and credits, multiple profiles, and eight hand-made themes. It has **no telemetr
 - Finds Jellyfin servers on your network automatically. You can also type an address, and Slopfin tries https, http and the default ports for you.
 - Sign in with profile tiles, a password, or **Quick Connect**.
 - **Multiple profiles** with a "Who's watching?" picker, quick switching, and optional automatic sign-in.
-- **Passwords are never stored.** Only Jellyfin's session token is kept, encrypted with Windows DPAPI for your Windows account.
+- **Passwords are never stored.** Only Jellyfin's session token is kept: on Windows it's encrypted with DPAPI for your Windows account, and on Linux it goes into your desktop keyring (GNOME Keyring, KWallet, KeePassXC…).
 
 ### Look and feel
 - **Eight original themes:** Midnight, Obsidian (true black for OLED), Aurora, Ember, Sakura, Deep Sea, Evergreen and Daylight. Switching is instant.
@@ -79,6 +79,8 @@ and credits, multiple profiles, and eight hand-made themes. It has **no telemetr
 - **Ready for keyboard and TV remotes.** Arrow keys move focus the way a TV remote's d-pad does.
 
 ## Install
+
+### Windows
 
 1. Download **`SlopfinApp-win-Setup.exe`** from the [latest release](https://github.com/devall96/Slopfin/releases/latest).
 2. Run it. It installs for your user account only, so no admin rights are needed, and adds Start-menu and Desktop shortcuts.
@@ -92,6 +94,18 @@ Prefer not to install? Download **`SlopfinApp-win-Portable.zip`**, extract it, a
 - For HDR, an HDR display with **Settings → Display → Use HDR** turned on.
 
 **Uninstall:** Windows Settings → Apps → Slopfin → Uninstall. Your settings and saved sign-ins stay in `%LOCALAPPDATA%\Slopfin`. Delete that folder too if you want everything gone.
+
+### Linux
+
+1. Download **`SlopfinApp.AppImage`** from the [latest release](https://github.com/devall96/Slopfin/releases/latest) and put it wherever you keep apps, for example `~/Applications`.
+2. Make it executable: right-click → Properties → *Allow executing file as program*, or run `chmod +x SlopfinApp.AppImage`.
+3. Double-click it. On first run, Slopfin offers to **add itself to your applications menu**, with its icon. This is also in **Settings → Desktop**. Nothing is installed system-wide and no root is needed.
+
+VLC is built in, so you don't need to install anything else. It runs on any 64-bit distro from about 2022 onwards: Ubuntu 22.04+, Debian 12+, Fedora, Arch and their derivatives.
+
+*If double-clicking does nothing,* your distro may be missing FUSE 2, which AppImages use. Install `libfuse2` (Ubuntu/Debian: `sudo apt install libfuse2t64`, or `libfuse2` on older releases) or run `./SlopfinApp.AppImage --appimage-extract-and-run`.
+
+**Uninstall:** in **Settings → Desktop**, press *Remove from menu*, then delete the AppImage. Settings and the image cache live in `~/.local/share/Slopfin` and `~/.cache/Slopfin`. Saved sign-ins are in your keyring under "Slopfin".
 
 ## Using Slopfin
 
@@ -143,7 +157,7 @@ Slopfin contains **no telemetry, analytics, crash reporting, ads or tracking**. 
 - TMDB, only if you turn on direct TMDB posters.
 
 Other privacy details:
-- Servers see the device as "Slopfin (Windows)", never your PC's name.
+- Servers see the device as "Slopfin (Windows)" or "Slopfin (Linux)", never your PC's name.
 - Images only load from the servers you configured.
 - VLC's online metadata lookups are disabled.
 - Diagnostic logs stay on your PC and have tokens masked.
@@ -156,7 +170,8 @@ Other privacy details:
 - **Dolby Vision profile 5** files (no HDR10 fallback) show wrong colours in VLC 3. Slopfin warns you about these files.
 - **Atmos and DTS:X** are decoded to PCM. Height channels need a receiver, and audio passthrough isn't available yet.
 - Not code-signed yet, so SmartScreen shows a warning on first install.
-- Windows only for now. The code is structured for Android TV and iOS versions later.
+- **Linux:** HDR video is tone-mapped to SDR, because VLC 3 has no HDR output on Linux. The badge says so. If your desktop has no keyring at all, sign-ins are kept in a file only your user can read.
+- Windows and Linux for now. The code is structured for Android TV and iOS versions later.
 
 ## Building from source
 
@@ -168,7 +183,13 @@ cd Slopfin
 dotnet run --project src/Slopfin.Desktop
 ```
 
-To build a release (installer, portable zip and update packages in `releases\`):
+On Linux, install VLC first (e.g. `sudo apt install vlc`). Source builds use the system's VLC; only the AppImage bundles its own.
+
+The Linux AppImage is built by the **Linux AppImage** GitHub Actions workflow
+(`.github/workflows/linux.yml`). It bundles libVLC, then decodes H.264, 4K HEVC 10-bit and AV1
+test clips on clean Ubuntu, Debian, Fedora and Arch machines before anything is published.
+
+To build a Windows release (installer, portable zip and update packages in `releases\`):
 
 ```bash
 powershell -ExecutionPolicy Bypass -File build-release.ps1
@@ -184,7 +205,8 @@ powershell -ExecutionPolicy Bypass -File build-release.ps1
 src/
   Slopfin.Core      Platform-neutral: Jellyfin / Seerr / NostalgiaTV clients, models, settings, account vault
   Slopfin.UI        Avalonia views + view models, themes, image cache, VLC player (shared by every platform)
-  Slopfin.Desktop   Windows app: window, DPAPI secure storage, HDR detection, installer/updater hooks
+  Slopfin.Desktop   Windows + Linux app: window, secure storage (DPAPI / keyring), HDR detection,
+                    libVLC loading, applications-menu entry, installer/updater hooks
 ```
 
 ## Code signing policy

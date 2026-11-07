@@ -48,8 +48,8 @@ internal sealed class MainWindow : Window, IWindowHost
 
     public HdrDisplayState GetHdrState()
     {
-        // Linux has no reliable desktop-wide way to ask yet, so HDR badges say "couldn't confirm".
-        if (!OperatingSystem.IsWindows()) return HdrDisplayState.Unknown;
+        // Linux: libVLC 3 always tone-maps HDR to SDR there, whatever the display can do.
+        if (!OperatingSystem.IsWindows()) return HdrDisplayState.Sdr;
         var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         return hwnd == IntPtr.Zero ? HdrDisplayState.Unknown : DisplayHdr.ForWindow(hwnd);
     }
