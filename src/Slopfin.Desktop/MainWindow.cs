@@ -54,6 +54,53 @@ internal sealed class MainWindow : Window, IWindowHost
         return hwnd == IntPtr.Zero ? HdrDisplayState.Unknown : DisplayHdr.ForWindow(hwnd);
     }
 
+    // ---------- Linux: keep the player's overlay window lined up ----------
+    // The player's controls live in a separate transparent window over the video (that's how
+    // LibVLCSharp draws UI above native video). Desktop shells keep ordinary windows out of the
+    // dock / top-bar area, so in full screen GNOME pushed that overlay right and down by the dock
+    // and bar size, cutting the controls off at the right edge. Fix: while the main window is
+    // full screen, the overlay is made full screen too (shells allow that), and restored after.
+    // Also, if the shell moved our window without telling Avalonia, re-sync its position.
+
+    private Avalonia.Threading.DispatcherTimer? _linuxSync;
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (!OperatingSystem.IsLinux()) return;
+        if (change.Property == WindowStateProperty || change.Property == ClientSizeProperty)
+        {
+            Avalonia.Threading.DispatcherTimer.RunOnce(SyncLinuxWindows, TimeSpan.FromMilliseconds(120));
+            Avalonia.Threading.DispatcherTimer.RunOnce(SyncLinuxWindows, TimeSpan.FromMilliseconds(600));
+        }
+        if (change.Property == WindowStateProperty)
+        {
+            // The overlay can appear after the state change (player opening), so keep checking while full screen.
+            _linuxSync ??= new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(700), Avalonia.Threading.DispatcherPriority.Background, (_, _) => SyncLinuxWindows());
+            if (IsFullScreen) _linuxSync.Start(); else _linuxSync.Stop();
+        }
+    }
+
+    private void SyncLinuxWindows()
+    {
+        var handle = TryGetPlatformHandle();
+        if (handle?.HandleDescriptor == "XID" && Linux.X11.TryGetRootPosition(handle.Handle) is { } real && real != Position)
+        {
+            Slopfin.Core.Services.Log.Info($"window position resync {Position} -> {real}");
+            Position = real;
+        }
+
+        var wanted = IsFullScreen ? WindowState.FullScreen : WindowState.Normal;
+        foreach (var overlay in OwnedWindows)
+        {
+            if (!overlay.IsVisible) continue;
+            // LibVLCSharp creates the overlay fixed-size; window managers refuse to make
+            // fixed-size windows full screen, so allow resizing first (it has no frame anyway).
+            if (wanted == WindowState.FullScreen && !overlay.CanResize) overlay.CanResize = true;
+            if (overlay.WindowState != wanted) overlay.WindowState = wanted;
+        }
+    }
+
     public bool IsFullScreen => WindowState == WindowState.FullScreen;
 
     public void SetFullScreen(bool on)

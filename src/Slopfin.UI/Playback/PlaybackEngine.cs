@@ -11,6 +11,9 @@ public static class PlaybackEngine
     private static LibVLC? _vlc;
     private static readonly object Gate = new();
 
+    /// <summary>Extra libVLC options from the platform head (set before first use).</summary>
+    public static string[] PlatformOptions { get; set; } = [];
+
     public static LibVLC Vlc
     {
         get
@@ -18,7 +21,7 @@ public static class PlaybackEngine
             lock (Gate)
             {
                 if (_vlc != null) return _vlc;
-                _vlc = new LibVLC(
+                _vlc = new LibVLC([.. PlatformOptions,
                     "--no-video-title-show",
                     "--no-snapshot-preview",
                     "--no-stats",
@@ -28,7 +31,7 @@ public static class PlaybackEngine
                     // Privacy: libVLC never looks up artwork/metadata online, and its Lua
                     // extensions (online playlist resolvers, art finders) are disabled entirely.
                     "--no-metadata-network-access",
-                    "--no-lua");
+                    "--no-lua"]);
                 // Don't advertise the exact VLC build to servers.
                 _vlc.SetUserAgent("Slopfin", "Slopfin");
                 // Only errors go to Slopfin's diagnostic log.

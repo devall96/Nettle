@@ -112,6 +112,17 @@ public sealed partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(Shell));
         _ = shell.InitializeAsync();
         MaybeOfferMenuEntry();
+#if DEBUG
+        // Developer convenience: SLOPFIN_DEV_PLAY=<itemId> starts playing that item after sign-in.
+        var devPlay = Environment.GetEnvironmentVariable("SLOPFIN_DEV_PLAY");
+        if (!string.IsNullOrEmpty(devPlay))
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(2500);
+                var item = await AppServices.Jellyfin.GetItemAsync(devPlay);
+                await Dispatcher.UIThread.InvokeAsync(() => PlayItem(item, resume: true));
+            });
+#endif
     }
 
     // ---------- "Add to applications menu?" (Linux AppImage, asked once) ----------

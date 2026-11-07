@@ -81,6 +81,8 @@ internal static class Program
             .WithInterFont()
             .With(new Win32PlatformOptions { CompositionMode = new[] { Win32CompositionMode.WinUIComposition, Win32CompositionMode.RedirectionSurface } })
             // Linux: WM_CLASS matches StartupWMClass in the menu entry, so docks group the window with its launcher.
-            .With(new X11PlatformOptions { WmClass = "Slopfin" })
+            // UseDBusMenu off: Slopfin has no menu bar, and on desktops without a global-menu
+            // service (GNOME) the lookup only produced a D-Bus error in crash.log.
+            .With(new X11PlatformOptions { WmClass = "Slopfin", UseDBusMenu = false })
             .LogToTrace();
 }
