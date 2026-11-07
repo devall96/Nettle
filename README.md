@@ -106,7 +106,8 @@ Jellyfin server and a few minutes, you'd help a lot:
 - Sign in with an API key, or with your Jellyfin username and password. Only the resulting session is kept, encrypted.
 
 ### Accounts and sign-in
-- Finds Jellyfin servers on your network automatically. You can also type an address, and Nettle tries https, http and the default ports for you.
+- Finds Jellyfin servers on your network automatically. You can also pick http or https and type just the IP; the port is added for you.
+- **Sets up Live TV and Requests by itself:** NostalgiaTV and Seerr running on the same machine as Jellyfin are found and connected after you sign in.
 - Sign in with profile tiles, a password, or **Quick Connect**.
 - **Multiple profiles** with a "Who's watching?" picker, quick switching, and optional automatic sign-in.
 - **Passwords are never stored.** Only Jellyfin's session token is kept: on Windows it's encrypted with DPAPI for your Windows account, and on Linux it goes into your desktop keyring (GNOME Keyring, KWallet, KeePassXC…).
@@ -140,7 +141,7 @@ So far the Linux version has been tested mainly on Ubuntu 26.04 with GNOME and a
 card. If you're on something else, please [report how it went](#-testers-wanted).
 
 > [!WARNING]
-> **The 0.3.0 Linux build is untested for a short while.** The Linux test bench is being
+> **The 0.3.x Linux builds are untested for a short while.** The Linux test bench is being
 > reconfigured, so this release was only tested by hand on Windows. The Linux build still passes the
 > automated decode tests on clean Ubuntu, Debian, Fedora and Arch machines. Hands-on Linux testing
 > will follow soon.
@@ -158,9 +159,22 @@ mpv is built in, so you don't need to install anything else. It runs on 64-bit d
 ## Using Nettle
 
 ### First run
-1. Pick your server from **On your network**, or type its address, e.g. `192.168.1.20:8096` or `https://jellyfin.example.com`.
+1. Pick your server from **On your network**, or choose **http** or **https** and type just its IP address, e.g. `192.168.1.20`.
+   - The port is added for you: 8096 for http, 8920 for https.
+   - Type `:port` to use a different one, e.g. `192.168.1.20:9000`.
+   - Full addresses such as `https://jellyfin.example.com` work too.
 2. Choose your profile, or sign in with a username and password or Quick Connect.
 3. Leave **Remember me** on to sign in automatically next time. You can switch or forget profiles from the avatar at the bottom of the side rail, or in **Settings → Accounts**.
+
+**Live TV and Requests set themselves up.** After you sign in, Nettle looks on the same machine as
+your Jellyfin server for NostalgiaTV (port 19850) and Seerr (port 5055), using the same http / https.
+- Whichever it finds is set up for you, so you only ever type the IP, your username and your password.
+- Seerr is signed in with the Jellyfin username and password you just entered. The password is passed
+  to Seerr once and never stored. Quick Connect has no password, so then only Seerr's address is filled
+  in and you sign in to Seerr once in Settings.
+- If neither is there, nothing changes and you use Nettle with just Jellyfin.
+- Anything you've already set up in Settings is left alone.
+- If they run on a different machine, set them up by hand as below.
 
 ### Keyboard and remote
 
@@ -178,13 +192,13 @@ mpv is built in, so you don't need to install anything else. It runs on 64-bit d
 | Page Up / Page Down | | | Channel up / down |
 
 ### Live TV (NostalgiaTV)
-Go to **Settings → NostalgiaTV** and enter your NostalgiaTV address, for example `http://your-server:19850`. An API key is optional. Press **Save & test**, then open **Live TV**.
+Usually set up automatically when you sign in (see [First run](#first-run)). To do it by hand, go to **Settings → NostalgiaTV** and enter your NostalgiaTV address, for example `http://your-server:19850`. An API key is optional. Press **Save & test**, then open **Live TV**.
 
 - *Play original files (full quality)* is on by default. Turn it off to use NostalgiaTV's own broadcast feed instead, which NostalgiaTV re-encodes.
 - Channels without a Jellyfin item behind them, such as weather or external IPTV, always use the broadcast feed.
 
 ### Requests (Seerr)
-Go to **Settings → Seerr (Requests)**, enter your Seerr address and either an API key or your Jellyfin login, then press **Save & test**.
+Usually set up automatically when you sign in (see [First run](#first-run)). To do it by hand, go to **Settings → Seerr (Requests)**, enter your Seerr address and either an API key or your Jellyfin login, then press **Save & test**.
 
 Posters load through your Seerr server's image proxy, so TMDB never sees your IP address. If posters don't appear, turn on *Load posters directly from TMDB*.
 
@@ -200,6 +214,7 @@ Updates are **off unless you use them**:
 Nettle contains **no telemetry, analytics, crash reporting, ads or tracking**. It only ever connects to:
 
 - the Jellyfin, NostalgiaTV and Seerr servers *you* enter;
+- right after you sign in, the NostalgiaTV and Seerr ports (19850 and 5055) on *your Jellyfin server's own machine*, to set them up for you (never any other machine);
 - your local network, when the sign-in screen looks for Jellyfin servers;
 - your chosen update source, and only when you check for updates;
 - TMDB, only if you turn on direct TMDB posters.
@@ -214,7 +229,7 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.3.0 beta)
+## Known limitations (0.3.1 beta)
 - **Both platforms are beta.** Expect some bugs, and please report them.
 - **Linux:**
   - It's untested so far on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
