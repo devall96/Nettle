@@ -21,7 +21,19 @@ public sealed class ImageCache
     private readonly HttpClient _http = HttpFactory.Create(TimeSpan.FromSeconds(20));
     private readonly SemaphoreSlim _downloads = new(8);
     private readonly SemaphoreSlim _decodes = new(Math.Max(2, Environment.ProcessorCount / 2));
-    private readonly ConcurrentDictionary<string, Task<Bitmap?>> _inflight = new();
+    private readonly ConcurrentDictionary<string, Inflight> _inflight = new();
+
+    /// <summary>
+    /// One download+decode shared by everyone asking for the same image. It is abandoned (before
+    /// it uses a download slot, or mid-download) once every caller has cancelled, e.g. when the
+    /// posters that wanted it have scrolled away.
+    /// </summary>
+    private sealed class Inflight
+    {
+        public readonly CancellationTokenSource Cts = new();
+        public Task<Bitmap?> Task = null!;
+        public int Waiters;
+    }
 
     private readonly object _lruLock = new();
     private readonly Dictionary<string, LinkedListNode<(string key, Bitmap bmp, long size)>> _map = new();
@@ -58,52 +70,96 @@ public sealed class ImageCache
     public Func<Uri, bool>? IsAllowed { get; set; }
     private readonly ConcurrentDictionary<string, byte> _blockedHosts = new();
 
-    public Task<Bitmap?> LoadAsync(string url, int width)
+    private bool Permitted(string url)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
-            || (IsAllowed != null && !IsAllowed(uri)))
-        {
-            if (uri != null && _blockedHosts.TryAdd(uri.Host, 0))
-                Slopfin.Core.Services.Log.Info($"image blocked by privacy allowlist (host {uri.Host})");
-            return Task.FromResult<Bitmap?>(null);
-        }
-        var mem = TryGetMemory(url, width);
-        if (mem != null) return Task.FromResult<Bitmap?>(mem);
-        var key = Key(url, width);
-        return _inflight.GetOrAdd(key, _ => Task.Run(async () =>
-        {
-            try { return await LoadCoreAsync(url, width, key).ConfigureAwait(false); }
-            finally { _inflight.TryRemove(key, out Task<Bitmap?>? _); }
-        }));
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && (IsAllowed == null || IsAllowed(uri))) return true;
+        if (uri != null && _blockedHosts.TryAdd(uri.Host, 0))
+            Slopfin.Core.Services.Log.Info($"image blocked by privacy allowlist (host {uri.Host})");
+        return false;
     }
 
-    private async Task<Bitmap?> LoadCoreAsync(string url, int width, string key)
+    public async Task<Bitmap?> LoadAsync(string url, int width, CancellationToken ct = default)
     {
-        byte[]? bytes = null;
-        var file = Path.Combine(_dir, Hash(url));
+        if (!Permitted(url)) return null;
+        var mem = TryGetMemory(url, width);
+        if (mem != null) return mem;
+        var key = Key(url, width);
+
+        Inflight entry;
+        while (true)
+        {
+            entry = _inflight.GetOrAdd(key, k =>
+            {
+                var e = new Inflight();
+                e.Task = Task.Run(async () =>
+                {
+                    try { return await LoadCoreAsync(url, width, k, e.Cts.Token).ConfigureAwait(false); }
+                    finally { _inflight.TryRemove(new KeyValuePair<string, Inflight>(k, e)); }
+                });
+                return e;
+            });
+            // An entry everyone already gave up on is on its way out: start a fresh one.
+            Interlocked.Increment(ref entry.Waiters);
+            if (!entry.Cts.IsCancellationRequested) break;
+            _inflight.TryRemove(new KeyValuePair<string, Inflight>(key, entry));
+        }
+
+        using var reg = ct.Register(() =>
+        {
+            if (Interlocked.Decrement(ref entry.Waiters) == 0) entry.Cts.Cancel();
+        });
+        try { return await entry.Task.WaitAsync(ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) { return null; }
+    }
+
+    /// <summary>
+    /// Downloads (or reads from disk) and decodes at full size without keeping it in the memory
+    /// cache. For large one-off images such as trickplay sheets.
+    /// </summary>
+    public async Task<Bitmap?> LoadUncachedAsync(string url)
+    {
+        if (!Permitted(url)) return null;
+        var bytes = await GetBytesAsync(url, CancellationToken.None).ConfigureAwait(false);
+        if (bytes == null) return null;
         try
         {
-            if (File.Exists(file))
-            {
-                bytes = await File.ReadAllBytesAsync(file).ConfigureAwait(false);
-            }
-            else
-            {
-                await _downloads.WaitAsync().ConfigureAwait(false);
-                try
-                {
-                    using var resp = await _http.GetAsync(url).ConfigureAwait(false);
-                    if (!resp.IsSuccessStatusCode) return null;
-                    bytes = await resp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                }
-                finally { _downloads.Release(); }
-                try { await File.WriteAllBytesAsync(file, bytes).ConfigureAwait(false); } catch { /* cache is best-effort */ }
-            }
+            using var ms = new MemoryStream(bytes, writable: false);
+            return new Bitmap(ms);
         }
-        catch
+        catch { return null; }
+    }
+
+    private async Task<byte[]?> GetBytesAsync(string url, CancellationToken ct)
+    {
+        var file = Path.Combine(_dir, Hash(StripToken(url)));
+        try
         {
-            return null;
+            if (File.Exists(file)) return await File.ReadAllBytesAsync(file, ct).ConfigureAwait(false);
+            byte[] bytes;
+            await _downloads.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode) return null;
+                bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+            }
+            finally { _downloads.Release(); }
+            try { await File.WriteAllBytesAsync(file, bytes, CancellationToken.None).ConfigureAwait(false); } catch { /* cache is best-effort */ }
+            return bytes;
         }
+        catch { return null; }
+    }
+
+    /// <summary>The disk cache is keyed without the access token, so a new sign-in still hits it.</summary>
+    private static string StripToken(string url) =>
+        System.Text.RegularExpressions.Regex.Replace(url, "(?i)([?&])(ApiKey|api_key)=[^&]*&?", "$1").TrimEnd('&', '?');
+
+    private async Task<Bitmap?> LoadCoreAsync(string url, int width, string key, CancellationToken ct)
+    {
+        var file = Path.Combine(_dir, Hash(StripToken(url)));
+        var bytes = await GetBytesAsync(url, ct).ConfigureAwait(false);
+        if (ct.IsCancellationRequested) return null;
 
         if (bytes == null || bytes.Length == 0) return null;
 

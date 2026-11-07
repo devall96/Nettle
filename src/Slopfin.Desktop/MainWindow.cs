@@ -12,15 +12,22 @@ namespace Slopfin.Desktop;
 internal sealed class MainWindow : Window, IWindowHost
 {
     private WindowState _restoreState = WindowState.Maximized;
+    private readonly MainViewModel _vm;
+    private bool _readyToClose;
+    // Last size/position while in a normal (not maximized / full-screen) state.
+    private Size _normalSize;
+    private PixelPoint? _normalPos;
 
     public MainWindow(MainViewModel vm)
     {
+        _vm = vm;
         Title = "Slopfin";
         Width = 1440;
         Height = 900;
         MinWidth = 960;
         MinHeight = 600;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        RestorePlacement();
         ExtendClientAreaToDecorationsHint = true;
         ExtendClientAreaChromeHints = ExtendClientAreaChromeHints.PreferSystemChrome;
         ExtendClientAreaTitleBarHeightHint = 32;
@@ -30,6 +37,62 @@ internal sealed class MainWindow : Window, IWindowHost
         Content = new MainView { DataContext = vm };
         this[!BackgroundProperty] = this.GetResourceObservable("BgBrush").ToBinding();
         AppServices.Window = this;
+        PositionChanged += (_, _) => { if (WindowState == WindowState.Normal) _normalPos = Position; };
+    }
+
+    // ---------- Remember the window's size and place ----------
+
+    private void RestorePlacement()
+    {
+        var p = AppServices.Settings.Current.Window;
+        if (p == null || p.Width < MinWidth || p.Height < MinHeight) return;
+        Width = p.Width;
+        Height = p.Height;
+        _normalSize = new Size(p.Width, p.Height);
+        if (p.X is { } x && p.Y is { } y)
+        {
+            // Only reuse the position if it's still on a connected screen (monitors change).
+            Opened += (_, _) =>
+            {
+                var pos = new PixelPoint(x, y);
+                if (Screens.All.Any(s => s.WorkingArea.Contains(pos + new PixelPoint(40, 40))))
+                {
+                    Position = pos;
+                    _normalPos = pos;
+                }
+            };
+        }
+        if (p.Maximized) WindowState = WindowState.Maximized;
+    }
+
+    private void SavePlacement()
+    {
+        var size = _normalSize.Width > 0 ? _normalSize : ClientSize;
+        AppServices.Settings.Current.Window = new Slopfin.Core.Models.WindowPlacement
+        {
+            Width = Math.Round(size.Width),
+            Height = Math.Round(size.Height),
+            X = _normalPos?.X,
+            Y = _normalPos?.Y,
+            Maximized = WindowState == WindowState.Maximized || (_restoreState == WindowState.Maximized && IsFullScreen),
+        };
+    }
+
+    protected override async void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        if (_readyToClose || e.Cancel) return;
+        // Finish the "stopped" report (resume position) and save settings before exiting.
+        e.Cancel = true;
+        _readyToClose = true;
+        try
+        {
+            SavePlacement();
+            await _vm.ShutdownAsync();
+            await AppServices.Settings.SaveAsync();
+        }
+        catch (Exception ex) { Slopfin.Core.Services.Log.Error("shutdown", ex); }
+        Close();
     }
 
     /// <summary>Window + taskbar icon, from the copy embedded in this assembly.</summary>
@@ -66,6 +129,8 @@ internal sealed class MainWindow : Window, IWindowHost
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (change.Property == ClientSizeProperty && WindowState == WindowState.Normal && !IsFullScreen)
+            _normalSize = ClientSize;
         if (!OperatingSystem.IsLinux()) return;
         if (change.Property == WindowStateProperty || change.Property == ClientSizeProperty)
         {

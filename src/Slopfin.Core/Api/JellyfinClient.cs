@@ -282,6 +282,44 @@ public sealed class JellyfinClient
             .Add("userId", UserId).Add("seasonId", seasonId).Add("fields", ListFields + ",MediaSources")),
             JellyfinJson.Default.QueryResultBaseItemDto, ct);
 
+    /// <summary>
+    /// Just the episodes either side of <paramref name="episodeId"/> (plus itself), in series
+    /// order. Much cheaper than listing the whole series.
+    /// </summary>
+    public Task<QueryResult<BaseItemDto>> GetAdjacentEpisodesAsync(string seriesId, string episodeId, CancellationToken ct = default) =>
+        SendAsync(Req(HttpMethod.Get, $"/Shows/{seriesId}/Episodes" + new Query()
+            .Add("userId", UserId).Add("adjacentTo", episodeId).Add("fields", "PrimaryImageAspectRatio")
+            .Add("enableImageTypes", "Primary,Thumb").Add("imageTypeLimit", 1)),
+            JellyfinJson.Default.QueryResultBaseItemDto, ct);
+
+    /// <summary>One episode of a series by season and episode number (no full series listing).</summary>
+    public async Task<BaseItemDto?> FindEpisodeAsync(string seriesId, int season, int episode, CancellationToken ct = default)
+    {
+        var r = await SendAsync(Req(HttpMethod.Get, "/Items" + new Query()
+            .Add("userId", UserId).Add("parentId", seriesId).Add("includeItemTypes", "Episode").Add("recursive", true)
+            .Add("parentIndexNumber", season).Add("indexNumber", episode).Add("limit", 5)),
+            JellyfinJson.Default.QueryResultBaseItemDto, ct).ConfigureAwait(false);
+        // Older servers ignore the number filters, so check the numbers ourselves.
+        return r.Items.FirstOrDefault(e => e.ParentIndexNumber == season && e.IndexNumber == episode);
+    }
+
+    /// <summary>The item's trickplay (scrubbing thumbnail) layouts, or null when it has none.</summary>
+    public async Task<Dictionary<string, Dictionary<string, TrickplayInfo>>?> GetTrickplayAsync(string itemId, CancellationToken ct = default)
+    {
+        try
+        {
+            var item = await SendAsync(Req(HttpMethod.Get, $"/Items/{itemId}" + new Query().Add("userId", UserId).Add("fields", "Trickplay")),
+                JellyfinJson.Default.BaseItemDto, ct).ConfigureAwait(false);
+            return item.Trickplay;
+        }
+        catch (ApiException) { return null; }
+        catch (JsonException) { return null; }
+    }
+
+    /// <summary>One sheet of trickplay thumbnails (a JPEG holding TileWidth × TileHeight thumbnails).</summary>
+    public string TrickplayTileUrl(string itemId, string mediaSourceId, int width, int index) =>
+        $"{BaseUrl}/Videos/{itemId}/Trickplay/{width}/{index}.jpg" + new Query().Add("mediaSourceId", mediaSourceId).Add("ApiKey", Token);
+
     public Task<QueryResult<BaseItemDto>> GetSimilarAsync(string id, int limit = 16, CancellationToken ct = default) =>
         SendAsync(Req(HttpMethod.Get, $"/Items/{id}/Similar" + new Query().Add("userId", UserId).Add("limit", limit).Add("fields", ListFields)),
             JellyfinJson.Default.QueryResultBaseItemDto, ct);

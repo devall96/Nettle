@@ -22,6 +22,14 @@ public sealed class SeerrMediaInfo
     public int? TmdbId { get; set; }
     public string? MediaType { get; set; }
     public int? Status { get; set; }
+    /// <summary>TV only: per-season availability.</summary>
+    public List<SeerrSeasonStatus>? Seasons { get; set; }
+}
+
+public sealed class SeerrSeasonStatus
+{
+    public int SeasonNumber { get; set; }
+    public int Status { get; set; }
 }
 
 public sealed class SeerrResult

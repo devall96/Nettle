@@ -19,9 +19,16 @@ public sealed class PlaybackSettings
     public int UpNextCountdownSeconds { get; set; } = 10;
     public string PreferredAudioLanguage { get; set; } = "";
     public string PreferredSubtitleLanguage { get; set; } = "";
-    public int NetworkCachingMs { get; set; } = 1000;
+    /// <summary>How many seconds of video mpv tries to keep downloaded ahead (its cache-secs).</summary>
+    public int NetworkBufferSeconds { get; set; } = 10;
     public int SeekStepSeconds { get; set; } = 10;
     public int Volume { get; set; } = 100;
+    /// <summary>Send Dolby / DTS audio untouched to an AV receiver (S/PDIF or HDMI passthrough).</summary>
+    public bool AudioPassthrough { get; set; }
+    /// <summary>Ask "Are you still watching?" after several episodes (or hours of live TV) with no input.</summary>
+    public bool StillWatchingPrompt { get; set; } = true;
+    /// <summary>Episodes auto-played in a row, with no input, before the prompt appears.</summary>
+    public int StillWatchingEpisodes { get; set; } = 3;
     /// <summary>
     /// NostalgiaTV: play each scheduled program's original file from Jellyfin at the broadcast
     /// offset (full quality, nothing re-encoded) instead of NostalgiaTV's ffmpeg broadcast feed.
@@ -51,6 +58,18 @@ public sealed class AppSettings
 
     /// <summary>Linux: the one-time "add to applications menu?" question has been answered.</summary>
     public bool MenuPromptAnswered { get; set; }
+
+    /// <summary>Main window size and position from the last session (null = first run).</summary>
+    public WindowPlacement? Window { get; set; }
+}
+
+public sealed class WindowPlacement
+{
+    public double Width { get; set; }
+    public double Height { get; set; }
+    public int? X { get; set; }
+    public int? Y { get; set; }
+    public bool Maximized { get; set; }
 }
 
 /// <summary>A remembered sign-in. Stored only inside the encrypted secure store.</summary>

@@ -1,4 +1,4 @@
-<Styles xmlns="https://github.com/avaloniaui"
+﻿<Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!-- ===== Typography ===== -->
@@ -40,7 +40,7 @@
   </Style>
 
   <!-- ===== Images fade in when loaded ===== -->
-  <Style Selector="Image.fade">
+  <Style Selector=":is(Control).motion Image.fade">
     <Setter Property="Transitions">
       <Transitions>
         <DoubleTransition Property="Opacity" Duration="0:0:0.35" Easing="CubicEaseOut" />
@@ -185,7 +185,7 @@
       </ControlTemplate>
     </Setter>
   </Style>
-  <Style Selector="Button.card:pointerover, Button.card:focus-visible">
+  <Style Selector=":is(Control).motion Button.card:pointerover, :is(Control).motion Button.card:focus-visible">
     <Setter Property="RenderTransform" Value="scale(1.045)" />
   </Style>
   <!-- Cards never show the generic button hover/press fill; the frame + lift is the feedback. -->
@@ -193,7 +193,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
-  <Style Selector="Button.card:pressed">
+  <Style Selector=":is(Control).motion Button.card:pressed">
     <Setter Property="RenderTransform" Value="scale(1.0)" />
   </Style>
   <Style Selector="Button.card Border.frame">
@@ -208,6 +208,8 @@
   </Style>
   <Style Selector="Button.card Border.playhint">
     <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector=":is(Control).motion Button.card Border.playhint">
     <Setter Property="Transitions">
       <Transitions>
         <DoubleTransition Property="Opacity" Duration="0:0:0.15" />
@@ -279,7 +281,7 @@
   </Style>
 
   <!-- Page entrance: content slides up gently -->
-  <Style Selector="Panel.page, Grid.page">
+  <Style Selector=":is(Control).motion Panel.page, :is(Control).motion Grid.page">
     <Style.Animations>
       <Animation Duration="0:0:0.32" Easing="CubicEaseOut" FillMode="Forward">
         <KeyFrame Cue="0%">

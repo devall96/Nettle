@@ -3,8 +3,12 @@ using System.Runtime.InteropServices;
 
 namespace Slopfin.UI.Playback;
 
-/// <summary>One audio / subtitle track as mpv reports it.</summary>
-public sealed record MpvTrack(int Id, string Type, string Name, bool Selected);
+/// <summary>
+/// One audio / subtitle track as mpv reports it. <see cref="FfIndex"/> is the stream's index in
+/// the file (what Jellyfin calls the stream index); <see cref="ExternalUrl"/> is set for
+/// subtitles loaded from a separate file.
+/// </summary>
+public sealed record MpvTrack(int Id, string Type, string Name, bool Selected, int? FfIndex = null, string? ExternalUrl = null);
 
 /// <summary>What to play and how: everything a single "loadfile" needs.</summary>
 public sealed class MpvLoad
@@ -62,8 +66,12 @@ public sealed class MpvPlayer : IDisposable
 
     // ---------------- lifecycle ----------------
 
-    /// <summary>Starts the core, drawing into <paramref name="wid"/> (HWND / X11 window), or headless with null.</summary>
-    public void Initialize(long? wid)
+    /// <summary>
+    /// Starts the core, drawing into <paramref name="wid"/> (HWND / X11 window), or headless with
+    /// null. <paramref name="beforeLoad"/> runs right after the core starts and before any queued
+    /// file is loaded (the render API needs its context to exist before video starts).
+    /// </summary>
+    public void Initialize(long? wid, Action<IntPtr>? beforeLoad = null)
     {
         lock (_gate)
         {
@@ -71,6 +79,7 @@ public sealed class MpvPlayer : IDisposable
             if (wid is { } w) Mpv.mpv_set_option_string(_h, "wid", w.ToString(CultureInfo.InvariantCulture));
             int r = Mpv.mpv_initialize(_h);
             if (r < 0) throw new InvalidOperationException("libmpv failed to initialize: " + Mpv.ErrorString(r));
+            beforeLoad?.Invoke(_h);
             Mpv.mpv_request_log_messages(_h, "warn");
             Observe(1, "time-pos", Mpv.FormatDouble);
             Observe(2, "duration", Mpv.FormatDouble);
@@ -101,12 +110,32 @@ public sealed class MpvPlayer : IDisposable
         }
     }
 
+    // A render-API surface owns a render context that must be freed (with its GL context
+    // current) before the core is destroyed, so shutdown waits for it to let go.
+    private bool _renderAttached, _terminateAfterRender;
+
+    /// <summary>Called by a render-API surface once its render context exists.</summary>
+    public void AttachRender() { lock (_gate) _renderAttached = true; }
+
+    /// <summary>Called by a render-API surface after freeing its render context.</summary>
+    public void DetachRender()
+    {
+        bool terminate;
+        lock (_gate)
+        {
+            _renderAttached = false;
+            terminate = _terminateAfterRender;
+        }
+        if (terminate) Terminate();
+    }
+
     /// <summary>Stops playback and frees mpv. Safe to call more than once and from any thread.</summary>
     public void Terminate(int waitMs = 3000)
     {
         Thread? events;
         lock (_gate)
         {
+            if (_renderAttached) { _terminateAfterRender = true; return; }
             if (_h == IntPtr.Zero || _terminating) { events = _events; goto wait; }
             _terminating = true;
             _pending.Clear();
@@ -308,7 +337,10 @@ public sealed class MpvPlayer : IDisposable
                 string P(string f) => Mpv.GetString(_h, $"track-list/{i}/{f}") ?? "";
                 var type = P("type");
                 if (type is not ("audio" or "sub") || !int.TryParse(P("id"), out var tid)) continue;
-                list.Add(new MpvTrack(tid, type, DescribeTrack(P("title"), P("lang"), P("codec"), P("demux-channel-count"), P("external") == "yes", type == "sub" && P("forced") == "yes"), P("selected") == "yes"));
+                bool external = P("external") == "yes";
+                int? ff = int.TryParse(P("ff-index"), out var f) ? f : null;
+                list.Add(new MpvTrack(tid, type, DescribeTrack(P("title"), P("lang"), P("codec"), P("demux-channel-count"), external, type == "sub" && P("forced") == "yes"),
+                    P("selected") == "yes", external ? null : ff, external ? P("external-filename") : null));
             }
         }
         return list;

@@ -20,7 +20,7 @@ your graphics card for 4K, HDR and Dolby Vision. Slopfin never transcodes: it ha
 asks the server to.
 
 It also brings in a TV-style live guide for **NostalgiaTV**, **Seerr** requests, skippable intros
-and credits, multiple profiles, and eight hand-made themes. It has **no telemetry of any kind**.
+and credits, multiple profiles, and sixteen hand-made themes. It has **no telemetry of any kind**.
 
 > [!NOTE]
 > **Slopfin is in beta on Windows and Linux.** It works well on the machines it has been tested
@@ -63,7 +63,7 @@ Jellyfin server and a few minutes, you'd help a lot:
 | | |
 |---|---|
 | <img src="docs/images/details.png" alt="Details page"> | <img src="docs/images/library.png" alt="Library grid"> |
-| <img src="docs/images/signin.png" alt="Sign-in with profile tiles and Quick Connect"> | <img src="docs/images/themes.png" alt="Eight built-in themes"> |
+| <img src="docs/images/signin.png" alt="Sign-in with profile tiles and Quick Connect"> | <img src="docs/images/themes.png" alt="Sixteen built-in themes"> |
 
 <sub>Screenshots show Jellyfin's public demo server.</sub>
 
@@ -80,8 +80,11 @@ Jellyfin server and a few minutes, you'd help a lot:
   - Audio formats only appear once that audio is actually being decoded.
 - **Skip intro, recap, credits, previews and ads,** using the [Intro Skipper](https://github.com/intro-skipper/intro-skipper) plugin or Jellyfin media segments. Each one can show a button, skip automatically, or do nothing.
 - **Up Next** card with a countdown during the credits, then automatic next episode.
-- Resume points and watched status stay in sync with your server.
-- Audio and subtitle track menu, including external subtitles.
+- **"Are you still watching?"** After a few episodes in a row with no input (3 by default), or 4 hours of Live TV, Slopfin pauses and asks. You can change the count or turn it off in **Settings → Playback**.
+- **Scrubbing previews.** Hover over or drag the seek bar to see thumbnails, using the trickplay images your Jellyfin server already generates.
+- **Audio passthrough** (optional): Dolby Digital, Dolby Digital Plus / Atmos, TrueHD, DTS and DTS-HD / DTS:X go to your AV receiver untouched, so it decodes them, height channels included.
+- Resume points, watched status and your audio / subtitle choices stay in sync with your server. Closing Slopfin mid-episode still saves where you were.
+- Audio and subtitle track menu, including external subtitles. Adjustable network buffer for slow Wi-Fi.
 
 ### Browsing
 - **Home:** a spotlight carousel with logo art, plus Continue Watching, Next Up, and Recently Added for each library.
@@ -90,7 +93,7 @@ Jellyfin server and a few minutes, you'd help a lot:
 - **Search** across your library. If something's missing, one click searches Seerr to request it.
 
 ### Live TV: NostalgiaTV
-- A full cable-style **program guide** covering everything NostalgiaTV has scheduled (usually several days), with a live "now" line. Scroll through it, or jump ahead 90 minutes at a time.
+- A full cable-style **program guide** covering everything NostalgiaTV has scheduled (usually several days), with a live "now" line. Scroll through it, or jump ahead 90 minutes at a time. It opens instantly on later visits, and stays fast however far ahead NostalgiaTV schedules.
 - **Original-quality channels.** By default Slopfin plays each scheduled program's real file from your Jellyfin server at the live position, instead of NostalgiaTV's re-encoded broadcast feed.
   - It joins mid-program and rolls into the next show automatically.
   - Channel up/down works with the keyboard or the on-screen buttons.
@@ -98,8 +101,8 @@ Jellyfin server and a few minutes, you'd help a lot:
 - Only live channels appear. **NostalgiaTV's On Demand section is deliberately not included.**
 
 ### Requests: Seerr
-- Browse Trending, Popular and Coming Soon, search, and request movies or whole series with one click.
-- See your own requests and their status.
+- Browse Trending, Popular and Coming Soon, search, and request movies with one click. For series, **pick the seasons** you want; seasons you already have or requested are shown as such.
+- See your own requests and their status (only yours, even if your Seerr account is an admin).
 - Sign in with an API key, or with your Jellyfin username and password. Only the resulting session is kept, encrypted.
 
 ### Accounts and sign-in
@@ -109,9 +112,10 @@ Jellyfin server and a few minutes, you'd help a lot:
 - **Passwords are never stored.** Only Jellyfin's session token is kept: on Windows it's encrypted with DPAPI for your Windows account, and on Linux it goes into your desktop keyring (GNOME Keyring, KWallet, KeePassXC…).
 
 ### Look and feel
-- **Eight original themes:** Midnight, Obsidian (true black for OLED), Aurora, Ember, Sakura, Deep Sea, Evergreen and Daylight. Switching is instant.
-- Smooth, lightweight animations, a navigation rail that expands over the page, and fade-in artwork.
+- **Sixteen original themes:** Midnight, Obsidian (true black for OLED), Aurora, Ember, Sakura, Deep Sea, Evergreen, Neon Nights, Crimson, Slate, Mocha, Phosphor, High Contrast, and three light ones: Daylight, Lavender and Sandstone. Switching is instant.
+- Smooth, lightweight animations, a navigation rail that expands over the page, and fade-in artwork. **Reduce motion** in Settings turns the animations off.
 - **Ready for keyboard and TV remotes.** Arrow keys move focus the way a TV remote's d-pad does.
+- Remembers its window size and position, and only one copy runs at a time (opening it again brings the open window forward).
 
 ## Install
 
@@ -204,15 +208,15 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.1.0 beta)
+## Known limitations (0.2.0 beta)
 - **Both platforms are beta.** Expect some bugs, and please report them.
 - **Linux:**
   - It's untested so far on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
   - HDR is tone-mapped to SDR. Slopfin's window runs through X11 (XWayland on Wayland desktops), which has no HDR path yet. The badge says so.
-  - The player's on-screen controls are a separate window drawn over the video. Some desktops may place it wrongly, especially when switching in and out of full screen.
+  - Video is drawn through OpenGL inside Slopfin's own window. If your graphics driver can't do that, Slopfin falls back to mpv's own window, or you can force that with `SLOPFIN_VIDEO=window`.
   - The AppImage carries mpv 0.37 (from Ubuntu 24.04); Windows builds use mpv 0.42.
   - If your desktop has no keyring at all, sign-ins are kept in a file only your user can read.
-- **Atmos and DTS:X** are decoded to PCM. Height channels need a receiver, and audio passthrough isn't available yet.
+- **Audio passthrough** depends on your receiver and, on Linux, on your sound server allowing it for that output. It's off by default. On Windows it takes exclusive use of the audio device while playing.
 - Not code-signed yet, so SmartScreen shows a warning on first install.
 - Windows and Linux for now. The code is structured for Android TV and iOS versions later.
 

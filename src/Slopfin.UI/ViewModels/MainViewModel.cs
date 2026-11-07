@@ -122,9 +122,16 @@ public sealed partial class MainViewModel : ViewModelBase
                 var item = await AppServices.Jellyfin.GetItemAsync(devPlay);
                 await Dispatcher.UIThread.InvokeAsync(() => PlayItem(item, resume: true));
             });
-        // SLOPFIN_DEV_PAGE=livetv opens the guide after sign-in.
-        if (Environment.GetEnvironmentVariable("SLOPFIN_DEV_PAGE") == "livetv")
-            Dispatcher.UIThread.Post(() => shell.NavigateRoot(new LiveTvViewModel()), DispatcherPriority.Background);
+        // SLOPFIN_DEV_PAGE=livetv|settings|requests opens that page after sign-in.
+        PageViewModel? devPage = Environment.GetEnvironmentVariable("SLOPFIN_DEV_PAGE") switch
+        {
+            "livetv" => new LiveTvViewModel(),
+            "settings" => new SettingsViewModel(),
+            "requests" => new RequestsViewModel(),
+            _ => null,
+        };
+        if (devPage != null)
+            Dispatcher.UIThread.Post(() => shell.NavigateRoot(devPage), DispatcherPriority.Background);
         // SLOPFIN_DEV_LIVE=<channel number> tunes that NostalgiaTV channel after sign-in.
         var devLive = Environment.GetEnvironmentVariable("SLOPFIN_DEV_LIVE");
         if (!string.IsNullOrEmpty(devLive))
@@ -206,8 +213,36 @@ public sealed partial class MainViewModel : ViewModelBase
         if (p == null) return;
         Player = null;
         p.Dispose();
+        // Refresh once the server has the final position, so Continue Watching shows it.
+        _ = RefreshAfterAsync(p.Stopped);
+    }
+
+    private async Task RefreshAfterAsync(Task stopped)
+    {
+        await Task.WhenAny(stopped, Task.Delay(2500));
         Shell?.RefreshCurrent();
     }
+
+    /// <summary>
+    /// App is closing: stop playback and wait (briefly) until the server has the resume position,
+    /// so closing the window mid-episode never loses where you were.
+    /// </summary>
+    public async Task ShutdownAsync()
+    {
+        var p = Player;
+        if (p == null) return;
+        Player = null;
+        p.Dispose();
+        if (p.IsLive) return; // live TV has no resume position
+        await Task.WhenAny(p.Stopped, Task.Delay(3000));
+        Slopfin.Core.Services.Log.Info(p.Stopped.IsCompleted ? "resume position saved before exit" : "resume report timed out at exit");
+    }
+
+    /// <summary>Another copy of Slopfin was started: bring this one forward instead.</summary>
+    public void ActivatedByOtherInstance() => Toast("Slopfin is already open");
+
+    /// <summary>Settings → Reduce motion. Off = page slides, fades and card lifts are skipped.</summary>
+    [ObservableProperty] private bool _motionEnabled = !AppServices.Settings.Current.ReduceMotion;
 
     // ---------- Toasts ----------
 

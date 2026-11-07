@@ -185,13 +185,29 @@ public sealed partial class DetailsViewModel : PageViewModel
 
     private void BuildMediaInfo(BaseItemDto item)
     {
+        var keep = SelectedVersion?.Id;
+        _building = true;
         Versions.Clear();
         var sources = item.MediaSources ?? new();
         foreach (var s in sources) if (s.Id != null) Versions.Add(new MediaVersion(s.Id, s.Name ?? s.Container ?? "Version"));
-        SelectedVersion = Versions.FirstOrDefault();
+        SelectedVersion = Versions.FirstOrDefault(v => v.Id == keep) ?? Versions.FirstOrDefault();
+        _building = false;
         OnPropertyChanged(nameof(HasVersions));
+        ShowMediaInfo(item);
+    }
 
-        var src = sources.FirstOrDefault();
+    private bool _building;
+
+    // Picking another version (e.g. 4K vs 1080p) updates the format line and HDR badge to match it.
+    partial void OnSelectedVersionChanged(MediaVersion? value)
+    {
+        if (!_building && Item != null) ShowMediaInfo(Item);
+    }
+
+    private void ShowMediaInfo(BaseItemDto item)
+    {
+        var sources = item.MediaSources ?? new();
+        var src = sources.FirstOrDefault(s => s.Id == SelectedVersion?.Id) ?? sources.FirstOrDefault();
         var streams = src?.MediaStreams ?? item.MediaStreams ?? new();
         var v = streams.FirstOrDefault(s => s.Type == "Video");
         var a = streams.FirstOrDefault(s => s.Type == "Audio" && s.IsDefault) ?? streams.FirstOrDefault(s => s.Type == "Audio");

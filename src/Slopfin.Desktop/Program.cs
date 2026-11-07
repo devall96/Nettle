@@ -61,8 +61,31 @@ internal static class Program
             AppServices.Desktop = desktop;
         }
 
+        // One copy per user (build-time render modes are exempt).
+        SingleInstance? instance = null;
+        if (App.RenderSplashPath == null && App.RenderBannerPath == null)
+        {
+            instance = SingleInstance.TryAcquire(platform.DataDirectory);
+            if (instance == null)
+            {
+                Slopfin.Core.Services.Log.Info("already running: asking the open copy to come forward");
+                SingleInstance.SignalExisting(platform.DataDirectory);
+                return 0;
+            }
+            instance.Listen(() => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime { MainWindow: { } w })
+                {
+                    if (w.WindowState == Avalonia.Controls.WindowState.Minimized) w.WindowState = Avalonia.Controls.WindowState.Normal;
+                    w.Activate();
+                }
+                AppServices.Main?.ActivatedByOtherInstance();
+            }));
+        }
+
         try
         {
+            using var _ = instance;
             var code = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             Slopfin.Core.Services.Log.Info($"Lifetime ended (code {code})");
             return code;
@@ -94,6 +117,14 @@ internal static class Program
             // Linux: WM_CLASS matches StartupWMClass in the menu entry, so docks group the window with its launcher.
             // UseDBusMenu off: Slopfin has no menu bar, and on desktops without a global-menu
             // service (GNOME) the lookup only produced a D-Bus error in crash.log.
-            .With(new X11PlatformOptions { WmClass = "Slopfin", UseDBusMenu = false })
+            // EGL first: mpv's render API can only use VA-API hardware decoding with an EGL context.
+            .With(new X11PlatformOptions
+            {
+                WmClass = "Slopfin",
+                UseDBusMenu = false,
+                RenderingMode = Slopfin.UI.Playback.PlaybackEngine.UseRenderApi
+                    ? [X11RenderingMode.Egl, X11RenderingMode.Glx, X11RenderingMode.Software]
+                    : [X11RenderingMode.Glx, X11RenderingMode.Software],
+            })
             .LogToTrace();
 }

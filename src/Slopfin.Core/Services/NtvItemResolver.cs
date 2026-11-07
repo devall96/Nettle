@@ -47,8 +47,9 @@ public sealed class NtvItemResolver
             var series = await _jf.GetItemsAsync(new ItemQuery { SearchTerm = show, IncludeItemTypes = "Series", Limit = 20, SortBy = null, SortOrder = null }, ct).ConfigureAwait(false);
             var match = series.Items.FirstOrDefault(s => Norm(s.Name) == Norm(show)) ?? series.Items.FirstOrDefault();
             if (match == null) return null;
-            var eps = await _jf.GetEpisodesAsync(match.Id, null, ct).ConfigureAwait(false);
-            return eps.Items.FirstOrDefault(e => e.ParentIndexNumber == slot.SeasonNumber && e.IndexNumber == slot.EpisodeNumber)?.Id;
+            // Ask for just that episode instead of downloading the whole series.
+            var ep = await _jf.FindEpisodeAsync(match.Id, slot.SeasonNumber.Value, slot.EpisodeNumber.Value, ct).ConfigureAwait(false);
+            return ep?.Id;
         }
 
         var title = slot.Title ?? slot.ShowTitle;

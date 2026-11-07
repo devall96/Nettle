@@ -27,10 +27,27 @@ public sealed class SettingsStore
             if (File.Exists(_path))
                 Current = JsonSerializer.Deserialize(File.ReadAllText(_path), LocalJson.Default.AppSettings) ?? new();
         }
-        catch
+        catch (Exception ex)
         {
+            // The file couldn't be read: start from defaults, but keep a copy of the old file
+            // first, since the next save would otherwise overwrite it for good.
+            BackupDamagedFile(_path, ex);
             Current = new AppSettings();
         }
+    }
+
+    /// <summary>Copies an unreadable file to "name.broken-yyyyMMdd-HHmmss" next to it.</summary>
+    public static string? BackupDamagedFile(string path, Exception? reason = null)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            var backup = $"{path}.broken-{DateTime.Now:yyyyMMdd-HHmmss}";
+            File.Copy(path, backup, overwrite: true);
+            Log.Warn($"{Path.GetFileName(path)} couldn't be read ({reason?.Message}); reset to defaults, old copy kept as {Path.GetFileName(backup)}");
+            return backup;
+        }
+        catch { return null; }
     }
 
     public async Task SaveAsync()

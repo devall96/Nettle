@@ -70,7 +70,8 @@ public sealed partial class HomeViewModel : PageViewModel
 
     protected override Task LoadAsync() => _libraries == null ? Task.CompletedTask : ReloadAsync();
     protected override Task RefreshAsync() => ReloadAsync(quiet: true);
-    protected override void OnActivated() => _heroTimer.Start();
+    // Reduce motion: the banner doesn't rotate by itself (arrows still work).
+    protected override void OnActivated() { if (!AppServices.Settings.Current.ReduceMotion) _heroTimer.Start(); }
     public override void OnDeactivated() => _heroTimer.Stop();
 
     private async Task ReloadAsync(bool quiet = false)
@@ -106,8 +107,9 @@ public sealed partial class HomeViewModel : PageViewModel
 
             rows.Add(new CardRowViewModel("My Libraries", _libraries.Select(l => new MediaCardViewModel(l, CardShape.Landscape)).ToList()));
 
-            Rows.Clear();
-            foreach (var r in rows) Rows.Add(r);
+            // Update in place (e.g. after closing the player), so the page and each row keep
+            // their scroll position and only changed cards are redrawn.
+            CardRowViewModel.SyncRows(Rows, rows);
 
             if (!quiet || Heroes.Count == 0)
             {
@@ -135,6 +137,6 @@ public sealed partial class HomeViewModel : PageViewModel
         HeroIndex = (HeroIndex - 1 + Heroes.Count) % Heroes.Count;
         Hero = Heroes[HeroIndex];
         _heroTimer.Stop();
-        _heroTimer.Start();
+        if (!AppServices.Settings.Current.ReduceMotion) _heroTimer.Start();
     }
 }

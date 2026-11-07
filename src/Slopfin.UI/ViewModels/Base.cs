@@ -40,6 +40,9 @@ public abstract partial class PageViewModel : ViewModelBase
         OnActivated();
     }
 
+    /// <summary>Back / Escape pressed: return true if the page handled it itself (e.g. closed a dialog).</summary>
+    public virtual bool HandleBack() => false;
+
     protected virtual Task LoadAsync() => Task.CompletedTask;
     protected virtual Task RefreshAsync() => Task.CompletedTask;
     protected virtual void OnActivated() { }

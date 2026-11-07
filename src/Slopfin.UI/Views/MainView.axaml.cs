@@ -11,7 +11,24 @@ public partial class MainView : UserControl
 {
     private TopLevel? _top;
 
-    public MainView() => InitializeComponent();
+    private readonly Avalonia.Animation.IPageTransition? _crossFade;
+
+    public MainView()
+    {
+        InitializeComponent();
+        _crossFade = RootHost.PageTransition;
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (Vm is not { } vm) return;
+        ApplyMotion(vm.MotionEnabled);
+        vm.PropertyChanged += (_, a) => { if (a.PropertyName == nameof(MainViewModel.MotionEnabled)) ApplyMotion(vm.MotionEnabled); };
+    }
+
+    /// <summary>Reduce motion also drops the cross-fade between screens.</summary>
+    private void ApplyMotion(bool on) => RootHost.PageTransition = on ? _crossFade : null;
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {

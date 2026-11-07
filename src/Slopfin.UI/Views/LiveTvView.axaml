@@ -24,6 +24,14 @@
       <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
+    <!-- Invisible filler before a row's first realized cell (cells are created around the visible time only). -->
+    <Style Selector="Button.prog.spacer">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
     <Style Selector="Button.prog:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
     </Style>
@@ -131,7 +139,7 @@
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:GuideProgramViewModel">
-                      <Button Classes="prog" Classes.now="{Binding IsNow}" Classes.gap="{Binding IsGap}" Width="{Binding Width}"
+                      <Button Classes="prog" Classes.now="{Binding IsNow}" Classes.gap="{Binding IsGap}" Classes.spacer="{Binding IsSpacer}" Width="{Binding Width}"
                               Command="{Binding PlayCommand}"
                               PointerEntered="OnProgramPointerEntered" GotFocus="OnProgramGotFocus">
                         <StackPanel>

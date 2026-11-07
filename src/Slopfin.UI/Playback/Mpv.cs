@@ -53,6 +53,20 @@ internal static class Mpv
     [DllImport(Lib)] public static extern IntPtr mpv_wait_event(IntPtr ctx, double timeout);
     [DllImport(Lib)] public static extern void mpv_wakeup(IntPtr ctx);
 
+    // ---- render API (mpv/render.h, render_gl.h): mpv draws into our own OpenGL framebuffer ----
+    public const int RenderParamInvalid = 0, RenderParamApiType = 1, RenderParamOpenGlInitParams = 2, RenderParamOpenGlFbo = 3,
+        RenderParamFlipY = 4, RenderParamX11Display = 8;
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate IntPtr GetProcAddressFn(IntPtr ctx, IntPtr name);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void RenderUpdateFn(IntPtr ctx);
+
+    [DllImport(Lib)] public static extern int mpv_render_context_create(out IntPtr res, IntPtr mpv, IntPtr parameters);
+    [DllImport(Lib)] public static extern void mpv_render_context_set_update_callback(IntPtr ctx, IntPtr callback, IntPtr callbackCtx);
+    [DllImport(Lib)] public static extern ulong mpv_render_context_update(IntPtr ctx);
+    [DllImport(Lib)] public static extern int mpv_render_context_render(IntPtr ctx, IntPtr parameters);
+    [DllImport(Lib)] public static extern void mpv_render_context_report_swap(IntPtr ctx);
+    [DllImport(Lib)] public static extern void mpv_render_context_free(IntPtr ctx);
+
     public static string ErrorString(int code) => Marshal.PtrToStringUTF8(mpv_error_string(code)) ?? code.ToString();
 
     /// <summary>Runs an mpv command given as separate UTF-8 arguments (no quoting/escaping issues).</summary>

@@ -85,6 +85,9 @@ public sealed partial class MediaCardViewModel : ObservableObject
         _ = jf;
     }
 
+    /// <summary>Everything shown on the card; equal signatures mean the card looks the same.</summary>
+    public string Signature => $"{Item.Id}|{Title}|{Subtitle}|{ImageUrl}|{Progress:0.000}|{IsPlayed}|{Badge}";
+
     [RelayCommand]
     private void Open() => AppServices.Main.Shell?.OpenItem(Item);
 
@@ -95,11 +98,49 @@ public sealed partial class MediaCardViewModel : ObservableObject
 public sealed class CardRowViewModel
 {
     public string Title { get; }
-    public IReadOnlyList<MediaCardViewModel> Items { get; }
+    public System.Collections.ObjectModel.ObservableCollection<MediaCardViewModel> Items { get; }
     public CardRowViewModel(string title, IReadOnlyList<MediaCardViewModel> items)
     {
         Title = title;
-        Items = items;
+        Items = new(items);
+    }
+
+    /// <summary>
+    /// Updates this row to <paramref name="fresh"/> in place: unchanged cards keep their controls
+    /// (and the row its scroll position); only new, moved or changed cards are touched.
+    /// </summary>
+    public void SyncItems(IReadOnlyList<MediaCardViewModel> fresh)
+    {
+        var ids = fresh.Select(f => f.Item.Id).ToHashSet();
+        for (int i = Items.Count - 1; i >= 0; i--)
+            if (!ids.Contains(Items[i].Item.Id)) Items.RemoveAt(i);
+        for (int i = 0; i < fresh.Count; i++)
+        {
+            var f = fresh[i];
+            int at = -1;
+            for (int j = i; j < Items.Count; j++) if (Items[j].Item.Id == f.Item.Id) { at = j; break; }
+            if (at < 0) { Items.Insert(i, f); continue; }
+            if (at != i) Items.Move(at, i);
+            if (Items[i].Signature != f.Signature) Items[i] = f;
+        }
+        while (Items.Count > fresh.Count) Items.RemoveAt(Items.Count - 1);
+    }
+
+    /// <summary>Same as <see cref="SyncItems"/> for a list of rows, matched by title.</summary>
+    public static void SyncRows(System.Collections.ObjectModel.ObservableCollection<CardRowViewModel> rows, IReadOnlyList<CardRowViewModel> fresh)
+    {
+        var titles = fresh.Select(f => f.Title).ToHashSet();
+        for (int i = rows.Count - 1; i >= 0; i--)
+            if (!titles.Contains(rows[i].Title)) rows.RemoveAt(i);
+        for (int i = 0; i < fresh.Count; i++)
+        {
+            int at = -1;
+            for (int j = i; j < rows.Count; j++) if (rows[j].Title == fresh[i].Title) { at = j; break; }
+            if (at < 0) { rows.Insert(i, fresh[i]); continue; }
+            if (at != i) rows.Move(at, i);
+            rows[i].SyncItems(fresh[i].Items);
+        }
+        while (rows.Count > fresh.Count) rows.RemoveAt(rows.Count - 1);
     }
 }
 

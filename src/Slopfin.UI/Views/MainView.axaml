@@ -5,11 +5,12 @@
              x:Class="Slopfin.UI.Views.MainView"
              x:DataType="vm:MainViewModel"
              Background="{DynamicResource BgBrush}">
-  <Grid>
+  <!-- "motion" turns on the fades / slides in Controls.axaml (off with Settings → Reduce motion). -->
+  <Grid Classes.motion="{Binding MotionEnabled}">
     <!-- Soft ambient glow behind everything -->
     <Border Background="{DynamicResource AmbientGlowBrush}" IsHitTestVisible="False" />
 
-    <TransitioningContentControl Content="{Binding Root}" IsVisible="{Binding !IsPlayerOpen}">
+    <TransitioningContentControl x:Name="RootHost" Content="{Binding Root}" IsVisible="{Binding !IsPlayerOpen}">
       <TransitioningContentControl.PageTransition>
         <CrossFade Duration="0:0:0.28" />
       </TransitioningContentControl.PageTransition>

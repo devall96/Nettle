@@ -108,6 +108,7 @@ public sealed partial class ShellViewModel : ViewModelBase
     public void GoBack()
     {
         IsAccountMenuOpen = false;
+        if (Current?.HandleBack() == true) return;
         if (_back.Count > 0) Current = _back.Pop();
         else if (Current != _home) Current = _home;
     }

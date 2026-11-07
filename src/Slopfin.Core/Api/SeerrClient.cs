@@ -84,7 +84,19 @@ public sealed class SeerrClient
         return await SendAsync(req, SeerrJson.Default.SeerrUser, ct).ConfigureAwait(false);
     }
 
-    public Task<SeerrUser> GetMeAsync(CancellationToken ct = default) => SendAsync(Req(HttpMethod.Get, "/auth/me"), SeerrJson.Default.SeerrUser, ct);
+    private SeerrUser? _me;
+    private string? _meFor;
+
+    /// <summary>The Seerr account Slopfin is signed in as (cached per server + credentials).</summary>
+    public async Task<SeerrUser> GetMeAsync(CancellationToken ct = default)
+    {
+        var key = BaseUrl + "|" + ApiKey + "|" + SessionCookie;
+        if (_me != null && _meFor == key) return _me;
+        var me = await SendAsync(Req(HttpMethod.Get, "/auth/me"), SeerrJson.Default.SeerrUser, ct).ConfigureAwait(false);
+        _me = me;
+        _meFor = key;
+        return me;
+    }
 
     public Task<SeerrPage> TrendingAsync(int page = 1, CancellationToken ct = default) =>
         SendAsync(Req(HttpMethod.Get, "/discover/trending" + new Query().Add("page", page)), SeerrJson.Default.SeerrPage, ct);
@@ -107,16 +119,34 @@ public sealed class SeerrClient
     public Task<SeerrDetails> MovieAsync(int tmdbId, CancellationToken ct = default) =>
         SendAsync(Req(HttpMethod.Get, $"/movie/{tmdbId}"), SeerrJson.Default.SeerrDetails, ct);
 
-    public Task<SeerrRequestPage> MyRequestsAsync(int take = 30, CancellationToken ct = default) =>
-        SendAsync(Req(HttpMethod.Get, "/request" + new Query().Add("take", take).Add("skip", 0).Add("sort", "added")), SeerrJson.Default.SeerrRequestPage, ct);
+    /// <summary>
+    /// Requests made by the signed-in Seerr user only. Seerr returns everyone's requests to
+    /// admins, so the list is filtered by requester on the server and checked again here.
+    /// </summary>
+    public async Task<List<SeerrRequest>> MyRequestsAsync(int take = 30, CancellationToken ct = default)
+    {
+        var me = await GetMeAsync(ct).ConfigureAwait(false);
+        var page = await SendAsync(Req(HttpMethod.Get, "/request" + new Query().Add("take", take).Add("skip", 0).Add("sort", "added").Add("requestedBy", me.Id)),
+            SeerrJson.Default.SeerrRequestPage, ct).ConfigureAwait(false);
+        return page.Results.Where(r => r.RequestedBy?.Id == me.Id).ToList();
+    }
 
-    public async Task<SeerrRequest> RequestAsync(SeerrResult item, CancellationToken ct = default)
+    /// <summary>
+    /// Requests a movie, or the given seasons of a series (null = every season not already
+    /// available or requested).
+    /// </summary>
+    public async Task<SeerrRequest> RequestAsync(SeerrResult item, IReadOnlyCollection<int>? seasons = null, CancellationToken ct = default)
     {
         var body = new SeerrCreateRequest { MediaType = item.MediaType ?? "movie", MediaId = item.Id };
         if (body.MediaType == "tv")
         {
-            var tv = await TvAsync(item.Id, ct).ConfigureAwait(false);
-            body.Seasons = tv.Seasons?.Where(s => s.SeasonNumber > 0).Select(s => s.SeasonNumber).ToList() ?? new();
+            if (seasons is { Count: > 0 }) body.Seasons = seasons.ToList();
+            else
+            {
+                var tv = await TvAsync(item.Id, ct).ConfigureAwait(false);
+                var taken = tv.MediaInfo?.Seasons?.Where(s => s.Status >= SeerrMediaStatus.Pending).Select(s => s.SeasonNumber).ToHashSet() ?? new();
+                body.Seasons = tv.Seasons?.Where(s => s.SeasonNumber > 0 && !taken.Contains(s.SeasonNumber)).Select(s => s.SeasonNumber).ToList() ?? new();
+            }
         }
         var req = Req(HttpMethod.Post, "/request");
         req.Content = new StringContent(JsonSerializer.Serialize(body, SeerrJson.Default.SeerrCreateRequest), Encoding.UTF8, "application/json");

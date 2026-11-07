@@ -30,6 +30,37 @@ public sealed partial class NtvClient
             u += ":19850";
         BaseUrl = u;
         ApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
+        _guide = null; // different server or key: forget the cached guide
+    }
+
+    // The parsed guide is kept for a while: re-downloading and parsing several MB of XMLTV on
+    // every visit to the Live TV page was the slowest part of opening it.
+    private static readonly TimeSpan GuideMaxAge = TimeSpan.FromMinutes(10);
+    private readonly SemaphoreSlim _guideGate = new(1, 1);
+    private List<NtvChannel>? _guide;
+    private DateTimeOffset _guideAt;
+    private int _guideDays;
+
+    /// <summary>When the cached guide was downloaded (null = nothing cached).</summary>
+    public DateTimeOffset? GuideLoadedAt => _guide == null ? null : _guideAt;
+
+    /// <summary>
+    /// Channels plus the guide for [now - 3h, now + days]. Served from memory when a fresh
+    /// enough copy covering as many days is cached, unless <paramref name="force"/>.
+    /// </summary>
+    public async Task<List<NtvChannel>> LoadGuideAsync(int days = 3, bool force = false, CancellationToken ct = default)
+    {
+        await _guideGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (!force && _guide != null && _guideDays >= days && DateTimeOffset.Now - _guideAt < GuideMaxAge) return _guide;
+            var g = await LoadGuideCoreAsync(days, ct).ConfigureAwait(false);
+            _guide = g;
+            _guideAt = DateTimeOffset.Now;
+            _guideDays = days;
+            return g;
+        }
+        finally { _guideGate.Release(); }
     }
 
     private async Task<Stream> GetStreamAsync(string path, CancellationToken ct)
@@ -47,8 +78,7 @@ public sealed partial class NtvClient
         return await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>Loads channels and the guide window [now - 3h, now + days].</summary>
-    public async Task<List<NtvChannel>> LoadGuideAsync(int days = 3, CancellationToken ct = default)
+    private async Task<List<NtvChannel>> LoadGuideCoreAsync(int days, CancellationToken ct)
     {
         if (BaseUrl == null) throw new ApiException("NostalgiaTV isn't set up yet. Add its address in Settings.");
         var m3uTask = GetStreamAsync("/channels.m3u", ct);

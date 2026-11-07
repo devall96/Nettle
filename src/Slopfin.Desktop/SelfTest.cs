@@ -23,7 +23,7 @@ internal static class SelfTest
         list.RemoveAll(a => a.StartsWith("--mpvopt="));
 
         var options = PlaybackEngine.BaseOptions(hw).Concat(PlaybackEngine.PlatformOptions)
-            .Where(o => !window || o.Key is not ("gpu-context")) // own window: let mpv pick its context
+            .Where(o => !window || o.Key is not ("gpu-context" or "vo")) // own window: mpv's own output and context
             .ToList();
         if (!window) { options.Add(new("vo", "null")); options.Add(new("ao", "null")); }
         options.AddRange(extra);

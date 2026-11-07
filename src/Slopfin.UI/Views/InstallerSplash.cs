@@ -192,7 +192,7 @@ public static class InstallerSplash
         word.VerticalAlignment = VerticalAlignment.Center;
 
         var chips = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 10, LineSpacing = 10, MaxWidth = 860, HorizontalAlignment = HorizontalAlignment.Left };
-        foreach (var c in new[] { "Direct play only · never transcodes", "NostalgiaTV live guide", "Seerr requests", "Intro skipping", "8 themes", "Zero telemetry" })
+        foreach (var c in new[] { "Direct play only · never transcodes", "NostalgiaTV live guide", "Seerr requests", "Intro skipping", $"{ThemeManager.All.Count} themes", "Zero telemetry" })
             chips.Children.Add(Chip(c));
 
         root.Children.Add(new StackPanel

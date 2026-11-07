@@ -120,5 +120,41 @@
     </ScrollViewer>
 
     <Arc Classes="spin" Width="44" Height="44" IsVisible="{Binding IsBusy}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    <Arc Classes="spin" Width="44" Height="44" IsVisible="{Binding IsLoadingSeasons}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+    <!-- Season picker (series requests) -->
+    <Panel IsVisible="{Binding SeasonPicker, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{DynamicResource ScrimBrush}">
+      <Border DataContext="{Binding SeasonPicker}" x:DataType="vm:SeasonPickerViewModel" Classes="panel"
+              HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" MaxHeight="640" BoxShadow="0 20 60 0 #99000000">
+        <Grid RowDefinitions="Auto,Auto,*,Auto">
+          <TextBlock Classes="h2" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+          <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,6,0,10">
+            <TextBlock Text="Which seasons do you want?" Classes="muted" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="ghost" Content="Select all" Command="{Binding SelectAllCommand}" IsVisible="{Binding HasSelectable}" />
+          </Grid>
+          <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Seasons}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SeasonOptionViewModel">
+                  <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanSelect}" Margin="0,4">
+                    <StackPanel Margin="4,0,0,0">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding Detail}" Classes="muted caption"
+                                 IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </CheckBox>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0" HorizontalAlignment="Right">
+            <Button Content="Cancel" Command="{Binding CancelCommand}" />
+            <Button Classes="primary" Command="{Binding RequestCommand}">
+              <TextBlock Text="{Binding RequestText}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold" />
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Panel>
   </Grid>
 </UserControl>

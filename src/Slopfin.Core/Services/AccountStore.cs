@@ -27,8 +27,17 @@ public sealed class AccountStore
             var json = await _secure.GetAsync(Key);
             _vault = string.IsNullOrEmpty(json) ? new() : JsonSerializer.Deserialize(json, LocalJson.Default.AccountVault) ?? new();
         }
-        catch
+        catch (Exception ex)
         {
+            // Never silently drop saved sign-ins: keep the unreadable copy under another key
+            // before anything new is written over it.
+            try
+            {
+                var raw = await _secure.GetAsync(Key);
+                if (!string.IsNullOrEmpty(raw)) await _secure.SetAsync($"{Key}.broken-{DateTime.Now:yyyyMMdd-HHmmss}", raw);
+            }
+            catch { }
+            Log.Warn("saved accounts couldn't be read (" + ex.Message + "); a copy was kept");
             _vault = new();
         }
     }

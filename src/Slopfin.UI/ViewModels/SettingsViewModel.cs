@@ -113,8 +113,36 @@ public sealed partial class SettingsViewModel : PageViewModel
     public bool AutoPlayNext { get => P.AutoPlayNextEpisode; set { P.AutoPlayNextEpisode = value; Save(); OnPropertyChanged(); } }
     public string AudioLanguage { get => P.PreferredAudioLanguage; set { P.PreferredAudioLanguage = value.Trim(); Save(); OnPropertyChanged(); } }
     public string SubtitleLanguage { get => P.PreferredSubtitleLanguage; set { P.PreferredSubtitleLanguage = value.Trim(); Save(); OnPropertyChanged(); } }
-    public decimal NetworkCaching { get => P.NetworkCachingMs; set { P.NetworkCachingMs = (int)value; Save(); OnPropertyChanged(); } }
+    public decimal NetworkBuffer { get => P.NetworkBufferSeconds; set { P.NetworkBufferSeconds = (int)value; Save(); OnPropertyChanged(); } }
     public decimal SeekStep { get => P.SeekStepSeconds; set { P.SeekStepSeconds = (int)value; Save(); OnPropertyChanged(); } }
+    public bool AudioPassthrough { get => P.AudioPassthrough; set { P.AudioPassthrough = value; Save(); OnPropertyChanged(); } }
+    public string PassthroughHint => OperatingSystem.IsWindows()
+        ? "Sends Dolby (incl. Atmos and TrueHD) and DTS (incl. DTS-HD and DTS:X) untouched to your AV receiver or soundbar over HDMI / S/PDIF. While it plays, Slopfin's volume control has no effect and other apps' sound is paused (Windows needs exclusive use of the device). Leave off for TV speakers and headphones."
+        : "Sends Dolby (incl. Atmos and TrueHD) and DTS (incl. DTS-HD and DTS:X) untouched to your AV receiver or soundbar over HDMI / S/PDIF. Your sound server must allow passthrough for that output. Slopfin's volume control has no effect on it. Leave off for TV speakers and headphones.";
+
+    public bool StillWatchingPrompt
+    {
+        get => P.StillWatchingPrompt;
+        set { P.StillWatchingPrompt = value; Save(); OnPropertyChanged(); }
+    }
+    public decimal StillWatchingEpisodes { get => P.StillWatchingEpisodes; set { P.StillWatchingEpisodes = Math.Clamp((int)value, 1, 20); Save(); OnPropertyChanged(); } }
+
+    // ---------- Appearance ----------
+    public bool ReduceMotion
+    {
+        get => S.ReduceMotion;
+        set
+        {
+            S.ReduceMotion = value;
+            AppServices.Main.MotionEnabled = !value;
+            Save();
+            OnPropertyChanged();
+        }
+    }
+
+    public string SecureStoreText => OperatingSystem.IsWindows()
+        ? "Saved profiles on this PC (tokens encrypted with Windows DPAPI):"
+        : "Saved profiles on this PC (tokens kept in your desktop keyring):";
 
     public SegmentChoice IntroChoice { get => Choice(P.IntroAction); set { P.IntroAction = value.Value; Save(); OnPropertyChanged(); } }
     public SegmentChoice RecapChoice { get => Choice(P.RecapAction); set { P.RecapAction = value.Value; Save(); OnPropertyChanged(); } }
@@ -245,7 +273,7 @@ public sealed partial class SettingsViewModel : PageViewModel
             else await AppServices.Secure.SetAsync("ntv.apikey", NtvApiKey.Trim());
             AppServices.Ntv.Configure(S.NtvUrl, NtvApiKey);
             if (!AppServices.Ntv.IsConfigured) { NtvStatus = "Removed"; return; }
-            var ch = await AppServices.Ntv.LoadGuideAsync(1);
+            var ch = await AppServices.Ntv.LoadGuideAsync(14, force: true);
             NtvStatus = $"Connected: {ch.Count} channels, {ch.Sum(c => c.Programs.Count):N0} listings";
         }
         catch (Exception ex) { NtvStatus = "Failed: " + ex.Message; }

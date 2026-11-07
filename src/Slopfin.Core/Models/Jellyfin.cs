@@ -177,6 +177,8 @@ public sealed class BaseItemDto
     public List<MediaSourceInfo>? MediaSources { get; set; }
     public List<MediaStream>? MediaStreams { get; set; }
     public List<ChapterInfo>? Chapters { get; set; }
+    /// <summary>Scrubbing thumbnails: media source id → thumbnail width → tile sheet layout.</summary>
+    public Dictionary<string, Dictionary<string, TrickplayInfo>>? Trickplay { get; set; }
 
     public bool IsSeries => Type == "Series";
     public bool IsEpisode => Type == "Episode";
@@ -186,6 +188,21 @@ public sealed class BaseItemDto
 
     public string? Tag(string imageType) =>
         ImageTags != null && ImageTags.TryGetValue(imageType, out var t) ? t : null;
+}
+
+/// <summary>
+/// Jellyfin 10.9+ trickplay: thumbnails every <see cref="Interval"/> ms, packed into JPEG
+/// sheets of <see cref="TileWidth"/> × <see cref="TileHeight"/> thumbnails each.
+/// </summary>
+public sealed class TrickplayInfo
+{
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int TileWidth { get; set; }
+    public int TileHeight { get; set; }
+    public int ThumbnailCount { get; set; }
+    public int Interval { get; set; }
+    public int Bandwidth { get; set; }
 }
 
 public sealed class DirectPlayProfile
@@ -260,6 +277,9 @@ public sealed class PlaybackProgressInfo
     public bool CanSeek { get; set; } = true;
     public string PlayMethod { get; set; } = "DirectPlay";
     public string? EventName { get; set; }
+    /// <summary>Jellyfin's index of the audio / subtitle stream playing (-1 = subtitles off).</summary>
+    public int? AudioStreamIndex { get; set; }
+    public int? SubtitleStreamIndex { get; set; }
 }
 
 public sealed class MediaSegmentDto

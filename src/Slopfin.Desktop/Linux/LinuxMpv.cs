@@ -36,14 +36,26 @@ internal static class LinuxMpv
             throw new DllNotFoundException("libmpv wasn't found. Install it (e.g. 'sudo apt install libmpv2') or use the Slopfin AppImage, which includes it.");
         }
         PlaybackEngine.UseLibrary(lib);
-        PlaybackEngine.PlatformOptions = Options;
+        // Default: mpv renders into Slopfin's own OpenGL surface (render API), so the player
+        // controls are part of the main window. SLOPFIN_VIDEO=window brings back the old
+        // native-window mode in case a driver misbehaves.
+        PlaybackEngine.UseRenderApi = Environment.GetEnvironmentVariable("SLOPFIN_VIDEO") != "window";
+        PlaybackEngine.PlatformOptions = PlaybackEngine.UseRenderApi ? RenderApiOptions : WindowOptions;
+        Slopfin.Core.Services.Log.Info("video output: " + (PlaybackEngine.UseRenderApi ? "render API (OpenGL)" : "mpv window (x11egl)"));
     }
 
+    /// <summary>Render API: mpv draws through libmpv's OpenGL renderer into our framebuffer.</summary>
+    public static readonly IReadOnlyList<KeyValuePair<string, string>> RenderApiOptions =
+    [
+        new("vo", "libmpv"),
+    ];
+
     /// <summary>
-    /// Slopfin's window is an X11 window (also under Wayland, through XWayland), so mpv must
-    /// draw with an X11 context; left to itself it would pick Wayland and open its own window.
+    /// Native-window fallback: Slopfin's window is an X11 window (also under Wayland, through
+    /// XWayland), so mpv must draw with an X11 context; left to itself it would pick Wayland and
+    /// open its own window.
     /// </summary>
-    public static readonly IReadOnlyList<KeyValuePair<string, string>> Options =
+    public static readonly IReadOnlyList<KeyValuePair<string, string>> WindowOptions =
     [
         new("gpu-api", "opengl"),
         new("gpu-context", "x11egl"),

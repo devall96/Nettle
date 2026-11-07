@@ -18,10 +18,12 @@ public sealed class FormatBadgeViewModel(string label, string detail, bool verif
     public bool NotVerified => !verified;
 }
 
-public sealed partial class TrackOptionViewModel(PlayerViewModel owner, int id, string name, bool isAudio) : ObservableObject
+public sealed partial class TrackOptionViewModel(PlayerViewModel owner, int id, string name, bool isAudio, int? streamIndex = null) : ObservableObject
 {
     public int Id => id;
     public string Name => name;
+    /// <summary>Jellyfin's index for this stream (-1 for "subtitles off"; null if unknown).</summary>
+    public int? StreamIndex => streamIndex;
     [ObservableProperty] private bool _isSelected;
     [RelayCommand] private void Select() => owner.SelectTrack(this, isAudio);
 }
@@ -152,15 +154,19 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), "Couldn't confirm your display's HDR mode", false));
         }
 
-        // Audio: only once mpv is decoding an audio track.
+        // Audio: only once mpv is decoding an audio track (or passing it through).
         bool audioPlaying = Player.HasActiveAudio;
         var audio = PickAudioStream();
         var audioLabel = VideoFormat.AudioLabel(audio);
         if (audioPlaying && audioLabel != null)
         {
+            // mpv reports an "spdif-…" output format when the bitstream goes to the receiver untouched.
+            var outFormat = await Task.Run(() => Player.GetProperty("audio-out-params/format"));
+            bool passthrough = outFormat?.StartsWith("spdif", StringComparison.OrdinalIgnoreCase) == true;
             var layout = VideoFormat.ChannelLayout(audio!.Channels);
-            var detail = audioLabel is "Dolby Atmos" or "DTS:X"
-                ? $"Decoded by Slopfin to {layout} (object/height channels need a receiver with passthrough)"
+            var detail = passthrough ? "Passed through untouched: your receiver decodes it"
+                : audioLabel is "Dolby Atmos" or "DTS:X"
+                ? $"Decoded by Slopfin to {layout} (turn on audio passthrough in Settings to send height channels to a receiver)"
                 : $"Decoded by Slopfin · {layout}";
             badges.Add(new FormatBadgeViewModel(audioLabel.ToUpperInvariant(), detail, true));
         }
@@ -191,10 +197,13 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     public bool HasNext => _nextEpisode != null;
     public bool IsVod => !IsLive;
 
+    /// <summary>False when the user turned on Reduce motion (fades and slides are skipped).</summary>
+    public bool MotionEnabled { get; } = !AppServices.Settings.Current.ReduceMotion;
+
     private PlayerViewModel(MainViewModel main)
     {
         _main = main;
-        Player = PlaybackEngine.CreatePlayer(_settings.HardwareDecoding);
+        Player = PlaybackEngine.CreatePlayer(_settings.HardwareDecoding, _settings.AudioPassthrough);
         _volume = Math.Clamp(_settings.Volume, 0, 125);
         Player.SetVolume(_volume);
         Player.EndReached += () => Dispatcher.UIThread.Post(OnEnded);
@@ -203,12 +212,19 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             var tuneAtError = _tuneVersion;
             Dispatcher.UIThread.Post(() => _ = OnPlaybackErrorAsync(tuneAtError, reason));
         };
-        Player.Playing += () => Dispatcher.UIThread.Post(() =>
+        Player.Playing += () =>
         {
-            IsBuffering = false;
-            LoadTracks();
-            _ = ShowFormatBadgesAsync(_tuneVersion, _mediaGeneration);
-        });
+            // One line per file on how it's really being played (decoder, output), for bug reports.
+            var (w, h) = Player.VideoSize;
+            Slopfin.Core.Services.Log.Info($"playing: {w}x{h}, hwdec {Player.GetProperty("hwdec-current") ?? "no"}, vo {Player.GetProperty("current-vo")}, " +
+                $"audio {Player.GetProperty("audio-codec-name")} → {Player.GetProperty("audio-out-params/format") ?? "?"} via {Player.GetProperty("current-ao")}");
+            Dispatcher.UIThread.Post(() =>
+            {
+                IsBuffering = false;
+                LoadTracks();
+                _ = ShowFormatBadgesAsync(_tuneVersion, _mediaGeneration);
+            });
+        };
 
         _tick = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => OnTick());
         _tick.Start();
@@ -264,18 +280,22 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
             var url = jf.DirectStreamUrl(item.Id, source.Id, info.PlaySessionId);
             // External subtitle files are fetched as-is (no burn-in, no conversion) and handed to mpv.
+            _externalSubs = ExternalSubs(item.Id, source);
+            _lastPositionMs = startTicks is > 0 ? TimeSpan.FromTicks(startTicks.Value).TotalMilliseconds : 0;
             SwapMedia(new MpvLoad
             {
                 Url = url,
                 StartSeconds = startTicks is > 0 ? TimeSpan.FromTicks(startTicks.Value).TotalSeconds : null,
                 AudioLanguage = _settings.PreferredAudioLanguage,
                 SubtitleLanguage = _settings.PreferredSubtitleLanguage,
-                ExternalSubtitles = ExternalSubs(item.Id, source),
+                ExternalSubtitles = _externalSubs.Select(s => (s.Url, s.Title, s.Language)).ToList(),
+                CacheSeconds = BufferSeconds,
             });
 
             await jf.ReportStartAsync(Progress(isPaused: false));
             _lastReport = DateTime.UtcNow;
 
+            _ = LoadTrickplayAsync(item.Id, source.Id!);
             _segments = await AppServices.Segments.GetSegmentsAsync(item.Id);
             if (item.IsEpisode && _settings.AutoPlayNextEpisode) _ = FindNextEpisodeAsync(item);
         }
@@ -286,10 +306,18 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private static List<(string Url, string Title, string? Language)> ExternalSubs(string itemId, MediaSourceInfo source) =>
+    /// <summary>An external subtitle file handed to mpv, and the Jellyfin stream index it came from.</summary>
+    private sealed record ExternalSub(string Url, string Title, string? Language, int StreamIndex);
+
+    private List<ExternalSub> _externalSubs = new();
+
+    /// <summary>Read-ahead from Settings → Network buffer (mpv's cache-secs).</summary>
+    private int BufferSeconds => Math.Clamp(_settings.NetworkBufferSeconds, 2, 300);
+
+    private static List<ExternalSub> ExternalSubs(string itemId, MediaSourceInfo source) =>
         source.MediaStreams
             .Where(s => s.Type == "Subtitle" && s.IsExternal)
-            .Select(s => (AppServices.Jellyfin.ExternalSubtitleUrl(itemId, source.Id!, s), s.DisplayTitle ?? s.Title ?? s.Language ?? "External", s.Language))
+            .Select(s => new ExternalSub(AppServices.Jellyfin.ExternalSubtitleUrl(itemId, source.Id!, s), s.DisplayTitle ?? s.Title ?? s.Language ?? "External", s.Language, s.Index))
             .ToList();
 
     private async Task FindNextEpisodeAsync(BaseItemDto ep)
@@ -297,11 +325,12 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         if (ep.SeriesId == null) return;
         try
         {
-            var all = await AppServices.Jellyfin.GetEpisodesAsync(ep.SeriesId, null);
-            var idx = all.Items.FindIndex(e => e.Id == ep.Id);
-            if (idx >= 0 && idx + 1 < all.Items.Count)
+            // Only the neighbours of this episode, not the whole series with its media info.
+            var near = await AppServices.Jellyfin.GetAdjacentEpisodesAsync(ep.SeriesId, ep.Id);
+            var idx = near.Items.FindIndex(e => e.Id == ep.Id);
+            if (idx >= 0 && idx + 1 < near.Items.Count && _item?.Id == ep.Id)
             {
-                _nextEpisode = all.Items[idx + 1];
+                _nextEpisode = near.Items[idx + 1];
                 UpNextTitle = $"S{_nextEpisode.ParentIndexNumber}:E{_nextEpisode.IndexNumber}  {_nextEpisode.Name}";
                 UpNextImage = _nextEpisode.Tag("Primary") is { } t ? AppServices.Jellyfin.ImageUrl(_nextEpisode.Id, "Primary", t, 420) : null;
                 OnPropertyChanged(nameof(HasNext));
@@ -310,17 +339,37 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         catch { }
     }
 
-    private PlaybackProgressInfo Progress(bool isPaused) => new()
+    // What the server is told: the last known position (kept even once mpv has shut down) and
+    // the audio / subtitle streams actually chosen, so resuming elsewhere picks up the same ones.
+    private double _lastPositionMs;
+    private int? _audioStreamIndex, _subtitleStreamIndex;
+    private DateTime? _reportAfter;
+
+    private PlaybackProgressInfo Progress(bool isPaused, string? eventName = null)
     {
-        ItemId = _item?.Id,
-        MediaSourceId = _mediaSourceId,
-        PlaySessionId = _playSessionId,
-        PositionTicks = TimeSpan.FromMilliseconds(Math.Max(0, Player.TimeMs)).Ticks,
-        IsPaused = isPaused,
-        IsMuted = IsMuted,
-        VolumeLevel = Volume,
-        PlayMethod = "DirectPlay",
-    };
+        var t = Player.TimeMs;
+        if (t > 0 && !Player.HasEnded) _lastPositionMs = t;
+        return new()
+        {
+            ItemId = _item?.Id,
+            MediaSourceId = _mediaSourceId,
+            PlaySessionId = _playSessionId,
+            PositionTicks = TimeSpan.FromMilliseconds(Math.Max(0, _lastPositionMs)).Ticks,
+            IsPaused = isPaused,
+            IsMuted = IsMuted,
+            VolumeLevel = Volume,
+            PlayMethod = "DirectPlay",
+            EventName = eventName,
+            AudioStreamIndex = _audioStreamIndex,
+            SubtitleStreamIndex = _subtitleStreamIndex,
+        };
+    }
+
+    /// <summary>Sends a progress report about a second from now (coalesces bursts of seeks).</summary>
+    private void ReportSoon() { if (!IsLive && _item != null) _reportAfter = DateTime.UtcNow.AddSeconds(1); }
+
+    private int? StreamIndexOf(MpvTrack t) =>
+        t.FfIndex ?? (t.ExternalUrl != null ? _externalSubs.FirstOrDefault(s => s.Url == t.ExternalUrl)?.StreamIndex : null);
 
     // ===================== Live (NostalgiaTV) =====================
 
@@ -395,7 +444,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _sourceStreams = null; // feed: no file metadata, so only verified resolution is badged
         _feedWatchStart = DateTime.UtcNow;
         LiveSourceLabel = "NostalgiaTV broadcast feed";
-        SwapMedia(new MpvLoad { Url = ch.StreamUrl, CacheSeconds = 20 });
+        SwapMedia(new MpvLoad { Url = ch.StreamUrl, CacheSeconds = Math.Max(20, BufferSeconds) });
         UpdateLiveInfo();
     }
 
@@ -424,7 +473,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             StartSeconds = offsetMs > 500 ? offsetMs / 1000.0 : null,
             AudioLanguage = _settings.PreferredAudioLanguage,
             SubtitleLanguage = _settings.PreferredSubtitleLanguage,
-            ExternalSubtitles = ExternalSubs(itemId, source),
+            ExternalSubtitles = ExternalSubs(itemId, source).Select(s => (s.Url, s.Title, s.Language)).ToList(),
+            CacheSeconds = BufferSeconds,
         };
 
         _liveSlot = slot;
@@ -529,6 +579,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         {
             if (IsChannelBannerVisible && DateTime.UtcNow > _bannerUntil) IsChannelBannerVisible = false;
             CheckFeedWatchdog();
+            CheckLiveStillWatching();
             if (IsLiveDirect && _liveSlot != null && _livePausedAt == null && DateTimeOffset.Now.ToUnixTimeMilliseconds() >= _liveSlot.EndTimeMs - 250)
                 _ = AdvanceSlotAsync();
             UpdateLiveInfo();
@@ -549,10 +600,13 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
         UpdateSegments(pos, len);
 
-        if ((DateTime.UtcNow - _lastReport).TotalSeconds >= 10 && _item != null && time > 0)
+        bool due = (DateTime.UtcNow - _lastReport).TotalSeconds >= 10 || (_reportAfter is { } after && DateTime.UtcNow >= after);
+        if (due && _item != null && time > 0 && !Player.IsBuffering)
         {
             _lastReport = DateTime.UtcNow;
-            _ = AppServices.Jellyfin.ReportProgressAsync(Progress(!IsPlaying));
+            var eventName = _reportAfter != null ? "TimeUpdate" : null;
+            _reportAfter = null;
+            _ = AppServices.Jellyfin.ReportProgressAsync(Progress(!IsPlaying, eventName));
         }
     }
 
@@ -587,7 +641,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 _upNextShownAt = DateTime.UtcNow;
             }
             UpNextCountdown = Math.Max(0, _settings.UpNextCountdownSeconds - (int)(DateTime.UtcNow - _upNextShownAt).TotalSeconds);
-            if (UpNextCountdown == 0 && IsPlaying) { PlayNext(); return; }
+            if (UpNextCountdown == 0 && IsPlaying && !IsStillWatchingVisible) { AutoPlayNext(); return; }
             active = null;
         }
         else if (IsUpNextVisible && !creditsNow) IsUpNextVisible = false;
@@ -608,8 +662,15 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         IsSkipVisible = false;
     }
 
+    /// <summary>Next episode chosen by the user (button or N): counts as being here.</summary>
     [RelayCommand]
     private void PlayNext()
+    {
+        _autoPlayedInARow = 0;
+        PlayNextCore();
+    }
+
+    private void PlayNextCore()
     {
         if (_nextEpisode == null) return;
         var next = _nextEpisode;
@@ -619,6 +680,80 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand] private void DismissUpNext() { _upNextDismissed = true; IsUpNextVisible = false; }
+
+    // ===================== "Are you still watching?" =====================
+
+    /// <summary>Live TV asks after this long with no input at all.</summary>
+    private static readonly TimeSpan LiveStillWatchingAfter =
+#if DEBUG
+        // Testing: SLOPFIN_DEV_STILL=<seconds> makes the live prompt appear quickly.
+        int.TryParse(Environment.GetEnvironmentVariable("SLOPFIN_DEV_STILL"), out var devStill) ? TimeSpan.FromSeconds(devStill) :
+#endif
+        TimeSpan.FromHours(4);
+
+    private int _autoPlayedInARow;
+    private DateTime _lastUserInput = DateTime.UtcNow;
+    [ObservableProperty] private bool _isStillWatchingVisible;
+    [ObservableProperty] private string? _stillWatchingDetail;
+
+    /// <summary>Any key, click or mouse movement from the user.</summary>
+    public void UserActivity()
+    {
+        _lastUserInput = DateTime.UtcNow;
+        _autoPlayedInARow = 0;
+        ShowOsd();
+    }
+
+    /// <summary>Episode ended or the Up Next countdown ran out with nobody touching anything.</summary>
+    private void AutoPlayNext()
+    {
+        if (_nextEpisode == null) return;
+        if (_settings.StillWatchingPrompt && _autoPlayedInARow >= Math.Max(1, _settings.StillWatchingEpisodes))
+        {
+            Player.SetPause(true);
+            IsUpNextVisible = false;
+            StillWatchingDetail = $"{_autoPlayedInARow + 1} episodes in a row without a break. Slopfin paused before the next one.";
+            IsStillWatchingVisible = true;
+            Slopfin.Core.Services.Log.Info("still-watching prompt (episodes)");
+            return;
+        }
+        _autoPlayedInARow++;
+        PlayNextCore();
+    }
+
+    private void CheckLiveStillWatching()
+    {
+        if (!_settings.StillWatchingPrompt || IsStillWatchingVisible || !Player.IsPlaying) return;
+        if (DateTime.UtcNow - _lastUserInput < LiveStillWatchingAfter) return;
+        Player.SetPause(true);
+        if (IsLiveDirect) _livePausedAt = DateTime.UtcNow;
+        StillWatchingDetail = "This channel has been on for 4 hours without any input, so Slopfin paused it.";
+        IsStillWatchingVisible = true;
+        Slopfin.Core.Services.Log.Info("still-watching prompt (live)");
+    }
+
+    [RelayCommand]
+    private void ContinueWatching()
+    {
+        IsStillWatchingVisible = false;
+        _lastUserInput = DateTime.UtcNow;
+        _autoPlayedInARow = 0;
+        if (IsLive)
+        {
+            _livePausedAt = null;
+            TuneTo(_channelIndex); // back to the live point, like a real channel
+            return;
+        }
+        if (_nextEpisode != null) PlayNextCore();
+        else Player.SetPause(false);
+    }
+
+    [RelayCommand]
+    private void StopWatching()
+    {
+        IsStillWatchingVisible = false;
+        Close();
+    }
 
     private DateTime? _feedWatchStart;
 
@@ -717,7 +852,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             Error = "The channel stream ended.";
             return;
         }
-        if (_nextEpisode != null && _settings.AutoPlayNextEpisode && !_upNextDismissed) { PlayNext(); return; }
+        if (IsStillWatchingVisible) return;
+        if (_nextEpisode != null && _settings.AutoPlayNextEpisode && !_upNextDismissed) { AutoPlayNext(); return; }
         Close();
     }
 
@@ -757,7 +893,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         if (IsLive) return;
         SeekValue = ms;
+        _lastPositionMs = ms;
         Player.SeekTo((long)ms);
+        ReportSoon();
     }
 
     /// <summary>Called by the seek bar when the user releases it.</summary>
@@ -798,11 +936,13 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             SubtitleTracks.Clear();
             var tracks = task.Result;
             foreach (var t in tracks.Where(t => t.Type == "audio"))
-                AudioTracks.Add(new TrackOptionViewModel(this, t.Id, t.Name, true) { IsSelected = t.Selected });
+                AudioTracks.Add(new TrackOptionViewModel(this, t.Id, t.Name, true, StreamIndexOf(t)) { IsSelected = t.Selected });
             var subs = tracks.Where(t => t.Type == "sub").ToList();
-            SubtitleTracks.Add(new TrackOptionViewModel(this, -1, "Off", false) { IsSelected = !subs.Any(s => s.Selected) });
+            SubtitleTracks.Add(new TrackOptionViewModel(this, -1, "Off", false, -1) { IsSelected = !subs.Any(s => s.Selected) });
             foreach (var t in subs)
-                SubtitleTracks.Add(new TrackOptionViewModel(this, t.Id, t.Name, false) { IsSelected = t.Selected });
+                SubtitleTracks.Add(new TrackOptionViewModel(this, t.Id, t.Name, false, StreamIndexOf(t)) { IsSelected = t.Selected });
+            _audioStreamIndex = AudioTracks.FirstOrDefault(a => a.IsSelected)?.StreamIndex;
+            _subtitleStreamIndex = SubtitleTracks.FirstOrDefault(s => s.IsSelected)?.StreamIndex;
             Slopfin.Core.Services.Log.Info($"tracks: {AudioTracks.Count} audio ({AudioTracks.FirstOrDefault(a => a.IsSelected)?.Name ?? "none selected"}), {subs.Count} subtitle");
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
@@ -811,6 +951,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         Player.SelectTrack(audio ? "audio" : "sub", t.Id);
         foreach (var o in audio ? AudioTracks : SubtitleTracks) o.IsSelected = o == t;
+        if (audio) _audioStreamIndex = t.StreamIndex; else _subtitleStreamIndex = t.StreamIndex;
+        // Tell the server right away, so resuming (here or on another device) keeps this choice.
+        if (!IsLive && _item != null)
+            _ = AppServices.Jellyfin.ReportProgressAsync(Progress(!IsPlaying, audio ? "AudioTrackChange" : "SubtitleTrackChange"));
     }
 
     [RelayCommand]
@@ -832,6 +976,17 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     /// <summary>Keyboard / remote handling. Returns true when the key was consumed.</summary>
     public bool HandleKey(Key key)
     {
+        _lastUserInput = DateTime.UtcNow;
+        _autoPlayedInARow = 0;
+        if (IsStillWatchingVisible)
+        {
+            switch (key)
+            {
+                case Key.Enter or Key.Space or Key.MediaPlayPause or Key.K: ContinueWatching(); return true;
+                case Key.Escape or Key.Back or Key.BrowserBack or Key.MediaStop: StopWatching(); return true;
+                default: return true; // the prompt has focus until it's answered
+            }
+        }
         switch (key)
         {
             case Key.Space or Key.MediaPlayPause or Key.K:
@@ -880,12 +1035,97 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         await AppServices.Jellyfin.ReportStoppedAsync(p);
     }
 
+    /// <summary>Completes once the final "stopped" report (with the resume position) has been sent.</summary>
+    public Task Stopped { get; private set; } = Task.CompletedTask;
+
+    // ===================== Trickplay (scrubbing thumbnails) =====================
+
+    private (string ItemId, string SourceId, TrickplayInfo Info)? _trick;
+    private readonly Dictionary<int, Avalonia.Media.Imaging.Bitmap?> _trickSheets = new();
+    private readonly HashSet<int> _trickLoading = new();
+    private double _trickWantedMs = -1;
+    [ObservableProperty] private bool _isTrickVisible;
+    [ObservableProperty] private Avalonia.Media.IImage? _trickImage;
+    [ObservableProperty] private string _trickTime = "";
+    [ObservableProperty] private double _trickWidth = 240;
+    [ObservableProperty] private double _trickHeight = 135;
+    [ObservableProperty] private bool _hasTrickImage;
+
+    /// <summary>Loads the item's trickplay layout (thumbnails Jellyfin generated), if it has one.</summary>
+    private async Task LoadTrickplayAsync(string itemId, string sourceId)
+    {
+        _trick = null;
+        _trickSheets.Clear();
+        _trickLoading.Clear();
+        HasTrickImage = false;
+        var all = await AppServices.Jellyfin.GetTrickplayAsync(itemId);
+        if (_item?.Id != itemId) return;
+        var layouts = all == null ? null : all.TryGetValue(sourceId, out var l) ? l : all.Values.FirstOrDefault();
+        if (layouts == null || layouts.Count == 0)
+        {
+            Slopfin.Core.Services.Log.Info("trickplay: none for this item (the server hasn't generated scrubbing thumbnails)");
+            return;
+        }
+        // Smallest layout that still looks sharp in the preview (about 320 px wide).
+        var info = layouts.Values.Where(i => i.Width >= 280).OrderBy(i => i.Width).FirstOrDefault()
+                   ?? layouts.Values.OrderByDescending(i => i.Width).First();
+        if (info.Interval <= 0 || info.TileWidth <= 0 || info.TileHeight <= 0 || info.Width <= 0) return;
+        _trick = (itemId, sourceId, info);
+        TrickWidth = 280;
+        TrickHeight = Math.Round(280.0 * info.Height / Math.Max(1, info.Width));
+        Slopfin.Core.Services.Log.Info($"trickplay: {info.Width}x{info.Height}, every {info.Interval} ms, {info.ThumbnailCount} thumbnails");
+    }
+
+    /// <summary>Shows the scrubbing preview for a position (seek bar hover or drag).</summary>
+    public void ShowTrickplay(double ms)
+    {
+        if (IsLive || LengthMs <= 1) return;
+        ms = Math.Clamp(ms, 0, LengthMs);
+        TrickTime = Format.Clock(TimeSpan.FromMilliseconds(ms));
+        IsTrickVisible = true;
+        _trickWantedMs = ms;
+        if (_trick is not { } t) { HasTrickImage = false; return; }
+
+        var info = t.Info;
+        int n = Math.Clamp((int)(ms / info.Interval), 0, Math.Max(0, info.ThumbnailCount - 1));
+        int perSheet = info.TileWidth * info.TileHeight;
+        int sheet = n / perSheet, k = n % perSheet;
+        if (_trickSheets.TryGetValue(sheet, out var bmp))
+        {
+            if (bmp == null) { HasTrickImage = false; return; }
+            int x = k % info.TileWidth * info.Width, y = k / info.TileWidth * info.Height;
+            if (x + info.Width > bmp.PixelSize.Width || y + info.Height > bmp.PixelSize.Height) { HasTrickImage = false; return; }
+            TrickImage = new Avalonia.Media.Imaging.CroppedBitmap(bmp, new Avalonia.PixelRect(x, y, info.Width, info.Height));
+            HasTrickImage = true;
+            return;
+        }
+        if (_trickLoading.Add(sheet)) _ = LoadTrickSheetAsync(t.ItemId, t.SourceId, info, sheet);
+    }
+
+    private async Task LoadTrickSheetAsync(string itemId, string sourceId, TrickplayInfo info, int sheet)
+    {
+        var url = AppServices.Jellyfin.TrickplayTileUrl(itemId, sourceId, info.Width, sheet);
+        var bmp = await AppServices.Images.LoadUncachedAsync(url);
+        if (_item?.Id != itemId || _disposed) return;
+        // Keep only a few sheets in memory (each holds up to 100 thumbnails).
+        if (_trickSheets.Count >= 6) _trickSheets.Remove(_trickSheets.Keys.First());
+        _trickSheets[sheet] = bmp;
+        _trickLoading.Remove(sheet);
+        if (IsTrickVisible && _trickWantedMs >= 0) ShowTrickplay(_trickWantedMs);
+    }
+
+    public void HideTrickplay()
+    {
+        IsTrickVisible = false;
+        _trickWantedMs = -1;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _tick.Stop();
-        if (!IsLive) _ = ReportStoppedAsync();
+        if (!IsLive) Stopped = ReportStoppedAsync();
         if (!_wasFullScreen) AppServices.Window?.SetFullScreen(false);
         _ = AppServices.Settings.SaveAsync();
         Slopfin.Core.Services.Log.Info("player closed");

@@ -53,11 +53,30 @@ public static class PlaybackEngine
         yield return O("keepaspect-window", "no");
     }
 
+    /// <summary>
+    /// True when video is drawn through mpv's render API into Slopfin's own OpenGL surface (so the
+    /// controls are ordinary UI on top), instead of mpv drawing into a native child window.
+    /// Set by the platform head (Linux).
+    /// </summary>
+    public static bool UseRenderApi { get; set; }
+
     /// <summary>Uses an already-loaded libmpv (platform heads that bundle their own copy).</summary>
     public static void UseLibrary(IntPtr handle) => Mpv.LibraryHandle = handle;
 
-    public static MpvPlayer CreatePlayer(bool hardwareDecoding) =>
-        new(BaseOptions(hardwareDecoding).Concat(PlatformOptions));
+    /// <summary>
+    /// Audio passthrough: Dolby (AC-3, E-AC-3 / Atmos, TrueHD) and DTS (incl. DTS-HD / DTS:X) go
+    /// to the receiver untouched, so it decodes them (and Atmos height channels reach it).
+    /// Anything else is decoded as usual.
+    /// </summary>
+    public static IEnumerable<KeyValuePair<string, string>> PassthroughOptions()
+    {
+        yield return new("audio-spdif", "ac3,eac3,dts,dts-hd,truehd");
+        // Windows only sends TrueHD / DTS-HD bitstreams with exclusive access to the device.
+        if (OperatingSystem.IsWindows()) yield return new("audio-exclusive", "yes");
+    }
+
+    public static MpvPlayer CreatePlayer(bool hardwareDecoding, bool passthrough = false) =>
+        new(BaseOptions(hardwareDecoding).Concat(PlatformOptions).Concat(passthrough ? PassthroughOptions() : []));
 
     /// <summary>Loads libmpv off the UI thread so the first play is instant.</summary>
     public static void Prewarm() => Task.Run(() =>

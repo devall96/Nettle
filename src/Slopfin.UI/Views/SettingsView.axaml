@@ -56,6 +56,13 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Text="Reduce motion" FontWeight="SemiBold" />
+              <TextBlock Text="Skips page slides, fades, card lifts and the rotating Home banner" Classes="muted caption" />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding ReduceMotion}" OnContent="" OffContent="" VerticalAlignment="Center" />
+          </Grid>
         </StackPanel>
       </Border>
 
@@ -67,12 +74,31 @@
             <TextBlock TextWrapping="Wrap" Text="Slopfin always direct-plays the original file with mpv. It never asks your server to transcode or remux, so quality is untouched and server CPU stays idle." />
           </Border>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
-            <StackPanel><TextBlock Text="Hardware decoding" FontWeight="SemiBold" /><TextBlock Text="Use the GPU (D3D11/DXVA) for smooth 4K/HDR playback" Classes="muted caption" /></StackPanel>
+            <StackPanel><TextBlock Text="Hardware decoding" FontWeight="SemiBold" /><TextBlock Text="Use the GPU (D3D11VA on Windows, VA-API on Linux) for smooth 4K/HDR playback" Classes="muted caption" /></StackPanel>
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding HardwareDecoding}" OnContent="" OffContent="" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Text="Audio passthrough (AV receiver)" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding PassthroughHint}" Classes="muted caption" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left" />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AudioPassthrough}" OnContent="" OffContent="" VerticalAlignment="Center" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <StackPanel><TextBlock Text="Auto-play next episode" FontWeight="SemiBold" /><TextBlock Text="Shows an Up Next card during the credits" Classes="muted caption" /></StackPanel>
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoPlayNext}" OnContent="" OffContent="" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Text="Ask &quot;Are you still watching?&quot;" FontWeight="SemiBold" />
+              <TextBlock Classes="muted caption" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                         Text="Pauses before the next episode after several in a row with no input, and pauses Live TV after 4 hours with no input. Turn off to never be asked." />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding StillWatchingPrompt}" OnContent="" OffContent="" VerticalAlignment="Center" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding StillWatchingPrompt}">
+            <StackPanel><TextBlock Text="Episodes before asking" FontWeight="SemiBold" /><TextBlock Text="Auto-played episodes in a row before the question appears" Classes="muted caption" /></StackPanel>
+            <NumericUpDown Grid.Column="1" Value="{Binding StillWatchingEpisodes}" Minimum="1" Maximum="20" Increment="1" Width="200" FormatString="0" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <StackPanel><TextBlock Text="Intros" FontWeight="SemiBold" /><TextBlock Text="From the Intro Skipper plugin / Jellyfin media segments" Classes="muted caption" /></StackPanel>
@@ -103,8 +129,8 @@
             <TextBox Grid.Column="1" Text="{Binding SubtitleLanguage}" Width="200" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
-            <StackPanel><TextBlock Text="Network buffer (ms)" FontWeight="SemiBold" /><TextBlock Text="Raise this if playback stutters over Wi-Fi" Classes="muted caption" /></StackPanel>
-            <NumericUpDown Grid.Column="1" Value="{Binding NetworkCaching}" Minimum="300" Maximum="20000" Increment="250" Width="200" FormatString="0" />
+            <StackPanel><TextBlock Text="Network buffer (seconds)" FontWeight="SemiBold" /><TextBlock Text="How far ahead Slopfin downloads. Raise it if playback stutters over Wi-Fi" Classes="muted caption" /></StackPanel>
+            <NumericUpDown Grid.Column="1" Value="{Binding NetworkBuffer}" Minimum="2" Maximum="300" Increment="5" Width="200" FormatString="0" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <TextBlock Text="Seek step (seconds)" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -123,7 +149,7 @@
             <StackPanel><TextBlock Text="Sign in automatically" FontWeight="SemiBold" /><TextBlock Text="Skip the profile picker and resume the last profile on launch" Classes="muted caption" /></StackPanel>
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoLogin}" OnContent="" OffContent="" />
           </Grid>
-          <TextBlock Text="Saved profiles on this PC (tokens encrypted with Windows DPAPI):" Classes="muted caption" />
+          <TextBlock Text="{Binding SecureStoreText}" Classes="muted caption" />
           <ItemsControl ItemsSource="{Binding Accounts}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:AccountTileViewModel">
