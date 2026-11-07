@@ -64,7 +64,7 @@
         <StackPanel Spacing="4">
           <TextBlock Classes="section" Text="PLAYBACK" Margin="0,0,0,8" />
           <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="10" Padding="14,10" Margin="0,0,0,8">
-            <TextBlock TextWrapping="Wrap" Text="Slopfin always direct-plays the original file with libVLC. It never asks your server to transcode or remux, so quality is untouched and server CPU stays idle." />
+            <TextBlock TextWrapping="Wrap" Text="Slopfin always direct-plays the original file with mpv. It never asks your server to transcode or remux, so quality is untouched and server CPU stays idle." />
           </Border>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <StackPanel><TextBlock Text="Hardware decoding" FontWeight="SemiBold" /><TextBlock Text="Use the GPU (D3D11/DXVA) for smooth 4K/HDR playback" Classes="muted caption" /></StackPanel>
@@ -251,7 +251,7 @@
           <TextBlock Classes="section" Text="ABOUT" />
           <TextBlock Text="{Binding VersionText}" FontWeight="SemiBold" />
           <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="Slopfin is an independent client and is not affiliated with Jellyfin, VideoLAN, Seerr or NostalgiaTV. Playback is powered by libVLC (LGPL-2.1+). Open-source licenses are listed in THIRD_PARTY_NOTICES.md next to the app." />
+                     Text="Slopfin is an independent client and is not affiliated with Jellyfin, mpv, Seerr or NostalgiaTV. Playback is powered by mpv (GPL-2.0+). Open-source licenses are listed in THIRD_PARTY_NOTICES.md next to the app." />
           <Button Content="Clear image cache" Command="{Binding ClearImageCacheCommand}" HorizontalAlignment="Left" />
         </StackPanel>
       </Border>

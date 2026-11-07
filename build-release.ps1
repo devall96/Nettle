@@ -21,6 +21,8 @@ if (-not $Version) { $Version = ([xml](Get-Content Directory.Build.props)).Proje
 $publishDir = "dist\publish-$Version"
 Write-Host "== Slopfin $Version" -ForegroundColor Cyan
 
+& "$PSScriptRoot\get-libmpv.ps1"   # pinned, hash-checked libmpv-2.dll
+
 if (Test-Path $publishDir) { Remove-Item -Recurse -Force $publishDir }
 dotnet publish src/Slopfin.Desktop/Slopfin.Desktop.csproj -c Release -r win-x64 --self-contained true `
   -p:Version=$Version -o $publishDir -nologo -v q

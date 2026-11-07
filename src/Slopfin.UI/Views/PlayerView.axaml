@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Slopfin.UI.ViewModels"
              xmlns:c="using:Slopfin.UI.Controls"
-             xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
              x:Class="Slopfin.UI.Views.PlayerView"
              x:DataType="vm:PlayerViewModel"
              Background="Black">
@@ -46,8 +45,8 @@
     </Style>
   </UserControl.Styles>
 
-  <vlc:VideoView x:Name="Video" MediaPlayer="{Binding MediaPlayer}">
-    <!-- The overlay is rendered by LibVLCSharp in a transparent window above the native video surface. -->
+  <c:VideoSurface x:Name="Video" Player="{Binding Player}">
+    <!-- The overlay is shown in a transparent window kept above the native video surface (see VideoSurface). -->
     <Panel x:Name="Overlay" Background="#01000000">
       <!-- Buffering -->
       <Arc Classes="spin" Width="64" Height="64" StrokeThickness="5" IsVisible="{Binding IsBuffering}" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -273,5 +272,5 @@
         </ScrollViewer>
       </Border>
     </Panel>
-  </vlc:VideoView>
+  </c:VideoSurface>
 </UserControl>

@@ -31,13 +31,13 @@ internal static class Program
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Slopfin.Core.Services.Log.Error("Unhandled", e.ExceptionObject as Exception);
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Slopfin.Core.Services.Log.Info($"Process exit (code {Environment.ExitCode})");
 
-        // libVLC: Windows uses the bundled VideoLAN.LibVLC.Windows package; Linux has its own loader.
-        if (OperatingSystem.IsWindows()) LibVLCSharp.Shared.Core.Initialize();
-        else LinuxVlc.Initialize();
+        // libmpv: Windows uses libmpv-2.dll next to the app; Linux has its own loader.
+        if (OperatingSystem.IsWindows()) Slopfin.UI.Playback.PlaybackEngine.PlatformOptions = WindowsMpvOptions;
+        else LinuxMpv.Initialize();
 
-        // CI / diagnostics: `Slopfin --selftest file...` decodes test files headlessly and exits.
+        // CI / diagnostics: `Slopfin --selftest file...` decodes test files and exits.
         var selfTest = Array.IndexOf(args, "--selftest");
-        if (selfTest >= 0) return LinuxVlc.SelfTest(args.Skip(selfTest + 1));
+        if (selfTest >= 0) return SelfTest.Run(args.Skip(selfTest + 1));
 
         ISecureStore secure = OperatingSystem.IsWindows()
             ? new DpapiSecureStore(Path.Combine(platform.DataDirectory, "secure"))
@@ -74,6 +74,17 @@ internal static class Program
             throw;
         }
     }
+
+    /// <summary>
+    /// Windows: Direct3D 11 output. target-colorspace-hint tells Windows the video's real
+    /// colour space, so HDR10 / HLG / Dolby Vision go out as true HDR when Windows HDR is on.
+    /// </summary>
+    private static readonly IReadOnlyList<KeyValuePair<string, string>> WindowsMpvOptions =
+    [
+        new("gpu-api", "d3d11"),
+        new("gpu-context", "d3d11"),
+        new("target-colorspace-hint", "yes"),
+    ];
 
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>()

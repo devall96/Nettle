@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Slopfin.UI: all screens, view models, themes and the libVLC player.
-    Avalonia + LibVLCSharp both run on Windows, Linux, macOS, Android (incl. Android TV) and iOS,
+    Slopfin.UI: all screens, view models, themes and the mpv player.
+    Avalonia and libmpv both run on Windows, Linux, macOS, Android (incl. Android TV) and iOS,
     so platform "heads" (Slopfin.Desktop today) stay tiny.
   -->
   <PropertyGroup>
@@ -18,8 +18,6 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="LibVLCSharp" Version="3.10.2" />
-    <PackageReference Include="LibVLCSharp.Avalonia" Version="3.10.2" />
   </ItemGroup>
 
   <ItemGroup>

@@ -203,7 +203,7 @@ public static class InstallerSplash
             Children =
             {
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 26, Children = { Tile(p, 120), word } },
-                T("A fast, beautiful Jellyfin client for Windows, built on VLC.", 24, FontWeight.Medium, p.TextMuted),
+                T("A fast, beautiful Jellyfin client for Windows and Linux, built on mpv.", 24, FontWeight.Medium, p.TextMuted),
                 chips,
             }
         });

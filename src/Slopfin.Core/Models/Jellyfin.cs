@@ -200,12 +200,12 @@ public sealed class SubtitleProfile
 }
 
 /// <summary>
-/// A deliberately permissive profile: Slopfin uses libVLC which can decode practically anything,
+/// A deliberately permissive profile: Slopfin uses mpv, which can decode practically anything,
 /// so we tell the server "direct play everything" and never offer any transcoding profile.
 /// </summary>
 public sealed class DeviceProfile
 {
-    public string Name { get; set; } = "Slopfin (libVLC, direct play only)";
+    public string Name { get; set; } = "Slopfin (mpv, direct play only)";
     public int MaxStreamingBitrate { get; set; } = int.MaxValue;
     public int MaxStaticBitrate { get; set; } = int.MaxValue;
     public List<DirectPlayProfile> DirectPlayProfiles { get; set; } = new() { new() { Type = "Video" }, new() { Type = "Audio" } };

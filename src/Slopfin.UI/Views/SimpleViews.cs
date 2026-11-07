@@ -117,7 +117,57 @@ public partial class SettingsView : UserControl
 
 public partial class LiveTvView : UserControl
 {
-    public LiveTvView() => InitializeComponent();
+    private LiveTvViewModel? _vm;
+    private double? _pendingScrollX;
+    private bool _syncing;
+
+    public LiveTvView()
+    {
+        InitializeComponent();
+        // The schedule scrolls freely; the time header follows it sideways and the channel
+        // column follows it up and down.
+        GridScroll.ScrollChanged += (_, _) =>
+        {
+            if (_syncing) return;
+            _syncing = true;
+            HeaderScroll.Offset = new Avalonia.Vector(GridScroll.Offset.X, 0);
+            ChannelScroll.Offset = new Avalonia.Vector(0, GridScroll.Offset.Y);
+            _syncing = false;
+            _vm?.OnScrolled(GridScroll.Offset.X);
+        };
+        // Scrolling over the channel column scrolls the guide too.
+        ChannelScroll.ScrollChanged += (_, _) =>
+        {
+            if (_syncing) return;
+            _syncing = true;
+            GridScroll.Offset = new Avalonia.Vector(GridScroll.Offset.X, ChannelScroll.Offset.Y);
+            _syncing = false;
+        };
+        // A requested jump (e.g. "now") waits until the grid has been laid out wide enough.
+        GridScroll.LayoutUpdated += (_, _) => ApplyPendingScroll();
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (_vm != null) _vm.ScrollRequested -= OnScrollRequested;
+        _vm = DataContext as LiveTvViewModel;
+        if (_vm != null) _vm.ScrollRequested += OnScrollRequested;
+    }
+
+    private void OnScrollRequested(double x)
+    {
+        _pendingScrollX = x;
+        ApplyPendingScroll();
+    }
+
+    private void ApplyPendingScroll()
+    {
+        if (_pendingScrollX is not { } x || GridScroll.Extent.Width <= GridScroll.Viewport.Width && x > 0) return;
+        _pendingScrollX = null;
+        var max = Math.Max(0, GridScroll.Extent.Width - GridScroll.Viewport.Width);
+        GridScroll.Offset = new Avalonia.Vector(Math.Clamp(x, 0, max), GridScroll.Offset.Y);
+    }
 
     private void OnProgramPointerEntered(object? sender, PointerEventArgs e)
     {

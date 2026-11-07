@@ -1,4 +1,4 @@
-# Builds the Linux AppImage (with libVLC bundled), proves it works on clean machines of several
+# Builds the Linux AppImage (with libmpv bundled), proves it works on clean machines of several
 # distros, and optionally attaches it to the GitHub release for the current version.
 name: Linux AppImage
 
@@ -24,8 +24,9 @@ env:
 
 jobs:
   build:
-    # Oldest supported base: the AppImage runs on this glibc (2.35) and anything newer.
-    runs-on: ubuntu-22.04
+    # Oldest supported base: the AppImage runs on this glibc (2.39) and anything newer.
+    # (Ubuntu 24.04 is the oldest Ubuntu with a recent enough mpv / libplacebo.)
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
@@ -39,16 +40,16 @@ jobs:
         id: ver
         run: echo "version=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)" >> "$GITHUB_OUTPUT"
 
-      - name: Install VLC (to bundle) and FFmpeg (to make test clips)
+      - name: Install libmpv (to bundle) and FFmpeg (to make test clips)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libvlc5 libvlccore9 vlc-plugin-base vlc-plugin-video-output vlc-bin ffmpeg
+          sudo apt-get install -y --no-install-recommends libmpv2 ffmpeg
 
       - name: Publish
         run: dotnet publish src/Slopfin.Desktop -c Release -r linux-x64 --self-contained -p:DebugType=none -o publish
 
-      - name: Bundle libVLC
-        run: bash .github/linux/bundle-libvlc.sh publish/vlc
+      - name: Bundle libmpv
+        run: bash .github/linux/bundle-libmpv.sh publish/mpv
 
       - name: Make test clips
         run: |
@@ -98,12 +99,12 @@ jobs:
           releases-linux/*.AppImage --appimage-extract > /dev/null
           echo "SLOPFIN=$(find "$PWD/squashfs-root" -name Slopfin -type f -perm -u+x | head -n1)" >> "$GITHUB_ENV"
           du -sh squashfs-root; ls -la releases-linux
-      - name: VLC is not installed on this machine
-        run: "! ldconfig -p | grep -q libvlc"
-      - name: Decode test (bundled libVLC)
+      - name: mpv is not installed on this machine
+        run: "! ldconfig -p | grep -q libmpv"
+      - name: Decode test (bundled libmpv)
         run: |
           "$SLOPFIN" --selftest testmedia/*
-          grep "libVLC" ~/.local/share/Slopfin/slopfin.log || true
+          grep "libmpv" ~/.local/share/Slopfin/slopfin.log || true
       - name: Applications menu entry
         run: |
           export APPIMAGE="$PWD/My Apps/Slopfin.AppImage"
@@ -126,7 +127,7 @@ jobs:
           name: screenshot-ubuntu
           path: screenshot.png
 
-  # Clean containers of other distros with only typical desktop libraries installed (no VLC, no FFmpeg).
+  # Clean containers of other distros with only typical desktop libraries installed (no mpv, no FFmpeg).
   test-distros:
     needs: build
     runs-on: ubuntu-latest
@@ -138,20 +139,20 @@ jobs:
             setup: dnf install -y libicu glib2 libX11 libxcb mesa-libGL mesa-libEGL alsa-lib pulseaudio-libs fontconfig freetype findutils
           - image: archlinux:latest
             setup: pacman -Syu --noconfirm icu glib2 libx11 libxcb mesa alsa-lib libpulse fontconfig freetype2 findutils
-          - image: debian:12
-            setup: apt-get update && apt-get install -y --no-install-recommends libicu72 libglib2.0-0 libx11-6 libxcb1 libgl1 libegl1 libasound2 libpulse0 fontconfig libfreetype6
+          - image: debian:13
+            setup: apt-get update && apt-get install -y --no-install-recommends libicu76 libglib2.0-0t64 libx11-6 libxcb1 libgl1 libegl1 libasound2t64 libpulse0 fontconfig libfreetype6
     container: ${{ matrix.image }}
     steps:
       - name: Desktop baseline
         run: ${{ matrix.setup }}
       - uses: actions/download-artifact@v4
-      - name: Decode test (bundled libVLC)
+      - name: Decode test (bundled libmpv)
         run: |
           chmod +x releases-linux/*.AppImage
           releases-linux/*.AppImage --appimage-extract > /dev/null
           SLOPFIN="$(find "$PWD/squashfs-root" -name Slopfin -type f -perm -u+x | head -n1)"
           "$SLOPFIN" --selftest testmedia/*
-          grep "libVLC" ~/.local/share/Slopfin/slopfin.log || true
+          grep "libmpv" ~/.local/share/Slopfin/slopfin.log || true
 
   publish:
     needs: [build, test-ubuntu, test-distros]

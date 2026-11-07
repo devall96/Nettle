@@ -9,7 +9,7 @@ namespace Slopfin.Core.Api;
 /// NostalgiaTV integration using the server's standard tuner outputs:
 ///   GET /channels.m3u  (channel list + stream URLs)
 ///   GET /xmltv.xml     (program guide)
-/// Streams are MPEG-TS played as-is by libVLC. Only live channels are ever exposed; the
+/// Streams are MPEG-TS played as-is by mpv. Only live channels are ever exposed; the
 /// NostalgiaTV on-demand section is deliberately not integrated.
 /// </summary>
 public sealed partial class NtvClient

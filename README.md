@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/banner.png" alt="Slopfin: a fast, beautiful Jellyfin client for Windows and Linux, built on VLC" width="100%">
+  <img src="docs/images/banner.png" alt="Slopfin: a fast, beautiful Jellyfin client for Windows and Linux, built on mpv" width="100%">
 </p>
 
 <p align="center">
@@ -14,24 +14,23 @@
 
 ---
 
-**Slopfin** is a Jellyfin client for Windows and Linux that plays everything in **original quality**. Instead of
-asking your server to transcode, it plays the actual file with the VLC engine, using your graphics
-card for 4K and HDR. Slopfin never transcodes: it has no code path that asks the server to.
+**Slopfin** is a Jellyfin client for Windows and Linux that plays everything in **original quality**.
+Instead of asking your server to transcode, it plays the actual file with the **mpv** engine, using
+your graphics card for 4K, HDR and Dolby Vision. Slopfin never transcodes: it has no code path that
+asks the server to.
 
 It also brings in a TV-style live guide for **NostalgiaTV**, **Seerr** requests, skippable intros
 and credits, multiple profiles, and eight hand-made themes. It has **no telemetry of any kind**.
 
-> [!WARNING]
-> **Slopfin is in beta on both platforms.**
-> - **Windows (beta):** usable day to day, but expect rough edges.
-> - **Linux (early beta, VERY buggy):** it was added very recently and has only been tested on a
->   handful of machines. Expect broken playback, display glitches and crashes, especially on
->   setups that haven't been tested yet.
+> [!NOTE]
+> **Slopfin is in beta on Windows and Linux.** It works well on the machines it has been tested
+> on, but it hasn't been tried on much other hardware yet, so expect some rough edges.
 
 ## 🧪 Testers wanted
 
-Slopfin needs people to try it on real setups, **especially on Linux**. If you have a Jellyfin
-server and a few minutes, you'd help a lot:
+Slopfin needs people to try it on hardware it hasn't seen yet: **NVIDIA and Intel graphics,
+laptops, other Linux distros and desktops (KDE, XFCE…), multi-monitor and HDR setups.** If you have a
+Jellyfin server and a few minutes, you'd help a lot:
 
 1. [Download](https://github.com/devall96/Slopfin/releases/latest) the Windows installer or the Linux AppImage.
 2. Sign in and play a few different things: 4K / HDR / Dolby Vision files, older SD shows, surround
@@ -63,11 +62,13 @@ server and a few minutes, you'd help a lot:
 
 ### Playback
 - **Direct play, always.** Slopfin requests the original file and never asks the server for a transcode or remux. Your server's CPU stays idle and the picture is untouched.
-- **VLC engine** (libVLC), with hardware decoding (D3D11/DXVA). It plays practically every container, codec and subtitle format.
-- **HDR10, HLG and Dolby Vision** (via its HDR10 base layer), passed straight to HDR displays.
-- **TV-style format badges.** When playback starts, badges like **4K · DOLBY VISION · DTS-HD MA** pop up, the way a TV shows them. Each badge is *verified*:
+- **mpv engine** (libmpv) with its modern renderer (`gpu-next` / libplacebo) and hardware decoding: D3D11VA on Windows, VA-API on Linux. It plays practically every container, codec and subtitle format.
+- **HDR10, HDR10+, HLG and Dolby Vision,** including **Dolby Vision profile 5**, whose picture data is applied by the player. On Windows, HDR goes straight to your HDR display; on SDR screens it's tone-mapped carefully.
+- **Smooth motion.** Playback syncs to your display's refresh rate, so 24 fps films don't judder on 60 Hz screens.
+- **TV-style format badges.** When playback starts, badges like **4K · DOLBY VISION · DOLBY ATMOS** pop up, the way a TV shows them. Each badge is *verified*:
   - Resolution comes from the frames actually being decoded.
-  - HDR is only claimed if Windows confirms your monitor is in HDR mode right now.
+  - HDR is only claimed if the player is really sending an HDR signal, and Windows confirms your monitor is in HDR mode.
+  - Audio formats only appear once that audio is actually being decoded.
 - **Skip intro, recap, credits, previews and ads,** using the [Intro Skipper](https://github.com/intro-skipper/intro-skipper) plugin or Jellyfin media segments. Each one can show a button, skip automatically, or do nothing.
 - **Up Next** card with a countdown during the credits, then automatic next episode.
 - Resume points and watched status stay in sync with your server.
@@ -80,7 +81,7 @@ server and a few minutes, you'd help a lot:
 - **Search** across your library. If something's missing, one click searches Seerr to request it.
 
 ### Live TV: NostalgiaTV
-- A full cable-style **program guide**, with a live "now" line and paging.
+- A full cable-style **program guide** covering everything NostalgiaTV has scheduled (usually several days), with a live "now" line. Scroll through it, or jump ahead 90 minutes at a time.
 - **Original-quality channels.** By default Slopfin plays each scheduled program's real file from your Jellyfin server at the live position, instead of NostalgiaTV's re-encoded broadcast feed.
   - It joins mid-program and rolls into the next show automatically.
   - Channel up/down works with the keyboard or the on-screen buttons.
@@ -120,21 +121,18 @@ Prefer not to install? Download **`SlopfinApp-win-Portable.zip`**, extract it, a
 
 **Uninstall:** Windows Settings → Apps → Slopfin → Uninstall. Your settings and saved sign-ins stay in `%LOCALAPPDATA%\Slopfin`. Delete that folder too if you want everything gone.
 
-### Linux (early beta)
+### Linux
 
-> [!CAUTION]
-> The Linux version is **very buggy** right now. It has only been tested on a few machines (most
-> thoroughly on Ubuntu 26.04 with GNOME and an AMD graphics card). Other desktops (KDE, XFCE…),
-> NVIDIA and Intel graphics, and multi-monitor setups are untested. If you try it, please
-> [report how it went](#-testers-wanted).
+So far the Linux version has been tested mainly on Ubuntu 26.04 with GNOME and an AMD graphics
+card. If you're on something else, please [report how it went](#-testers-wanted).
 
 1. Download **`SlopfinApp.AppImage`** from the [latest release](https://github.com/devall96/Slopfin/releases/latest) and put it wherever you keep apps, for example `~/Applications`.
 2. Make it executable: right-click → Properties → *Allow executing file as program*, or run `chmod +x SlopfinApp.AppImage`.
 3. Double-click it. On first run, Slopfin offers to **add itself to your applications menu**, with its icon. This is also in **Settings → Desktop**. Nothing is installed system-wide and no root is needed.
 
-VLC is built in, so you don't need to install anything else. It runs on any 64-bit distro from about 2022 onwards: Ubuntu 22.04+, Debian 12+, Fedora, Arch and their derivatives.
+mpv is built in, so you don't need to install anything else. It runs on 64-bit distros from 2024 onwards: Ubuntu 24.04+, Debian 13+, Fedora 40+, Arch and their derivatives.
 
-*If double-clicking does nothing,* your distro may be missing FUSE 2, which AppImages use. Install `libfuse2` (Ubuntu/Debian: `sudo apt install libfuse2t64`, or `libfuse2` on older releases) or run `./SlopfinApp.AppImage --appimage-extract-and-run`.
+*If double-clicking does nothing,* your distro may be missing FUSE 2, which AppImages use. Install `libfuse2` (Ubuntu/Debian: `sudo apt install libfuse2t64`) or run `./SlopfinApp.AppImage --appimage-extract-and-run`.
 
 **Uninstall:** in **Settings → Desktop**, press *Remove from menu*, then delete the AppImage. Settings and the image cache live in `~/.local/share/Slopfin` and `~/.cache/Slopfin`. Saved sign-ins are in your keyring under "Slopfin".
 
@@ -190,7 +188,7 @@ Slopfin contains **no telemetry, analytics, crash reporting, ads or tracking**. 
 Other privacy details:
 - Servers see the device as "Slopfin (Windows)" or "Slopfin (Linux)", never your PC's name.
 - Images only load from the servers you configured.
-- VLC's online metadata lookups are disabled.
+- The player runs sealed off: it ignores any mpv config or scripts on your PC, never looks links up through youtube-dl, saves no watch history of its own, and identifies itself only as "Slopfin".
 - Diagnostic logs stay on your PC and have tokens masked.
 - Even the build process has Avalonia's build statistics turned off.
 
@@ -198,15 +196,15 @@ Other privacy details:
 > requested by the user or the person installing or operating it.
 
 ## Known limitations (0.1.0 beta)
-- **Both platforms are beta.** Expect bugs, and please report them.
-- **Linux is early beta and very buggy.** Known rough spots so far:
-  - It's untested on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
+- **Both platforms are beta.** Expect some bugs, and please report them.
+- **Linux:**
+  - It's untested so far on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
+  - HDR is tone-mapped to SDR. Slopfin's window runs through X11 (XWayland on Wayland desktops), which has no HDR path yet. The badge says so.
   - The player's on-screen controls are a separate window drawn over the video. Some desktops may place it wrongly, especially when switching in and out of full screen.
-  - To avoid a garbled picture with newer graphics drivers, video frames are copied once after hardware decoding. This uses some extra CPU at 4K.
-- **Dolby Vision profile 5** files (no HDR10 fallback) show wrong colours in VLC 3. Slopfin warns you about these files.
+  - The AppImage carries mpv 0.37 (from Ubuntu 24.04); Windows builds use mpv 0.42.
+  - If your desktop has no keyring at all, sign-ins are kept in a file only your user can read.
 - **Atmos and DTS:X** are decoded to PCM. Height channels need a receiver, and audio passthrough isn't available yet.
 - Not code-signed yet, so SmartScreen shows a warning on first install.
-- **Linux:** HDR video is tone-mapped to SDR, because VLC 3 has no HDR output on Linux. The badge says so. If your desktop has no keyring at all, sign-ins are kept in a file only your user can read.
 - Windows and Linux for now. The code is structured for Android TV and iOS versions later.
 
 ## Building from source
@@ -216,13 +214,19 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/).
 ```bash
 git clone https://github.com/devall96/Slopfin.git
 cd Slopfin
+```
+
+**Windows:** fetch libmpv once (a pinned, hash-checked build), then run:
+
+```bash
+powershell -ExecutionPolicy Bypass -File get-libmpv.ps1
 dotnet run --project src/Slopfin.Desktop
 ```
 
-On Linux, install VLC first (e.g. `sudo apt install vlc`). Source builds use the system's VLC; only the AppImage bundles its own.
+**Linux:** install libmpv from your distro (Ubuntu/Debian `sudo apt install libmpv2`, Fedora `sudo dnf install mpv-libs`, Arch `sudo pacman -S mpv`), then `dotnet run --project src/Slopfin.Desktop`. Source builds use the system's libmpv; only the AppImage bundles its own.
 
 The Linux AppImage is built by the **Linux AppImage** GitHub Actions workflow
-(`.github/workflows/linux.yml`). It bundles libVLC, then decodes H.264, 4K HEVC 10-bit and AV1
+(`.github/workflows/linux.yml`). It bundles libmpv, then decodes H.264, 4K HEVC 10-bit and AV1
 test clips on clean Ubuntu, Debian, Fedora and Arch machines before anything is published.
 
 To build a Windows release (installer, portable zip and update packages in `releases\`):
@@ -240,9 +244,9 @@ powershell -ExecutionPolicy Bypass -File build-release.ps1
 ```
 src/
   Slopfin.Core      Platform-neutral: Jellyfin / Seerr / NostalgiaTV clients, models, settings, account vault
-  Slopfin.UI        Avalonia views + view models, themes, image cache, VLC player (shared by every platform)
+  Slopfin.UI        Avalonia views + view models, themes, image cache, mpv player (shared by every platform)
   Slopfin.Desktop   Windows + Linux app: window, secure storage (DPAPI / keyring), HDR detection,
-                    libVLC loading, applications-menu entry, installer/updater hooks
+                    libmpv loading, applications-menu entry, installer/updater hooks
 ```
 
 ## Code signing policy
@@ -261,5 +265,5 @@ components and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY
 **Name and logo:** the "Slopfin" name and fin logo identify this project. Forks are welcome under the
 GPL, but please use a different name and icon for your own builds.
 
-Slopfin is an independent project. It is not affiliated with or endorsed by Jellyfin, VideoLAN,
-Seerr, TMDB or NostalgiaTV.
+Slopfin is an independent project. It is not affiliated with or endorsed by Jellyfin, the mpv
+project, Seerr, TMDB or NostalgiaTV.

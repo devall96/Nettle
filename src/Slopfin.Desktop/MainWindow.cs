@@ -48,7 +48,7 @@ internal sealed class MainWindow : Window, IWindowHost
 
     public HdrDisplayState GetHdrState()
     {
-        // Linux: libVLC 3 always tone-maps HDR to SDR there, whatever the display can do.
+        // Linux: Slopfin's window goes through XWayland/X11, which has no HDR path, so mpv tone-maps to SDR.
         if (!OperatingSystem.IsWindows()) return HdrDisplayState.Sdr;
         var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         return hwnd == IntPtr.Zero ? HdrDisplayState.Unknown : DisplayHdr.ForWindow(hwnd);
@@ -56,11 +56,10 @@ internal sealed class MainWindow : Window, IWindowHost
 
     // ---------- Linux: keep the player's overlay window lined up ----------
     // The player's controls live in a separate transparent window over the video (that's how
-    // LibVLCSharp draws UI above native video). Desktop shells keep ordinary windows out of the
+    // UI goes above native video, see VideoSurface). Desktop shells keep ordinary windows out of the
     // dock / top-bar area, so in full screen GNOME pushed that overlay right and down by the dock
     // and bar size, cutting the controls off at the right edge. Fix: while the main window is
     // full screen, the overlay is made full screen too (shells allow that), and restored after.
-    // Also, if the shell moved our window without telling Avalonia, re-sync its position.
 
     private Avalonia.Threading.DispatcherTimer? _linuxSync;
 
@@ -73,35 +72,40 @@ internal sealed class MainWindow : Window, IWindowHost
             Avalonia.Threading.DispatcherTimer.RunOnce(SyncLinuxWindows, TimeSpan.FromMilliseconds(120));
             Avalonia.Threading.DispatcherTimer.RunOnce(SyncLinuxWindows, TimeSpan.FromMilliseconds(600));
         }
-        if (change.Property == WindowStateProperty)
-        {
-            // The overlay can appear after the state change (player opening), so keep checking while full screen.
-            _linuxSync ??= new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(700), Avalonia.Threading.DispatcherPriority.Background, (_, _) => SyncLinuxWindows());
-            if (IsFullScreen) _linuxSync.Start(); else _linuxSync.Stop();
-        }
+        // Overlays appear and window states change from outside (keyboard shortcuts, the shell),
+        // so keep a cheap periodic check running while any overlay is around.
+        _linuxSync ??= new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(700), Avalonia.Threading.DispatcherPriority.Background, (_, _) => SyncLinuxWindows());
+        if (!_linuxSync.IsEnabled) _linuxSync.Start();
+    }
+
+    /// <summary>
+    /// True when the window really covers its whole screen. Avalonia reports "Maximized" for a
+    /// window that is both maximized and full screen (GNOME keeps both flags), so the state
+    /// alone can't be trusted on Linux.
+    /// </summary>
+    private bool CoversScreen()
+    {
+        if (WindowState == WindowState.FullScreen) return true;
+        var screen = Screens.ScreenFromWindow(this);
+        if (screen == null) return false;
+        var size = PixelSize.FromSize(ClientSize, RenderScaling);
+        return size.Width >= screen.Bounds.Width && size.Height >= screen.Bounds.Height;
     }
 
     private void SyncLinuxWindows()
     {
-        var handle = TryGetPlatformHandle();
-        if (handle?.HandleDescriptor == "XID" && Linux.X11.TryGetRootPosition(handle.Handle) is { } real && real != Position)
-        {
-            Slopfin.Core.Services.Log.Info($"window position resync {Position} -> {real}");
-            Position = real;
-        }
-
-        var wanted = IsFullScreen ? WindowState.FullScreen : WindowState.Normal;
+        var wanted = CoversScreen() ? WindowState.FullScreen : WindowState.Normal;
         foreach (var overlay in OwnedWindows)
         {
             if (!overlay.IsVisible) continue;
-            // LibVLCSharp creates the overlay fixed-size; window managers refuse to make
+            // Window managers refuse to make
             // fixed-size windows full screen, so allow resizing first (it has no frame anyway).
             if (wanted == WindowState.FullScreen && !overlay.CanResize) overlay.CanResize = true;
             if (overlay.WindowState != wanted) overlay.WindowState = wanted;
         }
     }
 
-    public bool IsFullScreen => WindowState == WindowState.FullScreen;
+    public bool IsFullScreen => WindowState == WindowState.FullScreen || (OperatingSystem.IsLinux() && CoversScreen());
 
     public void SetFullScreen(bool on)
     {
@@ -113,6 +117,9 @@ internal sealed class MainWindow : Window, IWindowHost
         }
         else
         {
+            // Linux: a window can be full screen while Avalonia reports "Maximized"; pass through
+            // FullScreen first so the change back actually clears the full-screen flag.
+            if (WindowState != WindowState.FullScreen) WindowState = WindowState.FullScreen;
             WindowState = _restoreState == WindowState.FullScreen ? WindowState.Normal : _restoreState;
         }
     }
