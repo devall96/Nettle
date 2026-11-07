@@ -25,6 +25,15 @@ and credits, multiple profiles, and eight hand-made themes. It has **no telemetr
 > [!NOTE]
 > **Slopfin is in beta on Windows and Linux.** It works well on the machines it has been tested
 > on, but it hasn't been tried on much other hardware yet, so expect some rough edges.
+>
+> **Entirely AI-coded, single-user tested.** All of Slopfin's code was written by an AI coding
+> assistant (Anthropic's Claude), directed and reviewed by one person. So far it has been tested by
+> that one person, on one Windows PC and one Ubuntu PC. That's why [testers are wanted](#-testers-wanted).
+
+> [!IMPORTANT]
+> **Not to be confused with [BeLikeBrett/SlopFin](https://github.com/BeLikeBrett/SlopFin),** a
+> Jellyfin client for jailbroken PS5 consoles. That's a different project, by a different author,
+> for different platforms. This Slopfin is unrelated to it.
 
 ## 🧪 Testers wanted
 
@@ -267,3 +276,10 @@ GPL, but please use a different name and icon for your own builds.
 
 Slopfin is an independent project. It is not affiliated with or endorsed by Jellyfin, the mpv
 project, Seerr, TMDB or NostalgiaTV.
+
+**Unrelated project with a similar name:** Slopfin is unrelated to
+[BeLikeBrett/SlopFin](https://github.com/BeLikeBrett/SlopFin), a Jellyfin client for jailbroken PS5
+consoles. That's a different project, by a different author, for different platforms.
+
+**How it was made:** Slopfin's code is entirely AI-written (Anthropic's Claude), directed, reviewed and
+tested by a single person.
