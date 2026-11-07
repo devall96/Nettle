@@ -26,6 +26,21 @@
       </StackPanel>
     </Grid>
 
+    <!-- One-time "add to applications menu?" card (Linux AppImage) -->
+    <Border IsVisible="{Binding IsMenuPromptVisible}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,32,32"
+            MaxWidth="400" Background="{DynamicResource SurfaceHighBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
+            CornerRadius="16" Padding="22,18" BoxShadow="0 16 40 0 #80000000">
+      <StackPanel Spacing="10">
+        <TextBlock Text="Add Slopfin to your applications menu?" FontWeight="SemiBold" FontSize="16" TextWrapping="Wrap" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="So you can launch it like any other app, with its icon. Nothing is installed system-wide, and you can remove it in Settings." />
+        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,6,0,0">
+          <Button Classes="primary" Content="Add to menu" Command="{Binding AcceptMenuPromptCommand}" />
+          <Button Content="Not now" Command="{Binding DeclineMenuPromptCommand}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
     <!-- Toast -->
     <Border IsVisible="{Binding IsToastVisible}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,48"
             Background="{DynamicResource SurfaceHighBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"

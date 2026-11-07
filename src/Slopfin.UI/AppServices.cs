@@ -19,6 +19,8 @@ public static class AppServices
     public static ISecureStore Secure { get; private set; } = null!;
     public static IWindowHost? Window { get; set; }
     public static IUpdater? Updater { get; set; }
+    /// <summary>Applications-menu integration (Linux AppImage); null where the installer already handles it.</summary>
+    public static IDesktopIntegration? Desktop { get; set; }
     public static SettingsStore Settings { get; private set; } = null!;
     public static AccountStore Accounts { get; private set; } = null!;
     public static JellyfinClient Jellyfin { get; private set; } = null!;
@@ -81,6 +83,19 @@ public interface IWindowHost
 }
 
 public enum HdrDisplayState { Unknown, Sdr, Hdr }
+
+/// <summary>
+/// Adds Slopfin to the desktop's applications menu (Linux: a .desktop entry + icon in the user's
+/// own ~/.local/share). Only ever done when the user asks.
+/// </summary>
+public interface IDesktopIntegration
+{
+    bool IsInMenu { get; }
+    /// <summary>True when it's worth asking on first run (running as the downloaded AppImage).</summary>
+    bool OfferOnFirstRun { get; }
+    void AddToMenu();
+    void RemoveFromMenu();
+}
 
 /// <summary>
 /// App updates (Windows: Velopack). Never contacts anything unless the user presses

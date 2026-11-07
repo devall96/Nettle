@@ -38,7 +38,9 @@ internal sealed class VelopackUpdater : IUpdater
     public async Task<string?> CheckAsync(string source, CancellationToken ct = default)
     {
         _mgr = Create(source);
-        if (!_mgr.IsInstalled) throw new InvalidOperationException("Updates work in the installed app (Slopfin Setup), not a copied folder.");
+        if (!_mgr.IsInstalled) throw new InvalidOperationException(OperatingSystem.IsWindows()
+            ? "Updates work in the installed app (Slopfin Setup), not a copied folder."
+            : "Updates work in the Slopfin AppImage, not an extracted or source build.");
         Slopfin.Core.Services.Log.Info("update check requested by user");
         _pending = await _mgr.CheckForUpdatesAsync().ConfigureAwait(false);
         return _pending?.TargetFullRelease.Version.ToString();

@@ -1,11 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Windows head: window chrome, DPAPI secure storage, bundled libVLC binaries. -->
+  <!-- Desktop head for Windows (win-x64) and Linux (linux-x64): window chrome, secure storage, libVLC loading. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>Slopfin</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\slopfin.ico</ApplicationIcon>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+    <!-- Default to the machine we're building on; `-r linux-x64` / `-r win-x64` overrides. -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <TieredPGO>true</TieredPGO>
     <ServerGarbageCollector>false</ServerGarbageCollector>
@@ -20,6 +23,10 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
     <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <!-- Windows: libVLC comes from NuGet. Linux: the AppImage build bundles it (see .github/linux). -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
   </ItemGroup>
 
@@ -31,5 +38,7 @@
     <None Include="..\..\THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
     <!-- Slopfin's own icon (original artwork), embedded so the window/taskbar icon can't fail to load. -->
     <EmbeddedResource Include="Assets\slopfin.ico" LogicalName="slopfin.ico" />
+    <!-- 256px PNG of the same icon: Linux window icon + applications-menu icon. -->
+    <EmbeddedResource Include="Assets\slopfin.png" LogicalName="slopfin.png" />
   </ItemGroup>
 </Project>

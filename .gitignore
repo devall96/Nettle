@@ -8,6 +8,7 @@
 
 !/.gitignore
 !/.githooks/
+!/.github/
 !/src/
 !/docs/
 !/README.md

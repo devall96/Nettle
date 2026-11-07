@@ -211,6 +211,17 @@
         </StackPanel>
       </Border>
 
+      <!-- Desktop (Linux: applications menu entry) -->
+      <Border Classes="panel" IsVisible="{Binding HasDesktopIntegration}">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="DESKTOP" />
+          <TextBlock Text="{Binding AppMenuStatus}" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Adds a launcher with Slopfin's icon to your desktop's app menu, for your user only. If you move the Slopfin file later, the launcher follows it the next time you open Slopfin." />
+          <Button Content="{Binding AppMenuButtonText}" Command="{Binding ToggleAppMenuCommand}" HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+
       <!-- Updates -->
       <Border Classes="panel">
         <StackPanel Spacing="10">

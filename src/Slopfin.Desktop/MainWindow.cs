@@ -37,7 +37,8 @@ internal sealed class MainWindow : Window, IWindowHost
     {
         try
         {
-            using var s = typeof(MainWindow).Assembly.GetManifestResourceStream("slopfin.ico");
+            // Windows wants the multi-size .ico; X11 window managers take a plain PNG.
+            using var s = typeof(MainWindow).Assembly.GetManifestResourceStream(OperatingSystem.IsWindows() ? "slopfin.ico" : "slopfin.png");
             if (s != null) return new WindowIcon(s);
             Slopfin.Core.Services.Log.Warn("window icon resource missing");
         }
@@ -47,6 +48,8 @@ internal sealed class MainWindow : Window, IWindowHost
 
     public HdrDisplayState GetHdrState()
     {
+        // Linux has no reliable desktop-wide way to ask yet, so HDR badges say "couldn't confirm".
+        if (!OperatingSystem.IsWindows()) return HdrDisplayState.Unknown;
         var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         return hwnd == IntPtr.Zero ? HdrDisplayState.Unknown : DisplayHdr.ForWindow(hwnd);
     }

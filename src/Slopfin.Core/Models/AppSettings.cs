@@ -48,6 +48,9 @@ public sealed class AppSettings
 
     /// <summary>Privacy: allow Requests posters to load directly from image.tmdb.org (third party).</summary>
     public bool AllowDirectTmdbImages { get; set; }
+
+    /// <summary>Linux: the one-time "add to applications menu?" question has been answered.</summary>
+    public bool MenuPromptAnswered { get; set; }
 }
 
 /// <summary>A remembered sign-in. Stored only inside the encrypted secure store.</summary>

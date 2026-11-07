@@ -1,18 +1,21 @@
 using Avalonia;
+using Slopfin.Core.Platform;
+using Slopfin.Desktop.Linux;
 using Slopfin.UI;
 
 namespace Slopfin.Desktop;
 
+/// <summary>Desktop head for Windows and Linux. Platform-specific pieces are picked at startup.</summary>
 internal static class Program
 {
     [STAThread]
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
         // Must run first: handles installer/updater lifecycle hooks (install, update, uninstall)
         // and exits immediately when invoked for one. No network access.
         Velopack.VelopackApp.Build().Run();
 
-        var platform = new WindowsPlatformInfo();
+        IPlatformInfo platform = OperatingSystem.IsWindows() ? new WindowsPlatformInfo() : new LinuxPlatformInfo();
         Directory.CreateDirectory(platform.DataDirectory);
         var crashLog = Path.Combine(platform.DataDirectory, "crash.log");
         // Crash details are redacted the same way as the diagnostic log (no tokens / API keys).
@@ -28,22 +31,41 @@ internal static class Program
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Slopfin.Core.Services.Log.Error("Unhandled", e.ExceptionObject as Exception);
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Slopfin.Core.Services.Log.Info($"Process exit (code {Environment.ExitCode})");
 
-        AppServices.Initialize(platform, new DpapiSecureStore(Path.Combine(platform.DataDirectory, "secure")));
+        // libVLC: Windows uses the bundled VideoLAN.LibVLC.Windows package; Linux has its own loader.
+        if (OperatingSystem.IsWindows()) LibVLCSharp.Shared.Core.Initialize();
+        else LinuxVlc.Initialize();
+
+        // CI / diagnostics: `Slopfin --selftest file...` decodes test files headlessly and exits.
+        var selfTest = Array.IndexOf(args, "--selftest");
+        if (selfTest >= 0) return LinuxVlc.SelfTest(args.Skip(selfTest + 1));
+
+        ISecureStore secure = OperatingSystem.IsWindows()
+            ? new DpapiSecureStore(Path.Combine(platform.DataDirectory, "secure"))
+            : new LinuxSecureStore(Path.Combine(platform.DataDirectory, "secure"));
+        AppServices.Initialize(platform, secure);
         App.CreateDesktopWindow = vm => new MainWindow(vm);
-        // Build-time: `Slopfin.exe --render-splash out.png` draws the installer splash art and exits.
+        // Build-time: `Slopfin --render-splash out.png` draws the installer splash art and exits.
         var splashArg = Array.IndexOf(args, "--render-splash");
         if (splashArg >= 0 && splashArg + 1 < args.Length) App.RenderSplashPath = Path.GetFullPath(args[splashArg + 1]);
         var bannerArg = Array.IndexOf(args, "--render-banner");
         if (bannerArg >= 0 && bannerArg + 1 < args.Length) App.RenderBannerPath = Path.GetFullPath(args[bannerArg + 1]);
         AppServices.Updater = new VelopackUpdater();
 
-        // Loads libvlc.dll from the bundled VideoLAN.LibVLC.Windows package.
-        LibVLCSharp.Shared.Core.Initialize();
+        if (OperatingSystem.IsLinux())
+        {
+            var desktop = new LinuxDesktopIntegration();
+            // Scriptable too: `Slopfin --add-to-menu` / `--remove-from-menu`, then exit.
+            if (args.Contains("--add-to-menu")) { desktop.AddToMenu(); return 0; }
+            if (args.Contains("--remove-from-menu")) { desktop.RemoveFromMenu(); return 0; }
+            desktop.RepairIfMoved();
+            AppServices.Desktop = desktop;
+        }
 
         try
         {
             var code = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             Slopfin.Core.Services.Log.Info($"Lifetime ended (code {code})");
+            return code;
         }
         catch (Exception ex)
         {
@@ -58,5 +80,7 @@ internal static class Program
             .UsePlatformDetect()
             .WithInterFont()
             .With(new Win32PlatformOptions { CompositionMode = new[] { Win32CompositionMode.WinUIComposition, Win32CompositionMode.RedirectionSurface } })
+            // Linux: WM_CLASS matches StartupWMClass in the menu entry, so docks group the window with its launcher.
+            .With(new X11PlatformOptions { WmClass = "Slopfin" })
             .LogToTrace();
 }

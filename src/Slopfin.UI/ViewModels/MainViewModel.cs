@@ -111,6 +111,46 @@ public sealed partial class MainViewModel : ViewModelBase
         Root = shell;
         OnPropertyChanged(nameof(Shell));
         _ = shell.InitializeAsync();
+        MaybeOfferMenuEntry();
+    }
+
+    // ---------- "Add to applications menu?" (Linux AppImage, asked once) ----------
+
+    [ObservableProperty] private bool _isMenuPromptVisible;
+
+    private async void MaybeOfferMenuEntry()
+    {
+        var d = AppServices.Desktop;
+        if (d == null || !d.OfferOnFirstRun || d.IsInMenu || AppServices.Settings.Current.MenuPromptAnswered) return;
+        await Task.Delay(1500); // let the home screen settle first
+        IsMenuPromptVisible = true;
+    }
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private async Task AcceptMenuPrompt()
+    {
+        IsMenuPromptVisible = false;
+        AppServices.Settings.Current.MenuPromptAnswered = true;
+        await AppServices.Settings.SaveAsync();
+        try
+        {
+            AppServices.Desktop?.AddToMenu();
+            Toast("Slopfin is now in your applications menu");
+        }
+        catch (Exception ex)
+        {
+            Slopfin.Core.Services.Log.Error("add to menu failed", ex);
+            Toast("Couldn't add Slopfin to the menu: " + ex.Message, 5000);
+        }
+    }
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private async Task DeclineMenuPrompt()
+    {
+        IsMenuPromptVisible = false;
+        AppServices.Settings.Current.MenuPromptAnswered = true;
+        await AppServices.Settings.SaveAsync();
+        Toast("You can add it any time in Settings → Desktop", 4000);
     }
 
     public void SwitchUser()

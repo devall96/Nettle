@@ -125,6 +125,30 @@ public sealed partial class SettingsViewModel : PageViewModel
 
     public bool NtvDirectPlay { get => P.NtvDirectPlay; set { P.NtvDirectPlay = value; Save(); OnPropertyChanged(); } }
 
+    // ---------- Desktop (Linux applications menu) ----------
+    public bool HasDesktopIntegration => AppServices.Desktop != null;
+    public bool IsInAppMenu => AppServices.Desktop?.IsInMenu == true;
+    public string AppMenuStatus => IsInAppMenu ? "Slopfin is in your applications menu." : "Slopfin isn't in your applications menu.";
+
+    [RelayCommand]
+    private void ToggleAppMenu()
+    {
+        var d = AppServices.Desktop;
+        if (d == null) return;
+        try
+        {
+            if (d.IsInMenu) d.RemoveFromMenu(); else d.AddToMenu();
+            S.MenuPromptAnswered = true;
+            Save();
+        }
+        catch (Exception ex) { AppServices.Main.Toast("Couldn't update the menu entry: " + ex.Message, 5000); }
+        OnPropertyChanged(nameof(IsInAppMenu));
+        OnPropertyChanged(nameof(AppMenuStatus));
+        OnPropertyChanged(nameof(AppMenuButtonText));
+    }
+
+    public string AppMenuButtonText => IsInAppMenu ? "Remove from menu" : "Add to applications menu";
+
     // ---------- Updates (opt-in, user-chosen source only) ----------
     public string UpdateSource { get => S.UpdateSource; set { S.UpdateSource = value?.Trim() ?? ""; Save(); OnPropertyChanged(); } }
     public bool AutoCheckUpdates { get => S.AutoCheckUpdates; set { S.AutoCheckUpdates = value; Save(); OnPropertyChanged(); } }
