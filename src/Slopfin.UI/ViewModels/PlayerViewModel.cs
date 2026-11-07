@@ -3,7 +3,6 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using LibVLCSharp.Shared;
 using Slopfin.Core.Models;
 using Slopfin.Core.Services;
 using Slopfin.UI.Playback;
@@ -29,15 +28,15 @@ public sealed partial class TrackOptionViewModel(PlayerViewModel owner, int id, 
 
 /// <summary>
 /// Player for both library items (direct play of the original file) and NostalgiaTV live
-/// channels. Position is polled on a UI timer (cheap, and avoids cross-thread churn from
-/// libVLC's event thread).
+/// channels, played by mpv. Position is polled on a UI timer from mpv's cached state (cheap,
+/// and never blocks on the player).
 /// </summary>
 public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 {
     private readonly MainViewModel _main;
     private readonly DispatcherTimer _tick;
     private readonly PlaybackSettings _settings = AppServices.Settings.Current.Playback;
-    private Media? _media;
+    private string? _currentUrl;
     private bool _disposed;
     private bool _wasFullScreen;
 
@@ -60,7 +59,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private int _channelIndex;
     private DateTime _bannerUntil;
 
-    public MediaPlayer MediaPlayer { get; }
+    public MpvPlayer Player { get; }
 
     [ObservableProperty] private string _title = "";
     [ObservableProperty] private string? _sourceLabel;
@@ -104,27 +103,27 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Pops up badges for what is ACTUALLY being output, verified at runtime:
-    ///  • resolution from the frames libVLC is really decoding,
-    ///  • HDR only if the file is HDR AND Windows reports this monitor in HDR mode,
-    ///  • premium audio only once an audio track is actually playing (stated as decoded).
+    ///  • resolution from the frames mpv is really decoding,
+    ///  • HDR only if the file is HDR AND mpv is sending an HDR (PQ/HLG) signal to the display
+    ///    AND (on Windows) the OS reports this monitor in HDR mode,
+    ///  • premium audio only once mpv is actually decoding an audio track (stated as decoded).
     /// </summary>
     private async Task ShowFormatBadgesAsync(int tuneVersion, int generation, int delayMs = 1500)
     {
         if (delayMs > 0) await Task.Delay(delayMs);
-        uint w = 0, h = 0;
-        bool decoded = false;
-        for (int i = 0; i < 6 && !decoded; i++)
+        int w = 0, h = 0;
+        for (int i = 0; i < 6 && w == 0; i++)
         {
             if (_disposed || tuneVersion != _tuneVersion || generation != _mediaGeneration) return;
-            try { decoded = MediaPlayer.Size(0, ref w, ref h) && w > 0; } catch { }
-            if (!decoded) await Task.Delay(500);
+            (w, h) = Player.VideoSize;
+            if (w == 0) await Task.Delay(500);
         }
-        if (!decoded) return; // no picture yet: claim nothing
+        if (w == 0) return; // no picture yet: claim nothing
 
         var badges = new List<FormatBadgeViewModel>();
         var video = _sourceStreams?.FirstOrDefault(s => s.Type == "Video");
 
-        var res = VideoFormat.Resolution((int)w);
+        var res = VideoFormat.Resolution(w);
         if (res is "4K" or "1440p" or "1080p")
             badges.Add(new FormatBadgeViewModel(res, $"{w}×{h} decoded", true));
 
@@ -132,16 +131,20 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         if (hdr != null)
         {
             var display = AppServices.Window?.GetHdrState() ?? HdrDisplayState.Unknown;
+            // What mpv is really sending to the screen: "pq" / "hlg" = HDR signal.
+            var target = await Task.Run(() => Player.GetProperty("video-target-params/gamma"));
+            bool hdrOut = target is "pq" or "hlg";
             bool isDv = hdr.StartsWith("Dolby Vision");
-            bool hlgBase = video?.VideoRangeType is "HLG" or "DOVIWithHLG";
-            string signal = hlgBase ? "HLG" : "HDR10";
+            string signal = target == "hlg" ? "HLG" : "HDR10 (PQ)";
             if (hdrWarning != null)
                 badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), hdrWarning, false));
-            else if (display == HdrDisplayState.Hdr)
+            else if (hdrOut && display != HdrDisplayState.Sdr)
                 badges.Add(isDv
-                    ? new FormatBadgeViewModel("DOLBY VISION", $"Output as {signal} (base layer) to your HDR display", true)
-                    : new FormatBadgeViewModel(hdr.ToUpperInvariant(), "HDR output active on this display", true));
-            else if (display == HdrDisplayState.Sdr)
+                    ? new FormatBadgeViewModel("DOLBY VISION", $"Dolby Vision picture data applied, output as {signal} to your HDR display", true)
+                    : new FormatBadgeViewModel(hdr.ToUpperInvariant(), $"HDR output active on this display ({signal})", true));
+            else if (display == HdrDisplayState.Hdr)
+                badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), "Your display is in HDR, but this is being tone-mapped to SDR", false));
+            else if (display == HdrDisplayState.Sdr || !OperatingSystem.IsWindows())
                 badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), OperatingSystem.IsWindows()
                     ? "Display is in SDR, so this is tone-mapped. Turn on Windows HDR for true HDR."
                     : "Tone-mapped to SDR (HDR output isn't available on Linux yet)", false));
@@ -149,9 +152,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), "Couldn't confirm your display's HDR mode", false));
         }
 
-        // Audio: only once libVLC has an audio track running.
-        bool audioPlaying = false;
-        try { audioPlaying = MediaPlayer.AudioTrack >= 0; } catch { }
+        // Audio: only once mpv is decoding an audio track.
+        bool audioPlaying = Player.HasActiveAudio;
         var audio = PickAudioStream();
         var audioLabel = VideoFormat.AudioLabel(audio);
         if (audioPlaying && audioLabel != null)
@@ -176,7 +178,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         IsFormatBadgesVisible = false;
     }
 
-    /// <summary>The audio stream libVLC most likely selected (preferred language, else default, else first).</summary>
+    /// <summary>The audio stream mpv most likely selected (preferred language, else default, else first).</summary>
     private MediaStream? PickAudioStream()
     {
         var audio = _sourceStreams?.Where(s => s.Type == "Audio").ToList();
@@ -192,31 +194,21 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private PlayerViewModel(MainViewModel main)
     {
         _main = main;
-        MediaPlayer = new MediaPlayer(PlaybackEngine.Vlc)
-        {
-            EnableHardwareDecoding = _settings.HardwareDecoding,
-            EnableKeyInput = false,
-            EnableMouseInput = false,
-        };
+        Player = PlaybackEngine.CreatePlayer(_settings.HardwareDecoding);
         _volume = Math.Clamp(_settings.Volume, 0, 125);
-        MediaPlayer.Volume = _volume;
-        MediaPlayer.EndReached += (_, _) => Dispatcher.UIThread.Post(OnEnded);
-        MediaPlayer.EncounteredError += (_, _) =>
+        Player.SetVolume(_volume);
+        Player.EndReached += () => Dispatcher.UIThread.Post(OnEnded);
+        Player.Error += reason =>
         {
             var tuneAtError = _tuneVersion;
-            Dispatcher.UIThread.Post(() => _ = OnVlcErrorAsync(tuneAtError));
+            Dispatcher.UIThread.Post(() => _ = OnPlaybackErrorAsync(tuneAtError, reason));
         };
-        MediaPlayer.Playing += (_, _) => Dispatcher.UIThread.Post(() =>
+        Player.Playing += () => Dispatcher.UIThread.Post(() =>
         {
             IsBuffering = false;
             LoadTracks();
             _ = ShowFormatBadgesAsync(_tuneVersion, _mediaGeneration);
         });
-        MediaPlayer.Buffering += (_, e) =>
-        {
-            var cache = e.Cache;
-            Dispatcher.UIThread.Post(() => IsBuffering = cache < 100f);
-        };
 
         _tick = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => OnTick());
         _tick.Start();
@@ -271,17 +263,15 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             _playSessionId = info.PlaySessionId;
 
             var url = jf.DirectStreamUrl(item.Id, source.Id, info.PlaySessionId);
-            var media = new Media(PlaybackEngine.Vlc, new Uri(url));
-            media.AddOption($":network-caching={_settings.NetworkCachingMs}");
-            if (startTicks is > 0) media.AddOption($":start-time={TimeSpan.FromTicks(startTicks.Value).TotalSeconds:0.###}".Replace(',', '.'));
-            if (!string.IsNullOrEmpty(_settings.PreferredAudioLanguage)) media.AddOption(":audio-language=" + _settings.PreferredAudioLanguage);
-            if (!string.IsNullOrEmpty(_settings.PreferredSubtitleLanguage)) media.AddOption(":sub-language=" + _settings.PreferredSubtitleLanguage);
-
-            // External subtitle files are fetched as-is (no burn-in, no conversion) and handed to libVLC.
-            foreach (var s in source.MediaStreams.Where(s => s.Type == "Subtitle" && s.IsExternal))
-                media.AddSlave(MediaSlaveType.Subtitle, 4, jf.ExternalSubtitleUrl(item.Id, source.Id!, s));
-
-            SwapMedia(media);
+            // External subtitle files are fetched as-is (no burn-in, no conversion) and handed to mpv.
+            SwapMedia(new MpvLoad
+            {
+                Url = url,
+                StartSeconds = startTicks is > 0 ? TimeSpan.FromTicks(startTicks.Value).TotalSeconds : null,
+                AudioLanguage = _settings.PreferredAudioLanguage,
+                SubtitleLanguage = _settings.PreferredSubtitleLanguage,
+                ExternalSubtitles = ExternalSubs(item.Id, source),
+            });
 
             await jf.ReportStartAsync(Progress(isPaused: false));
             _lastReport = DateTime.UtcNow;
@@ -295,6 +285,12 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             IsBuffering = false;
         }
     }
+
+    private static List<(string Url, string Title, string? Language)> ExternalSubs(string itemId, MediaSourceInfo source) =>
+        source.MediaStreams
+            .Where(s => s.Type == "Subtitle" && s.IsExternal)
+            .Select(s => (AppServices.Jellyfin.ExternalSubtitleUrl(itemId, source.Id!, s), s.DisplayTitle ?? s.Title ?? s.Language ?? "External", s.Language))
+            .ToList();
 
     private async Task FindNextEpisodeAsync(BaseItemDto ep)
     {
@@ -319,7 +315,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         ItemId = _item?.Id,
         MediaSourceId = _mediaSourceId,
         PlaySessionId = _playSessionId,
-        PositionTicks = TimeSpan.FromMilliseconds(Math.Max(0, MediaPlayer.Time)).Ticks,
+        PositionTicks = TimeSpan.FromMilliseconds(Math.Max(0, Player.TimeMs)).Ticks,
         IsPaused = isPaused,
         IsMuted = IsMuted,
         VolumeLevel = Volume,
@@ -399,10 +395,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _sourceStreams = null; // feed: no file metadata, so only verified resolution is badged
         _feedWatchStart = DateTime.UtcNow;
         LiveSourceLabel = "NostalgiaTV broadcast feed";
-        var media = new Media(PlaybackEngine.Vlc, new Uri(ch.StreamUrl));
-        media.AddOption($":network-caching={Math.Max(1500, _settings.NetworkCachingMs)}");
-        media.AddOption(":live-caching=1500");
-        SwapMedia(media);
+        SwapMedia(new MpvLoad { Url = ch.StreamUrl, CacheSeconds = 20 });
         UpdateLiveInfo();
     }
 
@@ -425,13 +418,14 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         var source = info.MediaSources.FirstOrDefault();
         if (source?.Id == null) throw new InvalidOperationException("No media source");
 
-        var media = new Media(PlaybackEngine.Vlc, new Uri(jf.DirectStreamUrl(itemId, source.Id, info.PlaySessionId)));
-        media.AddOption($":network-caching={_settings.NetworkCachingMs}");
-        if (offsetMs > 500) media.AddOption($":start-time={offsetMs / 1000.0:0.###}".Replace(',', '.'));
-        if (!string.IsNullOrEmpty(_settings.PreferredAudioLanguage)) media.AddOption(":audio-language=" + _settings.PreferredAudioLanguage);
-        if (!string.IsNullOrEmpty(_settings.PreferredSubtitleLanguage)) media.AddOption(":sub-language=" + _settings.PreferredSubtitleLanguage);
-        foreach (var s in source.MediaStreams.Where(s => s.Type == "Subtitle" && s.IsExternal))
-            media.AddSlave(MediaSlaveType.Subtitle, 4, jf.ExternalSubtitleUrl(itemId, source.Id, s));
+        var load = new MpvLoad
+        {
+            Url = jf.DirectStreamUrl(itemId, source.Id, info.PlaySessionId),
+            StartSeconds = offsetMs > 500 ? offsetMs / 1000.0 : null,
+            AudioLanguage = _settings.PreferredAudioLanguage,
+            SubtitleLanguage = _settings.PreferredSubtitleLanguage,
+            ExternalSubtitles = ExternalSubs(itemId, source),
+        };
 
         _liveSlot = slot;
         IsLiveDirect = true;
@@ -440,7 +434,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _sourceStreams = source.MediaStreams;
         var quality = VideoFormat.Resolution(v?.Width) ?? (slot.VideoResolution != null ? slot.VideoResolution + "p" : null);
         LiveSourceLabel = string.Join(" · ", new[] { "Original", quality, v?.Codec?.ToUpperInvariant(), VideoFormat.HdrLabel(v?.VideoRangeType, out _), "Direct play" }.Where(x => !string.IsNullOrEmpty(x)));
-        SwapMedia(media);
+        SwapMedia(load);
         UpdateLiveInfo();
     }
 
@@ -502,42 +496,20 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     // ===================== Common =====================
 
-    // Every libVLC call that can block (play/stop/seek/pause/dispose) runs on ONE ordered
-    // background queue. Running them on independent tasks let a fast channel change, a program
-    // rollover or closing the player free a Media while another call was still using it, which
-    // crashes natively. Serializing them makes those races impossible and keeps the UI thread free.
-    private readonly object _vlcGate = new();
-    private Task _vlcChain = Task.CompletedTask;
-
-    private void Vlc(string what, Action action)
+    // mpv's client API is thread-safe and "loadfile replace" atomically swaps files, so fast
+    // channel changes and program rollovers need no extra serialization (unlike libVLC).
+    private void SwapMedia(MpvLoad load)
     {
-        lock (_vlcGate)
-        {
-            _vlcChain = _vlcChain.ContinueWith(_ =>
-            {
-                try { action(); }
-                catch (Exception ex) { Slopfin.Core.Services.Log.Error($"vlc call '{what}' failed", ex); }
-            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
-        }
-    }
-
-    private void SwapMedia(Media media)
-    {
-        var old = _media;
-        _media = media;
+        if (_disposed) return;
+        _currentUrl = load.Url;
         _mediaGeneration++;
         AudioTracks.Clear();
         SubtitleTracks.Clear();
         _badgeHideCts?.Cancel();
         IsFormatBadgesVisible = false;
         FormatBadges.Clear();
-        Slopfin.Core.Services.Log.Info($"play {(IsLive ? (IsLiveDirect ? "live-direct" : "live-feed") : "vod")}: {Redact(media.Mrl)}");
-        Vlc("play", () =>
-        {
-            if (_disposed) { media.Dispose(); return; }
-            MediaPlayer.Play(media);
-            old?.Dispose(); // safe: the player has already switched to the new media
-        });
+        Slopfin.Core.Services.Log.Info($"play {(IsLive ? (IsLiveDirect ? "live-direct" : "live-feed") : "vod")}: {Redact(load.Url)}");
+        Player.Load(load);
     }
 
     /// <summary>Strips the access token from URLs before they reach the log.</summary>
@@ -547,7 +519,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private void OnTick()
     {
         if (_disposed) return;
-        IsPlaying = MediaPlayer.IsPlaying;
+        IsPlaying = Player.IsPlaying;
+        if (Error == null && LiveInterstitial == null) IsBuffering = Player.IsBuffering;
 
         if (IsOsdVisible && IsPlaying && !IsTracksOpen && (DateTime.UtcNow - _lastInput).TotalSeconds > 3.5)
             IsOsdVisible = false;
@@ -562,8 +535,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        long len = MediaPlayer.Length;
-        long time = MediaPlayer.Time;
+        long len = Player.LengthMs;
+        long time = Player.TimeMs;
         if (len > 0) LengthMs = len;
         if (!IsSeeking && time >= 0) SeekValue = time;
         var pos = TimeSpan.FromMilliseconds(Math.Max(0, IsSeeking ? SeekValue : time));
@@ -656,10 +629,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private void CheckFeedWatchdog()
     {
         if (_feedWatchStart is not { } started || IsLiveDirect) return;
-        uint w = 0, h = 0;
-        bool hasVideo = false;
-        try { hasVideo = MediaPlayer.Size(0, ref w, ref h) && w > 0; } catch { }
-        if (hasVideo) { _feedWatchStart = null; return; }
+        if (Player.VideoSize.Width > 0) { _feedWatchStart = null; return; }
         if ((DateTime.UtcNow - started).TotalSeconds < 15 || Error != null) return;
         _feedWatchStart = null;
         IsBuffering = false;
@@ -685,23 +655,23 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// libVLC raises an error for a stream that was abandoned mid-open (fast channel changes),
-    /// so errors are only surfaced if playback is genuinely dead a moment later, and a live
-    /// channel gets one silent retry before any message is shown.
+    /// Errors are only surfaced if playback is genuinely dead a moment later (a fast channel
+    /// change can abandon a stream mid-open), and a live channel gets one silent retry before
+    /// any message is shown.
     /// </summary>
-    private async Task OnVlcErrorAsync(int tuneAtError)
+    private async Task OnPlaybackErrorAsync(int tuneAtError, string reason)
     {
+        Slopfin.Core.Services.Log.Warn("playback error from mpv: " + reason);
         await Task.Delay(1200);
         if (_disposed || tuneAtError != _tuneVersion) return; // user already moved on
-        var state = MediaPlayer.State;
-        if (state is VLCState.Playing or VLCState.Opening or VLCState.Buffering or VLCState.Paused)
+        if (Player.IsPlaying || (Player.IsBuffering && !Player.HasEnded))
         {
-            Slopfin.Core.Services.Log.Info("ignored stale vlc error (player is healthy)");
+            Slopfin.Core.Services.Log.Info("ignored stale playback error (player is healthy)");
             return;
         }
 
         // Ask the server what went wrong so the message is actionable (and don't retry a missing file).
-        var status = await ProbeStatusAsync(_media?.Mrl);
+        var status = await ProbeStatusAsync(_currentUrl);
         if (_disposed || tuneAtError != _tuneVersion) return;
         string what = IsLive ? "this program" : "this item";
         if (status is 404 or 500 or 403)
@@ -755,8 +725,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private void TogglePlay()
     {
         ShowOsd();
-        if (MediaPlayer.State == VLCState.Ended && !IsLive) { SeekToMs(0); }
-        var willPause = MediaPlayer.IsPlaying;
+        if (Player.HasEnded && !IsLive && _item != null) { _ = StartItemAsync(_item, null, _mediaSourceId); return; }
+        var willPause = Player.IsPlaying;
         if (IsLive && IsLiveDirect)
         {
             if (willPause) _livePausedAt = DateTime.UtcNow;
@@ -767,7 +737,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 if ((DateTime.UtcNow - at).TotalSeconds > 3) { TuneTo(_channelIndex); return; }
             }
         }
-        Vlc("pause", () => MediaPlayer.SetPause(willPause));
+        Player.SetPause(willPause);
         IsPlaying = !willPause;
         if (!IsLive) _ = AppServices.Jellyfin.ReportProgressAsync(Progress(willPause));
     }
@@ -779,7 +749,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         if (IsLive) return;
         ShowOsd();
-        var target = Math.Clamp(MediaPlayer.Time + seconds * 1000L, 0, Math.Max(0, MediaPlayer.Length - 1000));
+        var target = Math.Clamp(Math.Max(0, Player.TimeMs) + seconds * 1000L, 0, Math.Max(0, Player.LengthMs - 1000));
         SeekToMs(target);
     }
 
@@ -787,8 +757,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         if (IsLive) return;
         SeekValue = ms;
-        var t = (long)ms;
-        Vlc("seek", () => MediaPlayer.Time = t);
+        Player.SeekTo((long)ms);
     }
 
     /// <summary>Called by the seek bar when the user releases it.</summary>
@@ -800,7 +769,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     partial void OnVolumeChanged(int value)
     {
-        MediaPlayer.Volume = value;
+        Player.SetVolume(value);
         _settings.Volume = value;
     }
 
@@ -808,7 +777,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private void ToggleMute()
     {
         IsMuted = !IsMuted;
-        MediaPlayer.Mute = IsMuted;
+        Player.SetMute(IsMuted);
     }
 
     [RelayCommand]
@@ -821,23 +790,27 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     private void LoadTracks()
     {
-        AudioTracks.Clear();
-        SubtitleTracks.Clear();
-        try
+        var generation = _mediaGeneration;
+        _ = Task.Run(Player.GetTracks).ContinueWith(task =>
         {
-            int curA = MediaPlayer.AudioTrack, curS = MediaPlayer.Spu;
-            foreach (var t in MediaPlayer.AudioTrackDescription)
-                if (t.Id >= 0) AudioTracks.Add(new TrackOptionViewModel(this, t.Id, t.Name ?? $"Track {t.Id}", true) { IsSelected = t.Id == curA });
-            foreach (var t in MediaPlayer.SpuDescription)
-                SubtitleTracks.Add(new TrackOptionViewModel(this, t.Id, t.Id < 0 ? "Off" : t.Name ?? $"Track {t.Id}", false) { IsSelected = t.Id == curS });
-        }
-        catch { }
+            if (task.IsFaulted || generation != _mediaGeneration || _disposed) return;
+            AudioTracks.Clear();
+            SubtitleTracks.Clear();
+            var tracks = task.Result;
+            foreach (var t in tracks.Where(t => t.Type == "audio"))
+                AudioTracks.Add(new TrackOptionViewModel(this, t.Id, t.Name, true) { IsSelected = t.Selected });
+            var subs = tracks.Where(t => t.Type == "sub").ToList();
+            SubtitleTracks.Add(new TrackOptionViewModel(this, -1, "Off", false) { IsSelected = !subs.Any(s => s.Selected) });
+            foreach (var t in subs)
+                SubtitleTracks.Add(new TrackOptionViewModel(this, t.Id, t.Name, false) { IsSelected = t.Selected });
+            Slopfin.Core.Services.Log.Info($"tracks: {AudioTracks.Count} audio ({AudioTracks.FirstOrDefault(a => a.IsSelected)?.Name ?? "none selected"}), {subs.Count} subtitle");
+        }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
     public void SelectTrack(TrackOptionViewModel t, bool audio)
     {
-        if (audio) { MediaPlayer.SetAudioTrack(t.Id); foreach (var a in AudioTracks) a.IsSelected = a == t; }
-        else { MediaPlayer.SetSpu(t.Id); foreach (var s in SubtitleTracks) s.IsSelected = s == t; }
+        Player.SelectTrack(audio ? "audio" : "sub", t.Id);
+        foreach (var o in audio ? AudioTracks : SubtitleTracks) o.IsSelected = o == t;
     }
 
     [RelayCommand]
@@ -915,16 +888,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         if (!IsLive) _ = ReportStoppedAsync();
         if (!_wasFullScreen) AppServices.Window?.SetFullScreen(false);
         _ = AppServices.Settings.SaveAsync();
-        var mp = MediaPlayer;
-        var media = _media;
-        _media = null;
         Slopfin.Core.Services.Log.Info("player closed");
-        // Queued after any pending play/seek, so nothing can touch the player once it's freed.
-        Vlc("dispose", () =>
-        {
-            try { mp.Stop(); } catch { }
-            mp.Dispose();
-            media?.Dispose();
-        });
+        // The video surface already shut mpv down synchronously if it was on screen; this
+        // covers a player that never got a surface. Terminate is idempotent.
+        Player.Dispose();
     }
 }

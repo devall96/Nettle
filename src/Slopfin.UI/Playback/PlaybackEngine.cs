@@ -1,49 +1,83 @@
-using LibVLCSharp.Shared;
-
 namespace Slopfin.UI.Playback;
 
 /// <summary>
-/// Single shared libVLC instance. libVLC decodes everything locally (hardware-accelerated when
-/// available), which is why Slopfin never needs the server to transcode.
+/// Creates mpv players with Slopfin's settings. mpv plays the original file and decodes it on
+/// this device (hardware-accelerated when available), which is why Slopfin never needs the
+/// server to transcode.
 /// </summary>
 public static class PlaybackEngine
 {
-    private static LibVLC? _vlc;
-    private static readonly object Gate = new();
+    /// <summary>Extra mpv options from the platform head (e.g. Windows HDR output), applied last.</summary>
+    public static IReadOnlyList<KeyValuePair<string, string>> PlatformOptions { get; set; } = [];
 
-    /// <summary>Extra libVLC options from the platform head (set before first use).</summary>
-    public static string[] PlatformOptions { get; set; } = [];
+    /// <summary>Options shared by every platform.</summary>
+    public static IEnumerable<KeyValuePair<string, string>> BaseOptions(bool hardwareDecoding)
+    {
+        KeyValuePair<string, string> O(string k, string v) => new(k, v);
 
-    public static LibVLC Vlc
+        // Privacy / isolation: never read the user's own mpv config or scripts, never resolve
+        // URLs through youtube-dl, never remember positions on disk, generic user agent.
+        yield return O("config", "no");
+        yield return O("load-scripts", "no");
+        yield return O("ytdl", "no");
+        yield return O("osc", "no");
+        yield return O("load-stats-overlay", "no");
+        yield return O("load-osd-console", "no");
+        yield return O("load-auto-profiles", "no");
+        yield return O("resume-playback", "no");
+        yield return O("save-position-on-quit", "no");
+        yield return O("user-agent", "Slopfin");
+        yield return O("audio-client-name", "Slopfin");
+
+        // Slopfin draws all UI and handles all input itself.
+        yield return O("input-default-bindings", "no");
+        yield return O("input-vo-keyboard", "no");
+        yield return O("input-cursor", "no");
+        yield return O("cursor-autohide", "no");
+        yield return O("osd-level", "0");
+        yield return O("terminal", "no");
+
+        // Playback behaviour.
+        yield return O("idle", "yes");
+        yield return O("keep-open", "no");
+        yield return O("sub-auto", "no");          // only subtitles from the server
+        yield return O("audio-file-auto", "no");
+        yield return O("volume-max", "130");
+        yield return O("hr-seek", "default");
+        yield return O("cache", "yes");
+        yield return O("demuxer-max-bytes", "400MiB");
+        yield return O("network-timeout", "30");
+        yield return O("vo", "gpu-next");
+        yield return O("hwdec", hardwareDecoding ? "auto-safe" : "no");
+        yield return O("video-sync", "display-resample"); // smooth motion, no 24p judder
+        yield return O("keepaspect-window", "no");
+    }
+
+    /// <summary>Uses an already-loaded libmpv (platform heads that bundle their own copy).</summary>
+    public static void UseLibrary(IntPtr handle) => Mpv.LibraryHandle = handle;
+
+    public static MpvPlayer CreatePlayer(bool hardwareDecoding) =>
+        new(BaseOptions(hardwareDecoding).Concat(PlatformOptions));
+
+    /// <summary>Loads libmpv off the UI thread so the first play is instant.</summary>
+    public static void Prewarm() => Task.Run(() =>
+    {
+        try { Mpv.EnsureResolver(); _ = Mpv.mpv_client_api_version(); }
+        catch (Exception ex) { Slopfin.Core.Services.Log.Error("libmpv failed to load", ex); }
+    });
+
+    /// <summary>libmpv's version string, e.g. "mpv v0.41.0" (null if it can't be loaded).</summary>
+    public static string? Version
     {
         get
         {
-            lock (Gate)
+            try
             {
-                if (_vlc != null) return _vlc;
-                _vlc = new LibVLC([.. PlatformOptions,
-                    "--no-video-title-show",
-                    "--no-snapshot-preview",
-                    "--no-stats",
-                    "--no-sub-autodetect-file",
-                    "--no-osd",
-                    "--http-reconnect",
-                    // Privacy: libVLC never looks up artwork/metadata online, and its Lua
-                    // extensions (online playlist resolvers, art finders) are disabled entirely.
-                    "--no-metadata-network-access",
-                    "--no-lua"]);
-                // Don't advertise the exact VLC build to servers.
-                _vlc.SetUserAgent("Slopfin", "Slopfin");
-                // Only errors go to Slopfin's diagnostic log.
-                _vlc.Log += (_, e) =>
-                {
-                    if (e.Level == LogLevel.Error) Slopfin.Core.Services.Log.Warn($"vlc/{e.Module}: {e.Message}");
-                };
-                return _vlc;
+                using var p = new MpvPlayer([new("config", "no"), new("vo", "null"), new("ao", "null")]);
+                p.Initialize(null);
+                return p.GetProperty("mpv-version");
             }
+            catch { return null; }
         }
     }
-
-    /// <summary>Warm up libVLC (loads its plugin cache) off the UI thread so first play is instant.</summary>
-    public static void Prewarm() => Task.Run(() => { _ = Vlc; });
 }

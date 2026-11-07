@@ -48,7 +48,7 @@ internal sealed class MainWindow : Window, IWindowHost
 
     public HdrDisplayState GetHdrState()
     {
-        // Linux: libVLC 3 always tone-maps HDR to SDR there, whatever the display can do.
+        // Linux: Slopfin's window goes through XWayland/X11, which has no HDR path, so mpv tone-maps to SDR.
         if (!OperatingSystem.IsWindows()) return HdrDisplayState.Sdr;
         var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         return hwnd == IntPtr.Zero ? HdrDisplayState.Unknown : DisplayHdr.ForWindow(hwnd);
@@ -56,7 +56,7 @@ internal sealed class MainWindow : Window, IWindowHost
 
     // ---------- Linux: keep the player's overlay window lined up ----------
     // The player's controls live in a separate transparent window over the video (that's how
-    // LibVLCSharp draws UI above native video). Desktop shells keep ordinary windows out of the
+    // UI goes above native video, see VideoSurface). Desktop shells keep ordinary windows out of the
     // dock / top-bar area, so in full screen GNOME pushed that overlay right and down by the dock
     // and bar size, cutting the controls off at the right edge. Fix: while the main window is
     // full screen, the overlay is made full screen too (shells allow that), and restored after.
@@ -94,7 +94,7 @@ internal sealed class MainWindow : Window, IWindowHost
         foreach (var overlay in OwnedWindows)
         {
             if (!overlay.IsVisible) continue;
-            // LibVLCSharp creates the overlay fixed-size; window managers refuse to make
+            // Window managers refuse to make
             // fixed-size windows full screen, so allow resizing first (it has no frame anyway).
             if (wanted == WindowState.FullScreen && !overlay.CanResize) overlay.CanResize = true;
             if (overlay.WindowState != wanted) overlay.WindowState = wanted;

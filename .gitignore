@@ -19,6 +19,7 @@
 !/Directory.Build.targets
 !/dotnet-tools.json
 !/build-release.ps1
+!/get-libmpv.ps1
 
 # Build output inside the allowed folders
 bin/

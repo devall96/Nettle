@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Desktop head for Windows (win-x64) and Linux (linux-x64): window chrome, secure storage, libVLC loading. -->
+  <!-- Desktop head for Windows (win-x64) and Linux (linux-x64): window chrome, secure storage, libmpv loading. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>Slopfin</AssemblyName>
@@ -14,9 +14,6 @@
     <ServerGarbageCollector>false</ServerGarbageCollector>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <!-- Only bundle the libVLC build matching our runtime (saves ~190 MB). -->
-    <VlcWindowsX86Enabled>false</VlcWindowsX86Enabled>
-    <VlcWindowsArm64Enabled>false</VlcWindowsArm64Enabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,10 +22,17 @@
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
-  <!-- Windows: libVLC comes from NuGet. Linux: the AppImage build bundles it (see .github/linux). -->
+  <!-- Windows: libmpv is a pinned, hash-checked download (get-libmpv.ps1), copied next to the app.
+       Linux: the AppImage build bundles libmpv (see .github/linux); source builds use the system's. -->
+  <PropertyGroup>
+    <LibmpvWin>$(MSBuildThisFileDirectory)..\..\deps\libmpv\win-x64\libmpv-2.dll</LibmpvWin>
+  </PropertyGroup>
   <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
-    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
+    <None Include="$(LibmpvWin)" Link="libmpv-2.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('$(LibmpvWin)')" />
   </ItemGroup>
+  <Target Name="CheckLibmpv" BeforeTargets="Build" Condition="$(RuntimeIdentifier.StartsWith('win')) and !Exists('$(LibmpvWin)')">
+    <Error Text="libmpv isn't downloaded yet. Run once from the repository root:  powershell -ExecutionPolicy Bypass -File get-libmpv.ps1" />
+  </Target>
 
   <ItemGroup>
     <ProjectReference Include="..\Slopfin.UI\Slopfin.UI.csproj" />

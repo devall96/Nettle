@@ -5,29 +5,24 @@ public static class VideoFormat
 {
     /// <summary>
     /// Maps Jellyfin's VideoRangeType to a badge. Returns null for SDR / unknown.
-    /// <paramref name="warning"/> is set for formats libVLC 3 can't render correctly.
+    /// <paramref name="warning"/> is set for formats the player can't render correctly (none
+    /// currently: mpv applies Dolby Vision metadata itself, including profile 5).
     /// </summary>
     public static string? HdrLabel(string? rangeType, out string? warning)
     {
         warning = null;
-        switch (rangeType)
+        return rangeType switch
         {
-            case "HDR10": return "HDR10";
-            case "HDR10Plus": return "HDR10+";
-            case "HLG": return "HLG";
-            case "DOVIWithHDR10":
-            case "DOVIWithHDR10Plus":
-            case "DOVIWithHLG":
-            case "DOVIWithSDR":
-                return "Dolby Vision";
-            case "DOVI":
-                // Profile 5 (no HDR10/SDR fallback layer): VLC 3 shows incorrect colours.
-                warning = "Dolby Vision profile 5 has no HDR10 fallback, so colours may look wrong (purple/green) in this player.";
-                return "Dolby Vision 5";
-            default:
-                return null;
-        }
+            "HDR10" => "HDR10",
+            "HDR10Plus" => "HDR10+",
+            "HLG" => "HLG",
+            "DOVI" or "DOVIWithHDR10" or "DOVIWithHDR10Plus" or "DOVIWithHLG" or "DOVIWithSDR" => "Dolby Vision",
+            _ => null,
+        };
     }
+
+    /// <summary>True for Dolby Vision profile 5 (no HDR10/SDR fallback layer).</summary>
+    public static bool IsDolbyVisionOnly(string? rangeType) => rangeType == "DOVI";
 
     /// <summary>Premium audio format name for a badge, or null for ordinary stereo/AAC etc.</summary>
     public static string? AudioLabel(MediaStream? a)

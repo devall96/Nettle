@@ -32,7 +32,7 @@ public static class Log
         "(?i)(api_?key|token|x-emby-token|access_?token)([=:\"\\s]+)[A-Za-z0-9._-]{8,}",
         System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    /// <summary>Masks access tokens / API keys anywhere in a message (including URLs from libVLC).</summary>
+    /// <summary>Masks access tokens / API keys anywhere in a message (including URLs from the player).</summary>
     public static string Redact(string? text) => string.IsNullOrEmpty(text) ? "" : Secrets.Replace(text, "$1$2***");
 
     private static void Write(string level, string msg)
