@@ -41,7 +41,7 @@ public sealed partial class ShellViewModel : ViewModelBase
     public string ServerName => AppServices.Session.Current?.ServerName ?? "";
     public string? AvatarUrl => AppServices.Jellyfin.UserImageUrl(AppServices.Session.Current?.UserId, AppServices.Session.Current?.AvatarTag, 120);
     public bool CanGoBack => _back.Count > 0;
-    public string VersionText => $"v{AppServices.Version} test build";
+    public string VersionText => $"build {AppServices.Version}";
 
     private readonly HomeViewModel _home = new();
 
