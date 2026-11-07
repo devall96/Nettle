@@ -75,9 +75,19 @@ internal sealed class DpapiSecureStore : ISecureStore
             var plain = ProtectedData.Unprotect(data, Entropy, DataProtectionScope.CurrentUser);
             return Encoding.UTF8.GetString(plain);
         }
-        catch (CryptographicException)
+        catch (CryptographicException ex)
         {
-            return null; // created by another Windows user / machine
+            // Made by another Windows account / PC, or this account's keys were reset. It reads as
+            // "nothing saved", and the next save would overwrite it: keep the encrypted file first,
+            // so it can still be recovered if the old Windows profile comes back.
+            try
+            {
+                var keep = $"{p}.undecryptable-{DateTime.Now:yyyyMMdd-HHmmss}";
+                File.Copy(p, keep, overwrite: false);
+                Nettle.Core.Services.Log.Warn($"a saved secret couldn't be decrypted ({ex.Message}); kept as {Path.GetFileName(keep)}");
+            }
+            catch (IOException) { /* a copy from this second already exists */ }
+            return null;
         }
     }
 
@@ -94,5 +104,27 @@ internal sealed class DpapiSecureStore : ISecureStore
     {
         try { File.Delete(PathFor(key)); } catch { }
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Windows: keeps the display and system awake while video plays. mpv already does this for its
+/// own window; asking here too covers every playback path (and costs nothing).
+/// Must be called on the same thread each time (the UI thread): the request is per-thread.
+/// </summary>
+internal sealed class WindowsKeepAwake : Nettle.UI.IKeepAwake
+{
+    private const uint EsContinuous = 0x80000000, EsSystemRequired = 0x00000001, EsDisplayRequired = 0x00000002;
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint SetThreadExecutionState(uint flags);
+
+    private bool _on;
+
+    public void SetActive(bool on)
+    {
+        if (on == _on) return;
+        _on = on;
+        SetThreadExecutionState(on ? EsContinuous | EsSystemRequired | EsDisplayRequired : EsContinuous);
     }
 }

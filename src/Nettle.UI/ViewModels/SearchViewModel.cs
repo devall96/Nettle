@@ -13,6 +13,17 @@ public sealed partial class SearchViewModel : PageViewModel
     [ObservableProperty] private bool _noResults;
     private CancellationTokenSource? _cts;
 
+    private const int PerKind = 24;
+    private static readonly (string Title, string Type, CardShape Shape)[] Kinds =
+    [
+        ("Movies", "Movie", CardShape.Poster),
+        ("Shows", "Series", CardShape.Poster),
+        ("Episodes", "Episode", CardShape.Landscape),
+        ("Collections", "BoxSet", CardShape.Poster),
+        ("Music videos", "MusicVideo", CardShape.Landscape),
+        ("Videos", "Video", CardShape.Landscape),
+    ];
+
     public bool SeerrAvailable => AppServices.Seerr.IsConfigured;
 
     partial void OnQueryChanged(string value) => _ = DebouncedSearchAsync(value);
@@ -33,29 +44,37 @@ public sealed partial class SearchViewModel : PageViewModel
 
         await RunAsync(async () =>
         {
+            // One query per kind, in parallel: a single mixed query lets a common word fill the
+            // whole limit with episodes and push every movie and show out of the results.
             var jf = AppServices.Jellyfin;
-            var res = await jf.GetItemsAsync(new ItemQuery
+            var term = text.Trim();
+            var rows = Kinds.Select(k => (kind: k, task: jf.GetItemsAsync(new ItemQuery
             {
-                SearchTerm = text.Trim(),
-                IncludeItemTypes = "Movie,Series,Episode,BoxSet,MusicVideo,Video",
+                SearchTerm = term,
+                IncludeItemTypes = k.Type,
                 Recursive = true,
                 SortBy = null,
                 SortOrder = null,
-                Limit = 60,
-            }, cts.Token);
+                Limit = PerKind,
+            }, cts.Token))).ToList();
+
+            var built = new List<CardRowViewModel>();
+            ApiException? failure = null;
+            int failed = 0;
+            foreach (var (kind, task) in rows)
+            {
+                Nettle.Core.Models.QueryResult<Nettle.Core.Models.BaseItemDto> res;
+                try { res = await task; }
+                catch (ApiException ex) { failure = ex; failed++; continue; } // one kind failing shouldn't hide the others
+                catch (OperationCanceledException) { continue; } // a newer search took over; still await the rest
+                var items = res.Items.Where(i => i.Type == kind.Type).Select(i => new MediaCardViewModel(i, kind.Shape, true)).ToList();
+                if (items.Count > 0) built.Add(new CardRowViewModel(kind.Title, items));
+            }
             if (cts.IsCancellationRequested) return;
+            if (failed == rows.Count && failure != null) throw failure; // server unreachable: show the error, not "no results"
 
             Results.Clear();
-            void AddRow(string title, string type, CardShape shape)
-            {
-                var items = res.Items.Where(i => i.Type == type).Select(i => new MediaCardViewModel(i, shape, true)).ToList();
-                if (items.Count > 0) Results.Add(new CardRowViewModel(title, items));
-            }
-            AddRow("Movies", "Movie", CardShape.Poster);
-            AddRow("Shows", "Series", CardShape.Poster);
-            AddRow("Episodes", "Episode", CardShape.Landscape);
-            AddRow("Collections", "BoxSet", CardShape.Poster);
-            AddRow("Videos", "Video", CardShape.Landscape);
+            foreach (var r in built) Results.Add(r);
             NoResults = Results.Count == 0;
         }, showBusy: true);
     }

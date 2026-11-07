@@ -189,7 +189,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         var audio = _sourceStreams?.Where(s => s.Type == "Audio").ToList();
         if (audio == null || audio.Count == 0) return null;
-        var lang = _settings.PreferredAudioLanguage;
+        var lang = AudioLang;
         return (!string.IsNullOrEmpty(lang) ? audio.FirstOrDefault(a => string.Equals(a.Language, lang, StringComparison.OrdinalIgnoreCase)) : null)
                ?? audio.FirstOrDefault(a => a.IsDefault) ?? audio[0];
     }
@@ -235,6 +235,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     partial void OnIsLiveChanged(bool value) => OnPropertyChanged(nameof(IsVod));
 
+    // Screen stays on only while something is actually playing (paused = the screensaver may run).
+    partial void OnIsPlayingChanged(bool value) { if (!_disposed) AppServices.KeepAwake?.SetActive(value); }
+
     // ===================== Library item =====================
 
     public static PlayerViewModel ForItem(MainViewModel main, BaseItemDto item, long? startTicks, string? mediaSourceId)
@@ -246,6 +249,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     private async Task StartItemAsync(BaseItemDto item, long? startTicks, string? mediaSourceId)
     {
+        // Until the new file is handed to mpv, the player is still on the previous one: no
+        // reports, or the old file's position would be saved against this item.
+        _sourcePending = true;
         _item = item;
         _startTicks = startTicks;
         _segments = new();
@@ -286,11 +292,13 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             {
                 Url = url,
                 StartSeconds = startTicks is > 0 ? TimeSpan.FromTicks(startTicks.Value).TotalSeconds : null,
-                AudioLanguage = _settings.PreferredAudioLanguage,
-                SubtitleLanguage = _settings.PreferredSubtitleLanguage,
+                AudioLanguage = AudioLang,
+                SubtitleLanguage = SubLang,
+                SubtitlesOff = AppServices.Session.SubtitlesOff(_settings.PreferredSubtitleLanguage),
                 ExternalSubtitles = _externalSubs.Select(s => (s.Url, s.Title, s.Language)).ToList(),
                 CacheSeconds = BufferSeconds,
             });
+            _sourcePending = false;
 
             await jf.ReportStartAsync(Progress(isPaused: false));
             _lastReport = DateTime.UtcNow;
@@ -313,6 +321,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     /// <summary>Read-ahead from Settings → Network buffer (mpv's cache-secs).</summary>
     private int BufferSeconds => Math.Clamp(_settings.NetworkBufferSeconds, 2, 300);
+
+    /// <summary>Languages: this device's setting when filled in, otherwise the signed-in user's Jellyfin profile.</summary>
+    private string? AudioLang => AppServices.Session.PreferredAudioLanguage(_settings.PreferredAudioLanguage);
+    private string? SubLang => AppServices.Session.PreferredSubtitleLanguage(_settings.PreferredSubtitleLanguage);
 
     private static List<ExternalSub> ExternalSubs(string itemId, MediaSourceInfo source) =>
         source.MediaStreams
@@ -344,6 +356,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private double _lastPositionMs;
     private int? _audioStreamIndex, _subtitleStreamIndex;
     private DateTime? _reportAfter;
+    /// <summary>Set while switching items (e.g. to the next episode) until the new file is loaded.</summary>
+    private bool _sourcePending;
+    /// <summary>True when the server may be told about <see cref="_item"/> right now.</summary>
+    private bool CanReport => _item != null && !_sourcePending && !IsLive;
 
     private PlaybackProgressInfo Progress(bool isPaused, string? eventName = null)
     {
@@ -471,8 +487,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         {
             Url = jf.DirectStreamUrl(itemId, source.Id, info.PlaySessionId),
             StartSeconds = offsetMs > 500 ? offsetMs / 1000.0 : null,
-            AudioLanguage = _settings.PreferredAudioLanguage,
-            SubtitleLanguage = _settings.PreferredSubtitleLanguage,
+            AudioLanguage = AudioLang,
+            SubtitleLanguage = SubLang,
+            SubtitlesOff = AppServices.Session.SubtitlesOff(_settings.PreferredSubtitleLanguage),
             ExternalSubtitles = ExternalSubs(itemId, source).Select(s => (s.Url, s.Title, s.Language)).ToList(),
             CacheSeconds = BufferSeconds,
         };
@@ -601,7 +618,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         UpdateSegments(pos, len);
 
         bool due = (DateTime.UtcNow - _lastReport).TotalSeconds >= 10 || (_reportAfter is { } after && DateTime.UtcNow >= after);
-        if (due && _item != null && time > 0 && !Player.IsBuffering)
+        if (due && CanReport && time > 0 && !Player.IsBuffering)
         {
             _lastReport = DateTime.UtcNow;
             var eventName = _reportAfter != null ? "TimeUpdate" : null;
@@ -875,23 +892,33 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         }
         Player.SetPause(willPause);
         IsPlaying = !willPause;
-        if (!IsLive) _ = AppServices.Jellyfin.ReportProgressAsync(Progress(willPause));
+        if (CanReport) _ = AppServices.Jellyfin.ReportProgressAsync(Progress(willPause));
     }
 
     [RelayCommand] private void SeekBack() => SeekBy(-_settings.SeekStepSeconds);
-    [RelayCommand] private void SeekForward() => SeekBy(_settings.SeekStepSeconds * 3);
+    [RelayCommand] private void SeekForward() => SeekBy(_settings.SeekStepSeconds);
+    public string SeekBackTip => $"Back {_settings.SeekStepSeconds} s (←)";
+    public string SeekForwardTip => $"Forward {_settings.SeekStepSeconds} s (→)";
 
     public void SeekBy(int seconds)
     {
         if (IsLive) return;
         ShowOsd();
-        var target = Math.Clamp(Math.Max(0, Player.TimeMs) + seconds * 1000L, 0, Math.Max(0, Player.LengthMs - 1000));
+        // mpv reports the new position only after a seek lands, so presses in quick succession
+        // build on the last target rather than the (stale) reported time: 5 × Right = +5 steps.
+        double from = DateTime.UtcNow - _lastSeekAt < TimeSpan.FromSeconds(1.5) ? _lastSeekTargetMs : Math.Max(0, Player.TimeMs);
+        var target = Math.Clamp(from + seconds * 1000.0, 0, Math.Max(0, Player.LengthMs - 1000));
         SeekToMs(target);
     }
+
+    private double _lastSeekTargetMs;
+    private DateTime _lastSeekAt = DateTime.MinValue;
 
     public void SeekToMs(double ms)
     {
         if (IsLive) return;
+        _lastSeekTargetMs = ms;
+        _lastSeekAt = DateTime.UtcNow;
         SeekValue = ms;
         _lastPositionMs = ms;
         Player.SeekTo((long)ms);
@@ -953,7 +980,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         foreach (var o in audio ? AudioTracks : SubtitleTracks) o.IsSelected = o == t;
         if (audio) _audioStreamIndex = t.StreamIndex; else _subtitleStreamIndex = t.StreamIndex;
         // Tell the server right away, so resuming (here or on another device) keeps this choice.
-        if (!IsLive && _item != null)
+        if (CanReport)
             _ = AppServices.Jellyfin.ReportProgressAsync(Progress(!IsPlaying, audio ? "AudioTrackChange" : "SubtitleTrackChange"));
     }
 
@@ -1029,7 +1056,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     private async Task ReportStoppedAsync()
     {
-        if (_item == null) return;
+        // Closed before the new item's file started: it never began, so there's nothing to stop.
+        if (!CanReport) return;
         var p = Progress(isPaused: false);
         p.EventName = "Stopped";
         await AppServices.Jellyfin.ReportStoppedAsync(p);
@@ -1125,6 +1153,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         if (_disposed) return;
         _disposed = true;
         _tick.Stop();
+        AppServices.KeepAwake?.SetActive(false);
         if (!IsLive) Stopped = ReportStoppedAsync();
         if (!_wasFullScreen) AppServices.Window?.SetFullScreen(false);
         _ = AppServices.Settings.SaveAsync();

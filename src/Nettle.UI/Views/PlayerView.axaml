@@ -127,14 +127,14 @@
               <TextBlock Text="{Binding EndsAtText}" Opacity="0.7" VerticalAlignment="Center" Margin="16,0,0,0" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="18">
-              <Button Classes="osd" Command="{Binding SeekBackCommand}" ToolTip.Tip="Back (←)"><PathIcon Data="{StaticResource Icon.Rewind}" /></Button>
+              <Button Classes="osd" Command="{Binding SeekBackCommand}" ToolTip.Tip="{Binding SeekBackTip}"><PathIcon Data="{StaticResource Icon.Rewind}" /></Button>
               <Button Classes="osd big" Command="{Binding TogglePlayCommand}" x:Name="PlayPause">
                 <Panel>
                   <PathIcon Data="{StaticResource Icon.Pause}" IsVisible="{Binding IsPlaying}" />
                   <PathIcon Data="{StaticResource Icon.Play}" IsVisible="{Binding !IsPlaying}" />
                 </Panel>
               </Button>
-              <Button Classes="osd" Command="{Binding SeekForwardCommand}" ToolTip.Tip="Forward (→)"><PathIcon Data="{StaticResource Icon.Forward}" /></Button>
+              <Button Classes="osd" Command="{Binding SeekForwardCommand}" ToolTip.Tip="{Binding SeekForwardTip}"><PathIcon Data="{StaticResource Icon.Forward}" /></Button>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
               <Button Classes="osd" Command="{Binding PlayNextCommand}" IsVisible="{Binding HasNext}" ToolTip.Tip="Next episode (N)">

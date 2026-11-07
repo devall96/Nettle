@@ -17,6 +17,8 @@ public sealed class MpvLoad
     public double? StartSeconds { get; init; }
     public string? AudioLanguage { get; init; }
     public string? SubtitleLanguage { get; init; }
+    /// <summary>Start with subtitles off (the user's Jellyfin profile says "None"); they can still pick one.</summary>
+    public bool SubtitlesOff { get; init; }
     public IReadOnlyList<(string Url, string Title, string? Language)> ExternalSubtitles { get; init; } = [];
     /// <summary>Seconds of read-ahead to aim for (live feeds want a bit more).</summary>
     public int CacheSeconds { get; init; } = 10;
@@ -286,6 +288,7 @@ public sealed class MpvPlayer : IDisposable
             Mpv.mpv_set_property_string(h, "start", load.StartSeconds is > 0.5 ? load.StartSeconds.Value.ToString("0.###", CultureInfo.InvariantCulture) : "none");
             Mpv.mpv_set_property_string(h, "alang", load.AudioLanguage ?? "");
             Mpv.mpv_set_property_string(h, "slang", load.SubtitleLanguage ?? "");
+            Mpv.mpv_set_property_string(h, "sid", load.SubtitlesOff ? "no" : "auto");
             Mpv.mpv_set_property_string(h, "cache-secs", load.CacheSeconds.ToString(CultureInfo.InvariantCulture));
             Mpv.mpv_set_property_string(h, "pause", "no");
             int r = Mpv.Command(h, "loadfile", load.Url, "replace");

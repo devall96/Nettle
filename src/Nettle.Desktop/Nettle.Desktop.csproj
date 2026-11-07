@@ -20,6 +20,8 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
     <PackageReference Include="Velopack" Version="1.2.161" />
+    <!-- Linux: session D-Bus calls (keep the screen on during playback). Same version Avalonia already ships. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
   <!-- Windows: libmpv is a pinned, hash-checked download (get-libmpv.ps1), copied next to the app.

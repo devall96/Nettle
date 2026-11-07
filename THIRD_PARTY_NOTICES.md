@@ -13,6 +13,7 @@ this file is shipped next to the application.
 | System.Security.Cryptography.ProtectedData | Windows DPAPI secret storage | MIT | https://github.com/dotnet/runtime |
 | Material Design Icons (Pictogrammers) | Icon path data | Apache-2.0 | https://github.com/Templarian/MaterialDesign |
 | Velopack (runtime + `vpk` build tool) | Installer and opt-in updates | MIT | https://github.com/velopack/velopack |
+| Tmds.DBus.Protocol | Linux: keeping the screen on during playback (session D-Bus) | MIT | https://github.com/tmds/Tmds.DBus |
 | libsecret (used from the system, not bundled) | Linux: saving sign-ins in the desktop keyring | LGPL-2.1-or-later | https://gitlab.gnome.org/GNOME/libsecret |
 
 Nettle itself is GPL-3.0, which is compatible with mpv's GPL-2.0-or-later licensing.

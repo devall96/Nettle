@@ -21,6 +21,8 @@ public static class AppServices
     public static IUpdater? Updater { get; set; }
     /// <summary>Applications-menu integration (Linux AppImage); null where the installer already handles it.</summary>
     public static IDesktopIntegration? Desktop { get; set; }
+    /// <summary>Keeps the screen on while video plays (null where nothing is needed).</summary>
+    public static IKeepAwake? KeepAwake { get; set; }
     public static SettingsStore Settings { get; private set; } = null!;
     public static AccountStore Accounts { get; private set; } = null!;
     public static JellyfinClient Jellyfin { get; private set; } = null!;
@@ -83,6 +85,16 @@ public interface IWindowHost
 }
 
 public enum HdrDisplayState { Unknown, Sdr, Hdr }
+
+/// <summary>
+/// Stops the screen from blanking / locking while video plays. mpv does this itself only when it
+/// owns a native window; with the render API (Linux) the app has to ask the desktop.
+/// </summary>
+public interface IKeepAwake
+{
+    /// <summary>True while something is playing; false when paused, stopped or closed. Call on the UI thread.</summary>
+    void SetActive(bool on);
+}
 
 /// <summary>
 /// Adds Nettle to the desktop's applications menu (Linux: a .desktop entry + icon in the user's

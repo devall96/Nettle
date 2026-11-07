@@ -20,6 +20,7 @@ public sealed record FilterOption(string Label, string? Filters)
 public sealed partial class LibraryViewModel : PageViewModel
 {
     private const int PageSize = 120;
+    private const int RandomBatch = 300;
     private readonly BaseItemDto _view;
     private readonly bool _folderMode;
     private readonly List<MediaCardViewModel> _cards = new();
@@ -95,6 +96,9 @@ public sealed partial class LibraryViewModel : PageViewModel
     private async Task LoadPageAsync(CancellationToken ct)
     {
         if (_cards.Count >= _total) return;
+        // The server reshuffles on every request, so a second "page" of a random sort would
+        // repeat and skip items: random is one larger batch, with no further pages.
+        bool random = Sort.SortBy == "Random";
         var q = new ItemQuery
         {
             ParentId = _view.Id,
@@ -104,7 +108,7 @@ public sealed partial class LibraryViewModel : PageViewModel
             SortOrder = Sort.Order,
             Filters = Filter.Filters,
             StartIndex = _cards.Count,
-            Limit = PageSize,
+            Limit = random ? RandomBatch : PageSize,
         };
         var res = await AppServices.Jellyfin.GetItemsAsync(q, ct);
         if (ct.IsCancellationRequested) return;
@@ -114,6 +118,11 @@ public sealed partial class LibraryViewModel : PageViewModel
         _cards.AddRange(res.Items.Select(i => new MediaCardViewModel(i, shape)));
         AppendRows(start);
         CountText = _total == 1 ? "1 item" : $"{_total:N0} items";
+        if (random && _cards.Count < _total)
+        {
+            CountText = $"{_cards.Count:N0} of {_total:N0} items, picked at random";
+            _total = _cards.Count; // no more pages
+        }
     }
 
     /// <summary>Called by the view when there's room for a different number of columns.</summary>

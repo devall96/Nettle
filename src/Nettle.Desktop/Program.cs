@@ -59,6 +59,7 @@ internal static class Program
         var iconArg = Array.IndexOf(args, "--render-icon");
         if (iconArg >= 0 && iconArg + 1 < args.Length) App.RenderIconFolder = Path.GetFullPath(args[iconArg + 1]);
         AppServices.Updater = new VelopackUpdater();
+        AppServices.KeepAwake = OperatingSystem.IsWindows() ? new WindowsKeepAwake() : new LinuxKeepAwake();
 
         if (OperatingSystem.IsLinux())
         {

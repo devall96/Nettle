@@ -11,6 +11,26 @@ public sealed class SessionService
     private readonly SettingsStore _settings;
 
     public SavedAccount? Current { get; private set; }
+
+    /// <summary>
+    /// The signed-in user's playback preferences from their Jellyfin profile (languages, subtitle
+    /// mode). Per user, so each person in a household gets their own defaults on a shared device.
+    /// </summary>
+    public UserConfiguration? UserConfig { get; private set; }
+
+    /// <summary>Audio language to prefer: this device's setting if set, else the user's Jellyfin profile.</summary>
+    public string? PreferredAudioLanguage(string? deviceSetting) =>
+        !string.IsNullOrWhiteSpace(deviceSetting) ? deviceSetting : NullIfEmpty(UserConfig?.AudioLanguagePreference);
+
+    /// <summary>Subtitle language to prefer: this device's setting if set, else the user's Jellyfin profile.</summary>
+    public string? PreferredSubtitleLanguage(string? deviceSetting) =>
+        !string.IsNullOrWhiteSpace(deviceSetting) ? deviceSetting : NullIfEmpty(UserConfig?.SubtitleLanguagePreference);
+
+    /// <summary>The user chose "no subtitles" in Jellyfin (and this device doesn't ask for a subtitle language).</summary>
+    public bool SubtitlesOff(string? deviceSubtitleSetting) =>
+        string.IsNullOrWhiteSpace(deviceSubtitleSetting) && UserConfig?.SubtitleMode == "None";
+
+    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
     public event Action? SessionChanged;
 
     public SessionService(JellyfinClient client, AccountStore accounts, SettingsStore settings)
@@ -36,6 +56,7 @@ public sealed class SessionService
             account.UserName = me.Name ?? account.UserName;
             account.AvatarTag = me.PrimaryImageTag;
             account.IsAdmin = me.Policy?.IsAdministrator ?? account.IsAdmin;
+            UserConfig = me.Configuration;
         }
         catch (ApiException ex) when (ex.IsUnauthorized)
         {
@@ -70,6 +91,7 @@ public sealed class SessionService
         account.AccessToken = auth.AccessToken;
         account.DeviceId = _client.DeviceId;
         account.IsAdmin = auth.User.Policy?.IsAdministrator ?? false;
+        UserConfig = auth.User.Configuration;
 
         if (remember) await ActivateAsync(account).ConfigureAwait(false);
         else
@@ -94,6 +116,7 @@ public sealed class SessionService
     public void SwitchUser()
     {
         Current = null;
+        UserConfig = null;
         _client.ClearSession();
         SessionChanged?.Invoke();
     }
@@ -105,6 +128,7 @@ public sealed class SessionService
         {
             await _client.LogoutAsync().ConfigureAwait(false);
             Current = null;
+            UserConfig = null;
             _client.ClearSession();
         }
         await _accounts.RemoveAsync(account.Id).ConfigureAwait(false);

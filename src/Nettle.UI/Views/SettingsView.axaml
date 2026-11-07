@@ -121,11 +121,11 @@
             <ComboBox Grid.Column="1" ItemsSource="{Binding SegmentChoices}" SelectedItem="{Binding CommercialChoice}" MinWidth="200" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
-            <StackPanel><TextBlock Text="Preferred audio language" FontWeight="SemiBold" /><TextBlock Text="ISO code, e.g. eng, jpn (blank = file default)" Classes="muted caption" /></StackPanel>
+            <StackPanel><TextBlock Text="Preferred audio language" FontWeight="SemiBold" /><TextBlock Text="ISO code, e.g. eng, jpn (blank = your Jellyfin profile's choice, else the file default)" Classes="muted caption" /></StackPanel>
             <TextBox Grid.Column="1" Text="{Binding AudioLanguage}" Width="200" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
-            <StackPanel><TextBlock Text="Preferred subtitle language" FontWeight="SemiBold" /><TextBlock Text="ISO code (blank = file default)" Classes="muted caption" /></StackPanel>
+            <StackPanel><TextBlock Text="Preferred subtitle language" FontWeight="SemiBold" /><TextBlock Text="ISO code (blank = your Jellyfin profile's choice and subtitle mode, else the file default)" Classes="muted caption" /></StackPanel>
             <TextBox Grid.Column="1" Text="{Binding SubtitleLanguage}" Width="200" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">

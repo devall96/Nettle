@@ -50,7 +50,13 @@ public static class IntegrationAutoSetup
                     if (!await AppServices.Seerr.ProbeAsync(url, ProbeTimeout)) continue;
                     s.SeerrUrl = url; // remembered even if signing in fails, so Settings only needs a login
                     changed = true;
-                    if (!string.IsNullOrEmpty(username) && password != null)
+                    // The password only goes where it's no less protected than it was for Jellyfin:
+                    // never downgraded from https to http, never in plain http across the internet.
+                    bool downgrade = jf.Scheme == "https" && scheme == "http";
+                    bool insecure = Nettle.Core.Api.NetworkSafety.IsInsecureRemote(url);
+                    if ((downgrade || insecure) && password != null)
+                        Log.Info("auto-setup: Seerr found over plain http; not sending the password there (sign in from Settings)");
+                    else if (!string.IsNullOrEmpty(username) && password != null)
                     {
                         try
                         {

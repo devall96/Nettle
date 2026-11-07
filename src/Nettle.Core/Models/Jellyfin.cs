@@ -27,6 +27,17 @@ public sealed class UserDto
     public bool HasPassword { get; set; }
     public bool HasConfiguredPassword { get; set; }
     public UserPolicy? Policy { get; set; }
+    public UserConfiguration? Configuration { get; set; }
+}
+
+/// <summary>The user's own playback preferences, as set in their Jellyfin profile.</summary>
+public sealed class UserConfiguration
+{
+    /// <summary>ISO 639-2 code (e.g. "eng"), or empty for "any".</summary>
+    public string? AudioLanguagePreference { get; set; }
+    public string? SubtitleLanguagePreference { get; set; }
+    /// <summary>"Default", "Always", "OnlyForced", "None" or "Smart".</summary>
+    public string? SubtitleMode { get; set; }
 }
 
 public sealed class AuthenticateUserByName

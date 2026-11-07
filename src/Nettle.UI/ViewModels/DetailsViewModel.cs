@@ -113,14 +113,16 @@ public sealed partial class DetailsViewModel : PageViewModel
     partial void OnLogoUrlChanged(string? value) => OnPropertyChanged(nameof(HasLogo));
     partial void OnProgressChanged(double value) => OnPropertyChanged(nameof(HasProgress));
 
-    protected override Task LoadAsync() => RunAsync(LoadCoreAsync);
-    protected override Task RefreshAsync() => RunAsync(LoadCoreAsync, showBusy: false);
+    protected override Task LoadAsync() => RunAsync(() => LoadCoreAsync(refresh: false));
+    // Coming back (e.g. from the player): update watched state and progress, but keep the
+    // season the user picked, and leave cast / similar alone so nothing flickers or jumps.
+    protected override Task RefreshAsync() => RunAsync(() => LoadCoreAsync(refresh: true), showBusy: false);
 
-    private async Task LoadCoreAsync()
+    private async Task LoadCoreAsync(bool refresh)
     {
         var jf = AppServices.Jellyfin;
         var item = await jf.GetItemAsync(_itemId);
-        var similarTask = item.IsEpisode ? null : jf.GetSimilarAsync(item.Id, 16);
+        var similarTask = item.IsEpisode || (refresh && Similar.Count > 0) ? null : jf.GetSimilarAsync(item.Id, 16);
         Item = item;
         IsSeries = item.IsSeries;
         IsEpisode = item.IsEpisode;
@@ -158,11 +160,14 @@ public sealed partial class DetailsViewModel : PageViewModel
 
         BuildMediaInfo(item);
 
-        Cast.Clear();
-        foreach (var person in (item.People ?? new()).Where(x => x.Type is "Actor" or "Director" or "GuestStar").Take(24)) Cast.Add(new PersonViewModel(person));
-        OnPropertyChanged(nameof(HasCast));
+        if (!refresh)
+        {
+            Cast.Clear();
+            foreach (var person in (item.People ?? new()).Where(x => x.Type is "Actor" or "Director" or "GuestStar").Take(24)) Cast.Add(new PersonViewModel(person));
+            OnPropertyChanged(nameof(HasCast));
+        }
 
-        if (item.IsSeries) await LoadSeriesAsync(item);
+        if (item.IsSeries) await LoadSeriesAsync(item, refresh);
         else
         {
             _playTarget = item;
@@ -235,19 +240,24 @@ public sealed partial class DetailsViewModel : PageViewModel
         MediaInfo = parts.Count > 0 ? string.Join("  ·  ", parts) + "  ·  Direct Play" : null;
     }
 
-    private async Task LoadSeriesAsync(BaseItemDto series)
+    private async Task LoadSeriesAsync(BaseItemDto series, bool refresh)
     {
         var jf = AppServices.Jellyfin;
         var seasonsT = jf.GetSeasonsAsync(series.Id);
         var nextT = jf.GetNextUpAsync(1, series.Id);
         var seasons = await seasonsT;
-        Seasons.Clear();
-        foreach (var s in seasons.Items) Seasons.Add(new SeasonTabViewModel(this, s));
+        var keepSeasonId = refresh ? SelectedSeason?.Season.Id : null;
+        if (!Seasons.Select(s => s.Season.Id).SequenceEqual(seasons.Items.Select(s => s.Id)))
+        {
+            Seasons.Clear();
+            foreach (var s in seasons.Items) Seasons.Add(new SeasonTabViewModel(this, s));
+        }
 
         BaseItemDto? next = null;
         try { next = (await nextT).Items.FirstOrDefault(); } catch { }
 
-        var initial = Seasons.FirstOrDefault(s => s.Season.Id == _preferSeasonId)
+        var initial = Seasons.FirstOrDefault(s => keepSeasonId != null && s.Season.Id == keepSeasonId)
+                      ?? Seasons.FirstOrDefault(s => s.Season.Id == _preferSeasonId)
                       ?? Seasons.FirstOrDefault(s => next != null && s.Season.Id == next.SeasonId)
                       ?? Seasons.FirstOrDefault(s => s.Season.IndexNumber > 0)
                       ?? Seasons.FirstOrDefault();
@@ -267,14 +277,28 @@ public sealed partial class DetailsViewModel : PageViewModel
         foreach (var s in Seasons) s.IsSelected = s == tab;
         SelectedSeason = tab;
         if (Item == null) return;
+        // Only the latest pick may fill the list: quick clicks across tabs can answer out of order.
+        var version = ++_seasonLoad;
         try
         {
             var eps = await AppServices.Jellyfin.GetEpisodesAsync(Item.Id, tab.Season.Id);
-            Episodes.Clear();
-            foreach (var e in eps.Items) Episodes.Add(new EpisodeViewModel(e));
+            if (version != _seasonLoad) return;
+            if (Episodes.Select(e => e.Item.Id).SequenceEqual(eps.Items.Select(e => e.Id)))
+            {
+                // Same episodes (a refresh): swap each row in place so the list keeps its height
+                // and the page keeps its scroll position.
+                for (int i = 0; i < eps.Items.Count; i++) Episodes[i] = new EpisodeViewModel(eps.Items[i]);
+            }
+            else
+            {
+                Episodes.Clear();
+                foreach (var e in eps.Items) Episodes.Add(new EpisodeViewModel(e));
+            }
         }
-        catch (Exception ex) { Error = ex.Message; }
+        catch (Exception ex) { if (version == _seasonLoad) Error = ex.Message; }
     }
+
+    private int _seasonLoad;
 
     [RelayCommand]
     private void Play()
