@@ -9,6 +9,10 @@ on:
         description: "Attach the AppImage to the existing GitHub release v<Version>"
         type: boolean
         default: false
+      replace:
+        description: "Replace this version's Linux files in place (a fix before anyone could update; no delta package)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -57,7 +61,7 @@ jobs:
             -c:v libaom-av1 -cpu-used 8 -row-mt 1 -c:a libopus testmedia/av1-opus.mkv
 
       - name: Previous Linux release (for delta updates)
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish && !inputs.replace }}
         run: |
           dotnet tool restore
           dotnet vpk download github --repoUrl "https://github.com/${{ github.repository }}" --channel linux -o releases || echo "no previous Linux release"
