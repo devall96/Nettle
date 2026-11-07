@@ -166,4 +166,8 @@ jobs:
       - name: Attach to release v${{ needs.build.outputs.version }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "v${{ needs.build.outputs.version }}" releases/* --clobber --repo "${{ github.repository }}"
+        # Older versions' packages were only downloaded to build the delta; they already live on
+        # their own releases, so only this version's files are attached.
+        run: |
+          find releases -name '*.nupkg' ! -name "*-${{ needs.build.outputs.version }}-*" -print -delete
+          gh release upload "v${{ needs.build.outputs.version }}" releases/* --clobber --repo "${{ github.repository }}"
