@@ -107,6 +107,25 @@ object Main {
         shell.initialize(cached)
         // Lets other Jellyfin apps control this one, and keeps the screen in step with changes made elsewhere.
         RemoteControl.start()
+        maybeAutoCheckUpdates()
+    }
+
+    private var updateChecked = false
+
+    /** Opt-in only (Settings → Updates): one quiet check per launch, like the Windows / Linux apps. */
+    private fun maybeAutoCheckUpdates() {
+        val s = AppServices.settings.current
+        if (updateChecked || !s.autoCheckUpdates || s.updateSource.isBlank()) return
+        updateChecked = true
+        AppServices.scope.launch {
+            try {
+                delay(8000)
+                val u = io.github.devall96.nettle.tv.platform.Updater.check(s.updateSource)
+                if (u != null) toast("Nettle ${u.version} is available. Install it from Settings → Updates.", 6000)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
+                io.github.devall96.nettle.core.services.Log.warn("auto update check failed: ${e.message}")
+            }
+        }
     }
 
     fun switchUser() {

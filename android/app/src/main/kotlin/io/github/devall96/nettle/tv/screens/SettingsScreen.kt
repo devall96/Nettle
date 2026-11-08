@@ -181,6 +181,25 @@ fun SettingsScreen(vm: SettingsModel) {
                 }
             }
 
+            // Updates (same source, toggle and wording as the Windows / Linux apps)
+            Panel(Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionLabel("UPDATES")
+                    T(vm.installKind, weight = FontWeight.SemiBold)
+                    T("Nettle never checks for updates on its own unless you turn that on. It only ever contacts the source below: Nettle's GitHub Releases (filled in for you) or another GitHub repository. Each update is the newest release's Nettle-AndroidTV.apk, and the TV asks you before installing it.", muted = true)
+                    TvTextField(vm.updateSource, { vm.updateSource = it }, Modifier.fillMaxWidth(), placeholder = "https://github.com/devall96/Nettle",
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri, onSubmit = { vm.commitUpdateSource() })
+                    ToggleRow("Check automatically when Nettle starts", vm.autoCheckUpdates, { vm.changeAutoCheckUpdates(it) },
+                        hint = "Off by default. You'll be asked before anything is installed.")
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton("Check now", { if (!vm.isUpdating) vm.checkUpdates() })
+                        if (vm.availableUpdate != null)
+                            TextButton("Download & install", { if (!vm.isUpdating) vm.installUpdate() }, kind = ButtonKind.Primary)
+                        vm.updateStatus?.let { T(it, muted = true) }
+                    }
+                }
+            }
+
             // About
             Panel(Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

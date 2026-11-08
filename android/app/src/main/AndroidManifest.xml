@@ -3,7 +3,8 @@
   Nettle for Android TV (native). TV only for now: leanback launcher + banner; touch not required.
   allowBackup=false: saved sign-in tokens never go to Google's cloud backup.
   Cleartext http is allowed because home Jellyfin servers usually use it.
-  Permissions: network only (multicast for finding Jellyfin servers on the LAN).
+  Permissions: network (multicast for finding Jellyfin servers on the LAN), and installing
+  Nettle's own updates (Settings → Updates; Android asks the user before each install).
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -13,6 +14,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".NettleApp"
@@ -40,5 +42,16 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Hands a downloaded update (cache/updates/) to Android's package installer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
     </application>
 </manifest>

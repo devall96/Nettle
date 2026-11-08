@@ -10,6 +10,7 @@ import io.github.devall96.nettle.core.models.FrameRateMatching
 import io.github.devall96.nettle.core.models.PluginInfo
 import io.github.devall96.nettle.core.models.SegmentAction
 import io.github.devall96.nettle.tv.AppServices
+import io.github.devall96.nettle.tv.platform.Updater
 import io.github.devall96.nettle.tv.theme.Themes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -22,7 +23,7 @@ class PluginRow(p: PluginInfo) {
     val support = if (name.contains("intro", true) || name.contains("segment", true)) "Used by Nettle: skip buttons" else "Server-side"
 }
 
-/** Port of SettingsViewModel (desktop-only sections left out: hardware decoding, menu entry, updates). */
+/** Port of SettingsViewModel (desktop-only sections left out: hardware decoding, menu entry, display mode). */
 class SettingsModel : Page() {
     override val navKey = "settings"
     private val s get() = AppServices.settings.current
@@ -190,6 +191,57 @@ class SettingsModel : Page() {
     }
 
     fun switchUser() = Main.switchUser()
+
+    // ---------- Updates (same source and toggle as the Windows / Linux apps) ----------
+
+    var updateSource by mutableStateOf(s.updateSource)
+    var autoCheckUpdates by mutableStateOf(s.autoCheckUpdates); private set
+    var updateStatus by mutableStateOf<String?>(null); private set
+    var isUpdating by mutableStateOf(false); private set
+    var availableUpdate by mutableStateOf<io.github.devall96.nettle.core.services.AvailableUpdate?>(null); private set
+    val installKind get() = "Installed version ${AppServices.version}"
+
+    fun commitUpdateSource() { s.updateSource = updateSource.trim(); save() }
+    fun changeAutoCheckUpdates(v: Boolean) { autoCheckUpdates = v; s.autoCheckUpdates = v; save() }
+
+    fun checkUpdates() {
+        commitUpdateSource()
+        if (s.updateSource.isBlank()) { updateStatus = "Enter an update source first (Nettle's own is ${io.github.devall96.nettle.core.models.AppSettings.OFFICIAL_UPDATE_SOURCE})."; return }
+        isUpdating = true
+        availableUpdate = null
+        updateStatus = "Checking…"
+        scope.launch {
+            try {
+                val u = Updater.check(s.updateSource)
+                availableUpdate = u
+                updateStatus = if (u == null) "You're up to date (${AppServices.version})." else "Version ${u.version} is available."
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                updateStatus = "Couldn't check: ${e.message}"
+            } finally { isUpdating = false }
+        }
+    }
+
+    /** Download, then Android's own "update this app?" prompt. Settings and sign-ins are kept. */
+    fun installUpdate() {
+        val u = availableUpdate ?: return
+        if (!Updater.canInstall()) {
+            updateStatus = if (Updater.openInstallPermission())
+                "Turn on \"Allow from this source\" for Nettle, then come back and choose Install again."
+            else "Allow Nettle to install apps in the TV's settings (Apps → Security → Install unknown apps), then try again."
+            return
+        }
+        isUpdating = true
+        updateStatus = "Downloading ${u.version}…"
+        scope.launch {
+            try {
+                val apk = Updater.download(u) { f -> updateStatus = "Downloading ${u.version}… ${(f * 100).toInt()} %" }
+                updateStatus = if (Updater.install(apk)) "Confirm the update on the TV's install screen. Nettle restarts as ${u.version}."
+                else "This TV couldn't open its installer. Install Nettle-AndroidTV.apk with Downloader instead."
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                updateStatus = "Update failed: ${e.message}"
+            } finally { isUpdating = false }
+        }
+    }
 
     fun clearImageCache() {
         AppServices.images.diskCache?.clear()

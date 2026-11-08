@@ -314,11 +314,11 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.4.2 beta)
+## Known limitations (0.4.3 beta)
 - **All three platforms are beta.** Expect some bugs, and please report them.
 - **Android TV:**
   - Tested on one device so far (onn 4K, Google TV 14). Other boxes and TVs should work but are untested.
-  - Installed by hand (sideloaded) and updated the same way; there's no in-app updater yet.
+  - Installed by hand (sideloaded) the first time. From 0.4.3, **Settings → Updates** checks Nettle's GitHub Releases and installs the newest APK (the TV asks you to confirm each install).
   - No music: music libraries are hidden.
   - With audio passthrough off, DTS and TrueHD tracks only play if your box can decode them itself.
   - Some MKV files store subtitle tracks compressed (common for Blu-ray PGS subtitles). Those files play, but those subtitle tracks aren't offered yet.

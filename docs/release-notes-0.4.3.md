@@ -1,15 +1,22 @@
-## Nettle 0.4.3 · parity hotfix (Windows & Linux)
+## Nettle 0.4.3 · parity hotfix
 
 > [!TIP]
 > ### ⬇️ Downloads: these are the only files you need
 > - **Windows:** [**Nettle-win-Setup.exe**](https://github.com/devall96/Nettle/releases/download/v0.4.3/Nettle-win-Setup.exe) (installer) · or [Nettle-win-Portable.zip](https://github.com/devall96/Nettle/releases/download/v0.4.3/Nettle-win-Portable.zip) to run without installing
 > - **Linux:** [**Nettle.AppImage**](https://github.com/devall96/Nettle/releases/download/v0.4.3/Nettle.AppImage)
-> - **Android TV / Google TV:** [**Nettle-AndroidTV.apk**](https://github.com/devall96/Nettle/releases/download/v0.4.3/Nettle-AndroidTV.apk) (unchanged from 0.4.2; Downloader code below still works)
+> - **Android TV / Google TV:** [**Nettle-AndroidTV.apk**](https://github.com/devall96/Nettle/releases/download/v0.4.3/Nettle-AndroidTV.apk)
 >
-> Already on Windows or Linux? **Settings → Updates → Check now** installs this for you.
+> Already on Windows or Linux? **Settings → Updates → Check now** installs this for you. On Android TV, install this one by hand (steps below); from now on the TV app updates itself the same way.
 > Everything else under *Assets* (`.nupkg`, `.json`, `RELEASES`) is read by the built-in updater: you can ignore it.
 
-A hotfix that brings the **Windows and Linux** apps level with the new Android TV app, and fixes the desktop window. Windows and Linux share this version number; the Android TV app stays at 0.4.2 (its APK is attached here too, so the install link keeps working).
+A hotfix that brings all three apps level with each other: the desktop apps get the Android TV app's Live TV features and a fixed window with real display modes, and the Android TV app gets the desktop's built-in updater. Windows, Linux and Android TV all share this version number.
+
+### 📺 Android TV: updates itself now
+- **New: Settings → Updates**, the same as on Windows and Linux. **Check now** looks at Nettle's GitHub Releases and offers the newest `Nettle-AndroidTV.apk`; **Download & install** fetches it and opens the TV's install prompt. Your settings and sign-ins stay.
+- **Check automatically when Nettle starts** (off by default): one quiet check per launch, with a note when a new version is out.
+- The first time, Android asks you to let Nettle install apps (*Install unknown apps*); Nettle takes you to that switch.
+- Nettle still only connects to your own servers. GitHub is contacted only while you check for or install an update.
+- **Coming from 0.4.2:** install this version by hand once (Downloader or adb, as before). It installs over 0.4.2 and keeps your settings.
 
 ### 🪟 The window, fixed and with real display modes
 - **Fixed:** Nettle could open half off the screen, and then couldn't be moved or resized until you pressed F11 a few times.

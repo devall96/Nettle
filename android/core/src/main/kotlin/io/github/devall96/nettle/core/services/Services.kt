@@ -75,6 +75,8 @@ class SettingsStore(dataDirectory: File) {
             backupDamagedFile(path, e)
             AppSettings()
         }
+        // Like the desktop apps: an empty update source is filled in with Nettle's own releases.
+        if (current.updateSource.isBlank()) current.updateSource = AppSettings.OFFICIAL_UPDATE_SOURCE
     }
 
     suspend fun save() {

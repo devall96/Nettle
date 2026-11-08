@@ -62,7 +62,16 @@ data class AppSettings(
     var allowDirectTmdbImages: Boolean = false,
     /** Android TV: width of the drawing canvas in Nettle units (1440 = the Windows app's proportions). */
     var interfaceWidth: Int = 1440,
-)
+    /** Where updates come from (a GitHub repository; the latest release's Nettle-AndroidTV.apk). Empty = updates off. */
+    var updateSource: String = OFFICIAL_UPDATE_SOURCE,
+    /** Privacy: off by default. When on, checks the update source once per launch. */
+    var autoCheckUpdates: Boolean = false,
+) {
+    companion object {
+        /** Nettle's own GitHub Releases, same as the Windows and Linux apps. */
+        const val OFFICIAL_UPDATE_SOURCE = "https://github.com/devall96/Nettle"
+    }
+}
 
 /** A remembered sign-in. Stored only inside the encrypted secure store. */
 @Serializable
