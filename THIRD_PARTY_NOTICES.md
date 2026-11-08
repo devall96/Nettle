@@ -42,6 +42,24 @@ a library whenever one is installed.
 
 The Nettle app icon (gradient tile with fin) is original artwork made for this project.
 
+### Android TV app (native, `android/`)
+
+| Component | Use in Nettle | License | Source |
+|---|---|---|---|
+| Kotlin standard library, kotlinx.coroutines, kotlinx.serialization | Language runtime, async work, JSON | Apache-2.0 | https://github.com/JetBrains/kotlin |
+| AndroidX (Jetpack Compose, Activity, Lifecycle, ProfileInstaller) | User interface | Apache-2.0 | https://developer.android.com/jetpack/androidx |
+| AndroidX Media3 (ExoPlayer, OkHttp data source, subtitle view) | Video and audio playback | Apache-2.0 | https://github.com/androidx/media |
+| OkHttp and Okio | HTTP and WebSocket | Apache-2.0 | https://github.com/square/okhttp |
+| Coil | Image loading | Apache-2.0 | https://github.com/coil-kt/coil |
+| Accompanist Drawable Painter (used by Coil) | Image drawing | Apache-2.0 | https://github.com/google/accompanist |
+| Guava (used by Media3) | Utilities | Apache-2.0 | https://github.com/google/guava |
+| Inter typeface (the same files as the desktop app) | UI font | SIL Open Font License 1.1 | https://github.com/rsms/inter |
+| Material Design Icons (Pictogrammers) | Icon path data | Apache-2.0 | https://github.com/Templarian/MaterialDesign |
+
+None of these contact anything on their own. The Android build fails if any other dependency
+appears, and always fails on Google Play Services, Firebase, crash-reporting or analytics
+libraries. kxml2 (BSD) is used only to run the tests on a PC and is not shipped.
+
 ## Services and trademarks
 
 Nettle is an independent project. It is not affiliated with or endorsed by the Jellyfin project,

@@ -1,12 +1,13 @@
 <p align="center">
-  <img src="docs/images/banner.png" alt="Nettle: a fast, beautiful Jellyfin client for Windows and Linux, built on mpv" width="100%">
+  <img src="docs/images/banner.png" alt="Nettle: a fast, beautiful Jellyfin client for Windows, Linux and Android TV" width="100%">
 </p>
 
 <p align="center">
-  <b><a href="https://github.com/devall96/Nettle/releases/latest">⬇ Download Nettle for Windows or Linux</a></b>
+  <b><a href="https://github.com/devall96/Nettle/releases/latest">⬇ Download Nettle for Windows, Linux or Android TV</a></b>
   &nbsp;·&nbsp; <a href="#-testers-wanted">Testers wanted</a>
   &nbsp;·&nbsp; <a href="#features">Features</a>
   &nbsp;·&nbsp; <a href="#install">Install</a>
+  &nbsp;·&nbsp; <a href="#android-tv">Android TV</a>
   &nbsp;·&nbsp; <a href="#using-nettle">Using Nettle</a>
   &nbsp;·&nbsp; <a href="#privacy">Privacy</a>
   &nbsp;·&nbsp; <a href="#building-from-source">Build</a>
@@ -14,21 +15,38 @@
 
 ---
 
-**Nettle** is a Jellyfin client for Windows and Linux that plays everything in **original quality**.
-Instead of asking your server to transcode, it plays the actual file with the **mpv** engine, using
-your graphics card for 4K, HDR and Dolby Vision. Nettle never transcodes: it has no code path that
-asks the server to.
+**Nettle** is a Jellyfin client for Windows, Linux and **Android TV** that plays everything in
+**original quality**. Instead of asking your server to transcode, it plays the actual file: with the
+**mpv** engine on PCs, and with **Media3** (the TV's own hardware decoders) on Android TV, for 4K,
+HDR and Dolby Vision. Nettle never transcodes: it has no code path that asks the server to.
 
 It also brings in a TV-style live guide for **NostalgiaTV**, **Seerr** requests, skippable intros
 and credits, multiple profiles, and sixteen hand-made themes. It has **no telemetry of any kind**.
 
+> [!IMPORTANT]
+> ### 📺 New in 0.4.2: Nettle for Android TV
+> Nettle now runs natively on **Android TV and Google TV** boxes and televisions. It isn't a port
+> of the desktop window: it was rebuilt in Kotlin and Jetpack Compose for the remote, with the same
+> look, themes and features as the PC version.
+> - **Original files only**, through Media3 and the TV's hardware decoders: HDR10, HLG, HDR10+ and
+>   Dolby Vision go to your TV as they are, refresh rate follows the video, and audio passthrough
+>   sends Dolby and DTS to your receiver.
+> - **Live TV that feels like cable:** surf with Up / Down, type a channel number, jump back to the
+>   last channel, and a tuning screen covers each switch.
+> - **Fast on cheap boxes:** about 0.8 s from a cold start to your Home screen on a 2 GB onn 4K box.
+> - Home, libraries, details, search, NostalgiaTV, Seerr, intro skipping, Quick Connect and
+>   multiple profiles, all driven by the D-pad.
+>
+> [Install it on your TV ↓](#android-tv) · [What's in 0.4.2](https://github.com/devall96/Nettle/releases/tag/v0.4.2)
+
 > [!NOTE]
-> **Nettle is in beta on Windows and Linux.** It works well on the machines it has been tested
-> on, but it hasn't been tried on much other hardware yet, so expect some rough edges.
+> **Nettle is in beta on Windows, Linux and Android TV.** It works well on the devices it has been
+> tested on, but it hasn't been tried on much other hardware yet, so expect some rough edges.
 >
 > **Entirely AI-coded, single-user tested.** All of Nettle's code was written by an AI coding
 > assistant (Anthropic's Claude), directed and reviewed by one person. So far it has been tested by
-> that one person, on one Windows PC and one Ubuntu PC. That's why [testers are wanted](#-testers-wanted).
+> that one person, on one Windows PC, one Ubuntu PC and one onn 4K Google TV box. That's why
+> [testers are wanted](#-testers-wanted).
 
 > [!TIP]
 > **Nettle used to be called Slopfin.** If you installed Slopfin 0.1 or 0.2, **Settings → Updates**
@@ -38,21 +56,23 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 ## 🧪 Testers wanted
 
 Nettle needs people to try it on hardware it hasn't seen yet: **NVIDIA and Intel graphics,
-laptops, other Linux distros and desktops (KDE, XFCE…), multi-monitor and HDR setups.** If you have a
-Jellyfin server and a few minutes, you'd help a lot:
+laptops, other Linux distros and desktops (KDE, XFCE…), multi-monitor and HDR setups, and Android TV
+devices other than the onn 4K (NVIDIA Shield, Chromecast with Google TV, Google TV Streamer, TVs with
+Google TV built in…).** If you have a Jellyfin server and a few minutes, you'd help a lot:
 
-1. [Download](https://github.com/devall96/Nettle/releases/latest) the Windows installer or the Linux AppImage.
+1. [Download](https://github.com/devall96/Nettle/releases/latest) the Windows installer, the Linux AppImage or the Android TV app.
 2. Sign in and play a few different things: 4K / HDR / Dolby Vision files, older SD shows, surround
    audio, subtitles, and Live TV if you use NostalgiaTV.
 3. Tell us what broke, or that it worked, by
    [opening an issue](https://github.com/devall96/Nettle/issues/new?template=bug_report.md). Please include:
-   - Windows or Linux. On Linux, also the distro and desktop (e.g. *Fedora 41, KDE Plasma 6, Wayland*).
-   - Your graphics card (e.g. *AMD RX 9070*, *NVIDIA RTX 3060*, *Intel Arc*).
+   - Windows, Linux or Android TV. On Linux, also the distro and desktop (e.g. *Fedora 41, KDE Plasma 6, Wayland*). On Android TV, the device (e.g. *NVIDIA Shield Pro 2019*) and your TV / receiver.
+   - Your graphics card (e.g. *AMD RX 9070*, *NVIDIA RTX 3060*, *Intel Arc*), on a PC.
    - What you played: resolution, HDR type and audio format. Nettle's format badges (press **I** while playing) show all of this.
    - A screenshot, if it's visual.
    - The end of Nettle's log: `%LOCALAPPDATA%\Nettle\nettle.log` on Windows, or
-     `~/.local/share/Nettle/nettle.log` on Linux. Server tokens in the log are already masked, but
-     you may want to blank out your server's address.
+     `~/.local/share/Nettle/nettle.log` on Linux. On Android TV, if you use adb:
+     `adb logcat -d -s Nettle`. Server tokens in the log are already masked, but you may want to blank
+     out your server's address.
 
 "It worked fine on my setup" reports are just as useful, so they're welcome too.
 
@@ -91,6 +111,28 @@ Jellyfin server and a few minutes, you'd help a lot:
 - **Subtitles turn on the way you like:** default track, always, only forced (foreign dialogue), smart (when the audio is in another language), or off. By default this, and your audio and subtitle languages, follow each person's own Jellyfin profile.
 - **Play all and Shuffle** for libraries and collections, and **Shuffle for a whole series** (every episode of every season, in random order).
 - **Play on Nettle from other Jellyfin apps.** Nettle shows up as a "Play on" target: your phone can start, queue, pause, seek, skip and change the volume or tracks.
+
+### On Android TV
+Everything above and below works on the TV too, with these differences:
+- **Media3 instead of mpv,** using the TV box's own hardware decoders. HDR10, HLG, HDR10+ and Dolby
+  Vision frames go to the TV as they are (on TVs without Dolby Vision, profile 7 and 8 files play
+  their HDR10 layer instead). The format badges say what your TV really received.
+- **Refresh-rate matching** switches the TV to 23.976 / 24 / 25 / 50 / 59.94 Hz to match each video,
+  and can match the resolution too (Settings → Playback).
+- **Audio passthrough** sends Dolby Digital, Dolby Digital Plus / Atmos, TrueHD and DTS to your
+  receiver when your box and receiver support it. With passthrough off, Dolby audio is decoded on
+  the box.
+- **Remote buttons:** Left / Right seek (hold to go faster), Up / Down surf channels on Live TV when
+  the controls are hidden, number keys type a channel number (or jump 10 % at a time in a video),
+  and Channel up / down, Last channel, Guide, Audio track, Captions and Info buttons work on remotes
+  that have them.
+- **Live TV tuning screen** with the channel's logo while a channel switches, so letterboxed films
+  never flash stretched.
+- The same 1440-wide layout as the PC version, scaled to your TV, so it looks the same.
+- **Saved sign-ins are encrypted** with a key that never leaves the TV's secure hardware
+  (Android Keystore), and the app never takes part in cloud backups.
+- Not on the TV yet: music (music libraries are hidden), the built-in updater, and a software
+  decoder for DTS / TrueHD when passthrough is off.
 
 ### Browsing
 - **Home:** a spotlight carousel with logo art, plus Continue Watching, Next Up, and Recently Added for each library (except libraries you hid from it in Jellyfin). It appears instantly at startup, from your last visit, while fresh data loads.
@@ -163,6 +205,34 @@ mpv is built in, so you don't need to install anything else. It runs on 64-bit d
 
 **Uninstall:** in **Settings → Desktop**, press *Remove from menu*, then delete the AppImage. Settings and the image cache live in `~/.local/share/Nettle` and `~/.cache/Nettle`. Saved sign-ins are in your keyring under "Nettle".
 
+### Android TV
+
+Works on **Android TV and Google TV, Android 9 or newer**: TVs with Google TV built in, and boxes
+such as the onn 4K, Chromecast with Google TV, Google TV Streamer and NVIDIA Shield. So far it has
+been tested on an **onn 4K (Google TV, Android 14)**. Nettle isn't on the Play Store, so you install
+the app file yourself ("sideloading"). It only takes a minute:
+
+1. On the TV, install **Downloader** (by AFTVnews) from the Play Store.
+2. Allow it to install apps: **Settings → Apps → Security & restrictions → Unknown sources**
+   (on some TVs: *Settings → Device preferences → Security*), and turn on **Downloader**.
+3. Open Downloader and enter this address:
+   `https://github.com/devall96/Nettle/releases/latest/download/Nettle-AndroidTV.apk`
+4. When it finishes, choose **Install**, then **Open**. Nettle appears on your home screen with
+   your other apps.
+
+*With a computer and adb instead:* download `Nettle-AndroidTV.apk` from the
+[latest release](https://github.com/devall96/Nettle/releases/latest) and run
+`adb install Nettle-AndroidTV.apk`.
+
+**Signing in on a TV is easiest with Quick Connect:** pick *Use Quick Connect* and enter the 6-digit
+code on your phone or PC in Jellyfin (Settings → Quick Connect). Typing a username and password
+with the remote works too.
+
+**Updates:** the TV app has no built-in updater yet. When a new version comes out, install the new
+`Nettle-AndroidTV.apk` the same way; it replaces the old one and keeps your settings and sign-ins.
+
+**Uninstall:** Settings → Apps → Nettle → Uninstall. That removes everything, including saved sign-ins.
+
 ## Using Nettle
 
 ### First run
@@ -201,6 +271,10 @@ your Jellyfin server for NostalgiaTV (port 19850) and Seerr (port 5055), using t
 | [ / ] | | Slower / faster | |
 | Z / X | | Subtitles earlier / later | |
 
+On **Android TV**, the remote does the same: the D-pad moves focus and seeks, OK opens or shows the
+controls, and Back goes back. See [On Android TV](#on-android-tv) for the Live TV and number-key
+buttons.
+
 ### Live TV (NostalgiaTV)
 Usually set up automatically when you sign in (see [First run](#first-run)). To do it by hand, go to **Settings → NostalgiaTV** and enter your NostalgiaTV address, for example `http://your-server:19850`. An API key is optional. Press **Save & test**, then open **Live TV**.
 
@@ -215,7 +289,7 @@ Posters load through your Seerr server's image proxy, so TMDB never sees your IP
 ### Updates
 Updates are **off unless you use them**:
 
-1. Go to **Settings → Updates** and enter `https://github.com/devall96/Nettle`.
+1. Go to **Settings → Updates**. The address of Nettle's releases (`https://github.com/devall96/Nettle`) is already filled in.
 2. Press **Check now**, or turn on the once-per-launch check.
 3. Updates only download what changed, and install with **Install & restart**.
 
@@ -230,7 +304,8 @@ Nettle contains **no telemetry, analytics, crash reporting, ads or tracking**. I
 - TMDB, only if you turn on direct TMDB posters.
 
 Other privacy details:
-- Servers see the device as "Nettle (Windows)" or "Nettle (Linux)", never your PC's name.
+- Servers see the device as "Nettle (Windows)", "Nettle (Linux)" or "Nettle (Android TV)", never your PC's or TV's name.
+- The Android TV app contains no Google Play Services, Firebase, analytics or crash reporting; its build fails if any such library ever appears. Every connection, including the video player's and image loading, goes through one allowlist of the servers you set up.
 - Images only load from the servers you configured.
 - The player runs sealed off: it ignores any mpv config or scripts on your PC, never looks links up through youtube-dl, saves no watch history of its own, and identifies itself only as "Nettle".
 - Diagnostic logs stay on your PC and have tokens masked.
@@ -239,8 +314,15 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.4.0 beta)
-- **Both platforms are beta.** Expect some bugs, and please report them.
+## Known limitations (0.4.2 beta)
+- **All three platforms are beta.** Expect some bugs, and please report them.
+- **Android TV:**
+  - Tested on one device so far (onn 4K, Google TV 14). Other boxes and TVs should work but are untested.
+  - Installed by hand (sideloaded) and updated the same way; there's no in-app updater yet.
+  - No music: music libraries are hidden.
+  - With audio passthrough off, DTS and TrueHD tracks only play if your box can decode them itself.
+  - Some MKV files store subtitle tracks compressed (common for Blu-ray PGS subtitles). Those files play, but those subtitle tracks aren't offered yet.
+  - Changing to a 4K remux on Live TV can take several seconds, because the player has to jump into the middle of a very large file over the network.
 - **Linux:**
   - It's untested so far on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
   - HDR is tone-mapped to SDR. Nettle's window runs through X11 (XWayland on Wayland desktops), which has no HDR path yet. The badge says so.
@@ -248,8 +330,8 @@ Other privacy details:
   - The AppImage carries mpv 0.37 (from Ubuntu 24.04); Windows builds use mpv 0.42.
   - If your desktop has no keyring at all, sign-ins are kept in a file only your user can read.
 - **Audio passthrough** depends on your receiver and, on Linux, on your sound server allowing it for that output. It's off by default. On Windows, TrueHD and DTS-HD need exclusive use of the audio device while they play (other formats don't).
-- Not code-signed yet, so SmartScreen shows a warning on first install.
-- Windows and Linux for now. The code is structured for Android TV and iOS versions later.
+- Not code-signed yet on Windows, so SmartScreen shows a warning on first install.
+- No phone, tablet or iOS version yet.
 
 ## Building from source
 
@@ -273,6 +355,20 @@ The Linux AppImage is built by the **Linux AppImage** GitHub Actions workflow
 (`.github/workflows/linux.yml`). It bundles libmpv, then decodes H.264, 4K HEVC 10-bit and AV1
 test clips on clean Ubuntu, Debian, Fedora and Arch machines before anything is published.
 
+**Android TV:** the TV app lives in `android/` (Kotlin, Jetpack Compose, Media3). You need JDK 17
+and the Android SDK (Android Studio brings both). Then:
+
+```bash
+cd android
+./gradlew :core:test :app:assembleRelease
+```
+
+The APK lands in `android/app/build/outputs/apk/release/`. Official releases are signed with the
+maintainer's key, which is kept outside the repository; your own builds are signed with your debug
+key instead, so uninstall the official app before installing yours. The build fails if any
+dependency outside its allowlist appears (see `android/app/build.gradle.kts`). The plan and design
+notes are in [docs/native-android-tv.md](docs/native-android-tv.md).
+
 To build a Windows release (installer, portable zip and update packages in `releases\`):
 
 ```bash
@@ -291,6 +387,9 @@ src/
   Nettle.UI        Avalonia views + view models, themes, image cache, mpv player (shared by every platform)
   Nettle.Desktop   Windows + Linux app: window, secure storage (DPAPI / keyring), HDR detection,
                     libmpv loading, applications-menu entry, installer/updater hooks
+android/
+  core             Kotlin port of Nettle.Core for the TV app (same clients, rules and tests)
+  app              Android TV app: Jetpack Compose UI, Media3 player, Keystore-encrypted sign-ins
 ```
 
 ## About the name

@@ -1,0 +1,24 @@
+# Baseline Profile: code ART compiles ahead of time when Nettle is installed (via ProfileInstaller),
+# so start-up and the first scroll of Home, a library, Details and the Live TV guide don't run
+# interpreted. Compose, Media3 and AndroidX bring their own profiles; these rules add Nettle's
+# own code and the libraries without one. Wildcards are expanded against the release build.
+
+# Nettle (app + core)
+HSPLio/github/devall96/nettle/**->**(**)**
+Lio/github/devall96/nettle/**;
+
+# JSON (home cache, settings, every API response)
+HSPLkotlinx/serialization/**->**(**)**
+Lkotlinx/serialization/**;
+
+# Coroutines
+HSPLkotlinx/coroutines/**->**(**)**
+Lkotlinx/coroutines/**;
+
+# HTTP + images
+HSPLokhttp3/**->**(**)**
+Lokhttp3/**;
+HSPLokio/**->**(**)**
+Lokio/**;
+HSPLcoil3/**->**(**)**
+Lcoil3/**;

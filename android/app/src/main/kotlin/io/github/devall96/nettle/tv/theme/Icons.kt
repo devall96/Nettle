@@ -1,0 +1,56 @@
+package io.github.devall96.nettle.tv.theme
+
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.unit.dp
+
+/**
+ * Icon path data from Material Design Icons by Pictogrammers (Apache License 2.0), the same
+ * paths as src/Nettle.UI/Styles/Icons.axaml. See THIRD_PARTY_NOTICES.md.
+ */
+object Icons {
+    private val cache = HashMap<String, ImageVector>()
+
+    private fun icon(name: String, path: String): ImageVector = cache.getOrPut(name) {
+        ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+            .addPath(PathParser().parsePathString(path).toNodes(), fill = SolidColor(Color.White))
+            .build()
+    }
+
+    val Home get() = icon("Home", "M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z")
+    val Search get() = icon("Search", "M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z")
+    val Play get() = icon("Play", "M8,5.14V19.14L19,12.14L8,5.14Z")
+    val Pause get() = icon("Pause", "M14,19H18V5H14M6,19H10V5H6V19Z")
+    val Settings get() = icon("Settings", "M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z")
+    val Tv get() = icon("Tv", "M21,17H3V5H21M21,3H3A2,2 0 0,0 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5A2,2 0 0,0 21,3Z")
+    /** Live TV: an old set with rabbit ears (MDI "television-classic"), so it differs from the Shows libraries. TV app only; desktop still uses Tv. */
+    val LiveTv get() = icon("LiveTv", "M8.16,3L6.75,4.41L9.34,7H4C2.89,7 2,7.89 2,9V19C2,20.1 2.9,21 4,21H20C21.1,21 22,20.1 22,19V9C22,7.89 21.1,7 20,7H14.66L17.25,4.41L15.84,3L12,6.84L8.16,3M4,9H17V19H4V9M19.5,9A1,1 0 0,1 20.5,10A1,1 0 0,1 19.5,11A1,1 0 0,1 18.5,10A1,1 0 0,1 19.5,9M19.5,12A1,1 0 0,1 20.5,13A1,1 0 0,1 19.5,14A1,1 0 0,1 18.5,13A1,1 0 0,1 19.5,12Z")
+    val Movie get() = icon("Movie", "M18,4L20,8H17L15,4H13L15,8H12L10,4H8L10,8H7L5,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V4H18Z")
+    val Request get() = icon("Request", "M17,13H13V17H11V13H7V11H11V7H13V11H17M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z")
+    val Heart get() = icon("Heart", "M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z")
+    val Check get() = icon("Check", "M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z")
+    val Back get() = icon("Back", "M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z")
+    val SkipNext get() = icon("SkipNext", "M16,18H18V6H16M6,18L14.5,12L6,6V18Z")
+    val Shuffle get() = icon("Shuffle", "M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z")
+    val SkipPrevious get() = icon("SkipPrevious", "M6,18V6H8V18H6M9.5,12L18,6V18L9.5,12Z")
+    val Rewind get() = icon("Rewind", "M11.5,12L20,18V6M11,18V6L2.5,12L11,18Z")
+    val Forward get() = icon("Forward", "M13,6V18L21.5,12M4,18L12.5,12L4,6V18Z")
+    val Subtitles get() = icon("Subtitles", "M20,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6A2,2 0 0,0 20,4M4,12H8V14H4V12M14,18H4V16H14V18M20,18H16V16H20V18M20,14H10V12H20V14Z")
+    val Volume get() = icon("Volume", "M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z")
+    val Fullscreen get() = icon("Fullscreen", "M5,5H10V7H7V10H5V5M14,5H19V10H17V7H14V5M17,14H19V19H14V17H17V14M10,17V19H5V14H7V17H10Z")
+    val Account get() = icon("Account", "M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z")
+    val Logout get() = icon("Logout", "M16,17V14H9V10H16V7L21,12L16,17M14,2A2,2 0 0,1 16,4V6H14V4H5V20H14V18H16V20A2,2 0 0,1 14,22H5A2,2 0 0,1 3,20V4A2,2 0 0,1 5,2H14Z")
+    val Library get() = icon("Library", "M4,6H2V20A2,2 0 0,0 4,22H18V20H4V6M20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2Z")
+    val Music get() = icon("Music", "M21,3V15.5A3.5,3.5 0 0,1 17.5,19A3.5,3.5 0 0,1 14,15.5A3.5,3.5 0 0,1 17.5,12C18.04,12 18.55,12.12 19,12.34V6.47L9,8.6V17.5A3.5,3.5 0 0,1 5.5,21A3.5,3.5 0 0,1 2,17.5A3.5,3.5 0 0,1 5.5,14C6.04,14 6.55,14.12 7,14.34V6L21,3Z")
+    val ChevronLeft get() = icon("ChevronLeft", "M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z")
+    val ChevronRight get() = icon("ChevronRight", "M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z")
+    val Close get() = icon("Close", "M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z")
+    val Grid get() = icon("Grid", "M3,11H11V3H3M3,21H11V13H3M13,21H21V13H13M13,3V11H21V3")
+    val Plus get() = icon("Plus", "M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z")
+    val Refresh get() = icon("Refresh", "M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z")
+    val Server get() = icon("Server", "M4,1H20A1,1 0 0,1 21,2V6A1,1 0 0,1 20,7H4A1,1 0 0,1 3,6V2A1,1 0 0,1 4,1M4,9H20A1,1 0 0,1 21,10V14A1,1 0 0,1 20,15H4A1,1 0 0,1 3,14V10A1,1 0 0,1 4,9M4,17H20A1,1 0 0,1 21,18V22A1,1 0 0,1 20,23H4A1,1 0 0,1 3,22V18A1,1 0 0,1 4,17M9,5H10V3H9V5M9,13H10V11H9V13M9,21H10V19H9V21M5,3V5H7V3H5M5,11V13H7V11H5M5,19V21H7V19H5Z")
+    val Key get() = icon("Key", "M7,14A2,2 0 0,1 5,12A2,2 0 0,1 7,10A2,2 0 0,1 9,12A2,2 0 0,1 7,14M12.65,10C11.83,7.67 9.61,6 7,6A6,6 0 0,0 1,12A6,6 0 0,0 7,18C9.61,18 11.83,16.33 12.65,14H17V18H21V14H23V10H12.65Z")
+    val Swap get() = icon("Swap", "M21,9L17,5V8H10V10H17V13M7,11L3,15L7,19V16H14V14H7V11Z")
+}

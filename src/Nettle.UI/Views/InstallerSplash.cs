@@ -153,7 +153,7 @@ public static class InstallerSplash
         word.VerticalAlignment = VerticalAlignment.Center;
 
         var chips = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 10, LineSpacing = 10, MaxWidth = 860, HorizontalAlignment = HorizontalAlignment.Left };
-        foreach (var c in new[] { "Direct play only · never transcodes", "NostalgiaTV live guide", "Seerr requests", "Intro skipping", $"{ThemeManager.All.Count} themes", "Zero telemetry" })
+        foreach (var c in new[] { "Direct play only · never transcodes", "New: Android TV", "NostalgiaTV live guide", "Seerr requests", "Intro skipping", $"{ThemeManager.All.Count} themes", "Zero telemetry" })
             chips.Children.Add(Chip(c));
 
         root.Children.Add(new StackPanel
@@ -164,7 +164,7 @@ public static class InstallerSplash
             Children =
             {
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 26, Children = { AppIcon.CreateTile(120, p), word } },
-                T("A fast, beautiful Jellyfin client for Windows and Linux, built on mpv.", 24, FontWeight.Medium, p.TextMuted),
+                T("A fast, beautiful Jellyfin client for Windows, Linux and Android TV.", 24, FontWeight.Medium, p.TextMuted),
                 chips,
             }
         });

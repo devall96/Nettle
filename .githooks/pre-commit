@@ -7,7 +7,7 @@
 fail=0
 
 # 1) Path allowlist (mirrors .gitignore).
-allowed='^(\.gitignore|\.githooks/.*|\.github/.*|src/.*|tests/.*|docs/.*|README\.md|LICENSE|THIRD_PARTY_NOTICES\.md|Nettle\.slnx|Directory\.Build\.(props|targets)|dotnet-tools\.json|build-release\.ps1|get-libmpv\.ps1)$'
+allowed='^(\.gitignore|\.githooks/.*|\.github/.*|src/.*|tests/.*|docs/.*|README\.md|LICENSE|THIRD_PARTY_NOTICES\.md|Nettle\.slnx|Directory\.Build\.(props|targets)|dotnet-tools\.json|build-release\.ps1|get-libmpv\.ps1|android/.*)$'
 bad_paths=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ev "$allowed")
 if [ -n "$bad_paths" ]; then
   echo "pre-commit: refusing to commit files outside Nettle's allowlist:" >&2

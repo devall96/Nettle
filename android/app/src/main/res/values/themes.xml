@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Midnight background until Compose draws, so start-up never flashes white. -->
+  <style name="NettleTheme" parent="android:Theme.DeviceDefault.NoActionBar.Fullscreen">
+    <item name="android:windowBackground">@color/nettle_bg</item>
+    <item name="android:windowContentOverlay">@null</item>
+    <item name="android:windowNoTitle">true</item>
+  </style>
+  <color name="nettle_bg">#0A0D16</color>
+</resources>

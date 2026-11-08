@@ -21,6 +21,7 @@
 !/dotnet-tools.json
 !/build-release.ps1
 !/get-libmpv.ps1
+!/android/
 
 # Build output inside the allowed folders
 bin/
@@ -29,3 +30,12 @@ obj/
 *.suo
 *.DotSettings.user
 TestResults/
+
+# Android (Gradle) build output and machine-local files
+.gradle/
+android/**/build/
+android/local.properties
+android/.kotlin/
+android/.idea/
+*.apk
+*.aab

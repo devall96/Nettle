@@ -26,6 +26,8 @@ public sealed class SettingsStore
         {
             if (File.Exists(_path))
                 Current = JsonSerializer.Deserialize(File.ReadAllText(_path), LocalJson.Default.AppSettings) ?? new();
+            // Older installs saved an empty update source: fill in Nettle's own releases.
+            if (string.IsNullOrWhiteSpace(Current.UpdateSource)) Current.UpdateSource = AppSettings.OfficialUpdateSource;
         }
         catch (Exception ex)
         {

@@ -74,6 +74,31 @@ public class NeverTranscodeTests
                 foreach (Match m in Regex.Matches(text, pattern))
                     hits.Add($"{Path.GetRelativePath(root, file)}: {why} ('{m.Value}')");
         }
+        // The native Android TV app (android/, Kotlin) is held to the same rule.
+        var android = Path.Combine(root, "android");
+        if (Directory.Exists(android))
+        {
+            var kotlin = new (string Pattern, string Why)[]
+            {
+                (@"master\.m3u8|main\.m3u8|/hls1?/", "HLS (transcoding) playlist"),
+                (@"(?i)transcodingUrl", "server transcoding URL"),
+                (@"(?i)enableTranscoding\s*(:\s*Boolean\s*)?=\s*true", "transcoding turned on"),
+                (@"(?i)enableDirectStream\s*(:\s*Boolean\s*)?=\s*true", "remuxing turned on"),
+                (@"(?i)allow(Video|Audio)StreamCopy\s*(:\s*Boolean\s*)?=\s*true", "remuxing turned on"),
+                (@"/Audio/[^""]*/universal", "universal (transcoding) audio endpoint"),
+                (@"(?i)""static""\s*,\s*false|static=false", "non-static (transcoded) stream"),
+                (@"androidx\.media3\.exoplayer\.(hls|dash|smoothstreaming)", "adaptive-streaming player module"),
+            };
+            var sep = Path.DirectorySeparatorChar;
+            foreach (var file in Directory.EnumerateFiles(android, "*.kt", SearchOption.AllDirectories))
+            {
+                if (!file.Contains($"{sep}src{sep}main{sep}") || file.Contains($"{sep}build{sep}")) continue;
+                var text = File.ReadAllText(file);
+                foreach (var (pattern, why) in kotlin)
+                    foreach (Match m in Regex.Matches(text, pattern))
+                        hits.Add($"{Path.GetRelativePath(root, file)}: {why} ('{m.Value}')");
+            }
+        }
         Assert.True(hits.Count == 0, "Transcoding request found:\n" + string.Join("\n", hits));
     }
 
