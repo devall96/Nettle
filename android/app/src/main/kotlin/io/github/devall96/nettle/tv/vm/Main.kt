@@ -19,7 +19,7 @@ object Main {
     var player by mutableStateOf<PlayerModel?>(null); private set
     var isStarting by mutableStateOf(true); private set
     var toastText by mutableStateOf<String?>(null); private set
-    var themeKey by mutableStateOf("midnight")
+    var themeKey by mutableStateOf(io.github.devall96.nettle.tv.theme.Themes.DEFAULT_KEY)
     var motionEnabled by mutableStateOf(true)
     var canvasWidth by mutableStateOf(1440)
 

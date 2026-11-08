@@ -147,7 +147,12 @@ object Themes {
             c("#2A2118"), c("#7A6A58"), c("#E2D6C4")),
     )
 
-    fun find(key: String?): ThemePalette = all.firstOrNull { it.key == key } ?: all[0]
+    /** The theme a fresh install starts in (same on Windows, Linux, Android TV and the download page). */
+    const val DEFAULT_KEY = "ocean" // Deep Sea
+
+    val default: ThemePalette get() = all.first { it.key == DEFAULT_KEY }
+
+    fun find(key: String?): ThemePalette = all.firstOrNull { it.key == key } ?: default
 }
 
 /** Inter, the same font files the Windows app uses (Avalonia.Fonts.Inter). */
@@ -187,7 +192,7 @@ val NettleTypography = NettleType(
     section = base.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp),
 )
 
-val LocalPalette = staticCompositionLocalOf { Themes.all[0] }
+val LocalPalette = staticCompositionLocalOf { Themes.default }
 val LocalType = staticCompositionLocalOf { NettleTypography }
 /** False when Settings → Reduce motion is on. */
 val LocalMotion = staticCompositionLocalOf { true }

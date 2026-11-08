@@ -65,7 +65,7 @@ public class SettingsTests
         var store = new SettingsStore(p);
         File.WriteAllText(Path.Combine(p.DataDirectory, "settings.json"), "{ this is not json");
         store.Load();
-        Assert.Equal("midnight", store.Current.Theme); // defaults
+        Assert.Equal("ocean", store.Current.Theme); // defaults (Deep Sea)
         var backups = Directory.GetFiles(p.DataDirectory, "settings.json.broken-*");
         Assert.Single(backups);
         Assert.Equal("{ this is not json", File.ReadAllText(backups[0]));

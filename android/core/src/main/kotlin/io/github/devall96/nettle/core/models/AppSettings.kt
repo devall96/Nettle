@@ -49,7 +49,8 @@ data class PlaybackSettings(
 
 @Serializable
 data class AppSettings(
-    var theme: String = "midnight",
+    /** Fresh installs start in Deep Sea (Themes.DEFAULT_KEY); existing settings keep their theme. */
+    var theme: String = "ocean",
     var autoLogin: Boolean = true,
     var lastAccountId: String? = null,
     var playback: PlaybackSettings = PlaybackSettings(),

@@ -73,9 +73,14 @@ public static class ThemeManager
             C("#2A2118"), C("#7A6A58"), C("#E2D6C4")),
     };
 
-    public static ThemePalette Current { get; private set; } = All[0];
+    /// <summary>The theme a fresh install starts in (same on Windows, Linux, Android TV and the download page).</summary>
+    public const string DefaultKey = "ocean"; // Deep Sea
 
-    public static ThemePalette Find(string? key) => All.FirstOrDefault(t => t.Key == key) ?? All[0];
+    public static ThemePalette Default => All.First(t => t.Key == DefaultKey);
+
+    public static ThemePalette Current { get; private set; } = Default;
+
+    public static ThemePalette Find(string? key) => All.FirstOrDefault(t => t.Key == key) ?? Default;
 
     /// <summary>Raised after a theme is applied (e.g. to recolour the window icon).</summary>
     public static event Action<ThemePalette>? Applied;

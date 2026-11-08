@@ -55,7 +55,8 @@ public sealed class PlaybackSettings
 
 public sealed class AppSettings
 {
-    public string Theme { get; set; } = "midnight";
+    /// <summary>Fresh installs start in Deep Sea (ThemeManager.DefaultKey); existing settings keep their theme.</summary>
+    public string Theme { get; set; } = "ocean";
     public bool AutoLogin { get; set; } = true;
     public string? LastAccountId { get; set; }
     public PlaybackSettings Playback { get; set; } = new();
