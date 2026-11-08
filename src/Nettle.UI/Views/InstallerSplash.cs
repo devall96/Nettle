@@ -19,7 +19,7 @@ public static class InstallerSplash
 
     public static void RenderTo(string path, string version)
     {
-        var p = ThemeManager.Find("midnight");
+        var p = ThemeManager.Default;
         var inter = new FontFamily("fonts:Inter#Inter");
 
         var tile = AppIcon.CreateTile(88, p);
@@ -118,7 +118,7 @@ public static class InstallerSplash
     public static void RenderBanner(string path)
     {
         const int w = 1280, h = 400;
-        var p = ThemeManager.Find("midnight");
+        var p = ThemeManager.Default;
         var inter = new FontFamily("fonts:Inter#Inter");
 
         var root = new Grid { Width = w, Height = h, Background = new SolidColorBrush(p.Background), ClipToBounds = true };
