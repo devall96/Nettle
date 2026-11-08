@@ -170,7 +170,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # Older versions' packages were only downloaded to build the delta; they already live on
-        # their own releases, so only this version's files are attached.
+        # their own releases, so only this version's files are attached. assets.*.json is vpk's own
+        # upload checklist (the app's updater never reads it), so it stays off the release page.
         run: |
           find releases -name '*.nupkg' ! -name "*-${{ needs.build.outputs.version }}-*" -print -delete
+          rm -f releases/assets.*.json
           gh release upload "v${{ needs.build.outputs.version }}" releases/* --clobber --repo "${{ github.repository }}"

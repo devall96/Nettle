@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download Nettle</title>
+  <meta name="description" content="Nettle, a fast Jellyfin client for Windows, Linux and Android TV. Direct play only: your server never transcodes.">
+  <link rel="icon" href="images/nettle-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0a17;
+      --bg-alt: #120f24;
+      --surface: #191530;
+      --surface-high: #221d3f;
+      --border: #2c2650;
+      --text: #f2f0ff;
+      --muted: #a39fc4;
+      --accent: #8b6cf6;
+      --accent-2: #4fa8ff;
+      --on-accent: #ffffff;
+      --ok: #86efac;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.5;
+      min-height: 100vh;
+      background-image:
+        radial-gradient(900px 500px at 15% -10%, rgba(139, 108, 246, 0.22), transparent 70%),
+        radial-gradient(800px 500px at 100% 0%, rgba(79, 168, 255, 0.14), transparent 70%);
+      background-repeat: no-repeat;
+    }
+    a { color: var(--accent-2); }
+    code {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.86em;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1px 6px;
+      overflow-wrap: anywhere;
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+    header { padding: 56px 0 28px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand img { width: 56px; height: 56px; border-radius: 14px; }
+    .brand span { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+    h1 {
+      font-size: clamp(32px, 5vw, 52px);
+      line-height: 1.08;
+      letter-spacing: -1.2px;
+      margin: 28px 0 14px;
+      max-width: 16ch;
+    }
+    .lede { color: var(--muted); font-size: 18px; max-width: 60ch; margin: 0; }
+    .release {
+      display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-top: 22px; padding: 8px 14px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+      font-size: 14px; color: var(--muted);
+    }
+    .release b { color: var(--text); font-weight: 600; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 18px;
+      margin: 34px 0 18px;
+    }
+    .card {
+      position: relative;
+      display: flex; flex-direction: column; gap: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 26px 24px 24px;
+    }
+    .card.mine { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 18px 50px -20px rgba(139, 108, 246, 0.55); }
+    .yours {
+      display: none;
+      position: absolute; top: -11px; left: 22px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color: var(--on-accent);
+      font-size: 12px; font-weight: 700; letter-spacing: 0.4px;
+      padding: 3px 10px; border-radius: 999px;
+    }
+    .card.mine .yours { display: inline-block; }
+    .os { display: flex; align-items: center; gap: 12px; }
+    .os svg { width: 30px; height: 30px; flex: none; fill: var(--text); }
+    .os h2 { margin: 0; font-size: 22px; letter-spacing: -0.3px; }
+    .os small { display: block; color: var(--muted); font-size: 13px; font-weight: 500; }
+
+    .btn {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      text-decoration: none;
+      border-radius: 14px;
+      padding: 14px 18px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--surface-high);
+      color: var(--text);
+      transition: transform 0.12s ease, filter 0.12s ease;
+    }
+    .btn:hover { filter: brightness(1.12); }
+    .btn:active { transform: translateY(1px); }
+    .btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+    .btn.primary {
+      background: linear-gradient(90deg, var(--accent), #6c7cf8 60%, var(--accent-2));
+      border-color: transparent;
+      color: var(--on-accent);
+      font-size: 17px;
+    }
+    .btn .file { display: flex; flex-direction: column; min-width: 0; }
+    .btn .file small { font-weight: 500; opacity: 0.8; font-size: 12.5px; overflow-wrap: anywhere; }
+    .btn .size { font-weight: 500; font-size: 13px; opacity: 0.85; white-space: nowrap; }
+    .btn svg { width: 20px; height: 20px; flex: none; fill: currentColor; }
+
+    .steps { margin: 2px 0 0; padding-left: 20px; color: var(--muted); font-size: 14.5px; }
+    .steps li { margin: 4px 0; }
+    .steps b { color: var(--text); font-weight: 600; }
+    .code-box {
+      display: none;
+      align-items: center; justify-content: space-between; gap: 12px;
+      background: var(--bg-alt); border: 1px dashed var(--accent); border-radius: 14px;
+      padding: 12px 16px;
+    }
+    .code-box.on { display: flex; }
+    .code-box span { color: var(--muted); font-size: 14px; }
+    .code-box strong { font-size: 26px; letter-spacing: 3px; }
+
+    .note {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 20px;
+      color: var(--muted);
+      font-size: 14.5px;
+    }
+    .note b { color: var(--text); }
+
+    .shot { margin: 40px 0 0; }
+    .shot img {
+      display: block; width: 100%; height: auto;
+      border-radius: 18px; border: 1px solid var(--border);
+      box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.8);
+    }
+    .points {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px; margin: 28px 0 0; padding: 0; list-style: none;
+    }
+    .points li { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; color: var(--muted); font-size: 14.5px; }
+    .points li b { display: block; color: var(--text); font-size: 15.5px; margin-bottom: 2px; }
+
+    footer { margin: 48px 0 40px; color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+    footer a { color: var(--muted); }
+
+    @media (max-width: 520px) {
+      header { padding-top: 36px; }
+      .lede { font-size: 16px; }
+      .card { padding: 24px 18px 20px; }
+    }
+    @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <img src="images/nettle-icon.png" alt="" width="56" height="56">
+        <span>Nettle</span>
+      </div>
+      <h1>Your Jellyfin, at full quality.</h1>
+      <p class="lede">A fast, good-looking Jellyfin client for <b>Windows</b>, <b>Linux</b> and <b>Android TV</b>. It always plays the original file, so your server never has to transcode.</p>
+      <div class="release" id="release"><span class="dot"></span><span>Newest version: <b id="release-name">see the release page</b></span><span id="release-date"></span></div>
+    </header>
+
+    <main>
+      <section class="cards" aria-label="Downloads">
+        <!-- Windows -->
+        <article class="card" id="card-windows">
+          <span class="yours">FOR THIS COMPUTER</span>
+          <div class="os">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.1 10.4 4v7.2H3zM11.3 3.9 21 2.5v8.7h-9.7zM3 12.1h7.4v7.2L3 18.2zM11.3 12.1H21v8.6l-9.7-1.3z"/></svg>
+            <div><h2>Windows</h2><small>Windows 10 or 11, 64-bit</small></div>
+          </div>
+          <a class="btn primary" href="https://github.com/devall96/Nettle/releases/latest/download/Nettle-win-Setup.exe">
+            <span class="file">Download installer<small>Nettle-win-Setup.exe</small></span>
+            <span class="size" data-asset="Nettle-win-Setup.exe"></span>
+          </a>
+          <a class="btn" href="https://github.com/devall96/Nettle/releases/latest/download/Nettle-win-Portable.zip">
+            <span class="file">Portable, no install<small>Nettle-win-Portable.zip</small></span>
+            <span class="size" data-asset="Nettle-win-Portable.zip"></span>
+          </a>
+          <ol class="steps">
+            <li>Run the installer. It installs for your user only, no admin needed.</li>
+            <li>If Windows says <b>"Windows protected your PC"</b> (Nettle isn't code-signed yet), click <b>More info → Run anyway</b>.</li>
+            <li>Later versions install from <b>Settings → Updates</b>.</li>
+          </ol>
+        </article>
+
+        <!-- Linux -->
+        <article class="card" id="card-linux">
+          <span class="yours">FOR THIS COMPUTER</span>
+          <div class="os">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c-2.2 0-3.6 1.9-3.6 4.6 0 1.2.2 2.1-.4 3.3-.8 1.5-2.6 3.5-2.6 6.2 0 .8.2 1.4.5 2-.9.4-1.6 1-1.6 1.8 0 1.3 1.8 1.6 3.6 2.1 1.1.3 2 .6 2.7.6.8 0 1.2-.5 1.4-.9h1c.2.4.6.9 1.4.9.7 0 1.6-.3 2.7-.6 1.8-.5 3.6-.8 3.6-2.1 0-.8-.7-1.4-1.6-1.8.3-.6.5-1.2.5-2 0-2.7-1.8-4.7-2.6-6.2-.6-1.2-.4-2.1-.4-3.3C15.6 3.9 14.2 2 12 2zm-1.4 4.2c.4 0 .7.5.7 1.1s-.3 1.1-.7 1.1-.7-.5-.7-1.1.3-1.1.7-1.1zm2.8 0c.4 0 .7.5.7 1.1s-.3 1.1-.7 1.1-.7-.5-.7-1.1.3-1.1.7-1.1zM12 9.3c.9 0 2 .6 2 1 0 .5-1.1 1.2-2 1.2s-2-.7-2-1.2c0-.4 1.1-1 2-1z"/></svg>
+            <div><h2>Linux</h2><small>AppImage: Ubuntu, Debian, Fedora, Arch…</small></div>
+          </div>
+          <a class="btn primary" href="https://github.com/devall96/Nettle/releases/latest/download/Nettle.AppImage">
+            <span class="file">Download AppImage<small>Nettle.AppImage</small></span>
+            <span class="size" data-asset="Nettle.AppImage"></span>
+          </a>
+          <ol class="steps">
+            <li>Make it executable: <b>Properties → Allow executing as program</b>, or <code>chmod +x Nettle.AppImage</code>.</li>
+            <li>Double-click it. Nettle offers to add itself to your applications menu.</li>
+            <li>Later versions install from <b>Settings → Updates</b>.</li>
+          </ol>
+        </article>
+
+        <!-- Android TV -->
+        <article class="card" id="card-tv">
+          <span class="yours">FOR THIS DEVICE</span>
+          <div class="os">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h7v2H8v2h8v-2h-2v-2h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 13H3V5h18v11z"/></svg>
+            <div><h2>Android TV</h2><small>Google TV, onn 4K, Chromecast, Shield… (Android 9+)</small></div>
+          </div>
+          <a class="btn primary" href="https://github.com/devall96/Nettle/releases/latest/download/Nettle-AndroidTV.apk">
+            <span class="file">Download APK<small>Nettle-AndroidTV.apk</small></span>
+            <span class="size" data-asset="Nettle-AndroidTV.apk"></span>
+          </a>
+          <div class="code-box" id="downloader-code"><span>Code for the<br>Downloader app</span><strong id="downloader-code-value"></strong></div>
+          <ol class="steps">
+            <li>On the TV, install <b>Downloader</b> (by AFTVnews) from the Play Store.</li>
+            <li>Allow it to install apps: <b>Settings → Apps → Security &amp; restrictions → Unknown sources</b>, turn on Downloader.</li>
+            <li>In Downloader, enter <span id="downloader-how">this address:<br><code>github.com/devall96/Nettle/releases/latest/download/Nettle-AndroidTV.apk</code></span>, then <b>Install</b>.</li>
+            <li>Later versions install from <b>Settings → Updates</b> in Nettle.</li>
+          </ol>
+        </article>
+      </section>
+
+      <p class="note">These are the only files you need. The release page on GitHub also lists files ending in <b>.nupkg</b>, <b>.json</b> and <b>RELEASES</b>: Nettle's built-in updater reads those, so you can ignore them.</p>
+
+      <figure class="shot">
+        <img src="images/home.png" alt="Nettle's Home screen: a spotlight banner with Continue Watching underneath" width="1440" height="900" loading="lazy">
+      </figure>
+
+      <ul class="points">
+        <li><b>Original quality, always</b>Direct play of the original file. 4K, HDR10, Dolby Vision, Atmos and DTS go out as they are.</li>
+        <li><b>Live TV like cable</b>A full guide, channel surfing and a tuning screen, with NostalgiaTV.</li>
+        <li><b>Private by design</b>No analytics or crash reporting. Nettle only connects to the servers you set up.</li>
+        <li><b>Same app everywhere</b>Windows, Linux and Android TV share one version and the same features.</li>
+      </ul>
+    </main>
+
+    <footer>
+      <a href="https://github.com/devall96/Nettle/releases/latest">Release notes</a>
+      <a href="https://github.com/devall96/Nettle/releases">All releases</a>
+      <a href="https://github.com/devall96/Nettle">Source code</a>
+      <a href="https://github.com/devall96/Nettle/issues">Report a bug</a>
+      <span>Nettle is not affiliated with Jellyfin.</span>
+    </footer>
+  </div>
+
+  <script>
+    // Set this to the AFTVnews Downloader code once there is one (e.g. "1234567"); empty hides the box.
+    var DOWNLOADER_CODE = "";
+
+    (function () {
+      if (DOWNLOADER_CODE) {
+        document.getElementById("downloader-code-value").textContent = DOWNLOADER_CODE;
+        document.getElementById("downloader-code").classList.add("on");
+        document.getElementById("downloader-how").innerHTML = "the code <b>" + DOWNLOADER_CODE + "</b>";
+      }
+
+      // Highlight the card for the visitor's own system.
+      var ua = navigator.userAgent || "";
+      var mine = /Android|AFT|BRAVIA|GoogleTV|CrKey/i.test(ua) ? "card-tv"
+        : /Windows/i.test(ua) ? "card-windows"
+        : /Linux|X11/i.test(ua) && !/CrOS/i.test(ua) ? "card-linux" : null;
+      if (mine) {
+        var card = document.getElementById(mine);
+        card.classList.add("mine");
+        card.parentNode.insertBefore(card, card.parentNode.firstElementChild);
+      }
+
+      // Version, date and file sizes from GitHub (the links above work without this).
+      function mb(bytes) { return (bytes / 1048576).toFixed(bytes < 10485760 ? 1 : 0) + " MB"; }
+      fetch("https://api.github.com/repos/devall96/Nettle/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (rel) {
+          if (!rel) return;
+          document.getElementById("release-name").textContent = rel.name || rel.tag_name;
+          if (rel.published_at) {
+            var d = new Date(rel.published_at);
+            document.getElementById("release-date").textContent = "· " + d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+          }
+          (rel.assets || []).forEach(function (a) {
+            document.querySelectorAll('[data-asset="' + a.name + '"]').forEach(function (el) { el.textContent = mb(a.size); });
+          });
+        })
+        .catch(function () { /* offline or rate-limited: the page still works */ });
+    })();
+  </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <b><a href="https://github.com/devall96/Nettle/releases/latest">⬇ Download Nettle for Windows, Linux or Android TV</a></b>
+  <b><a href="https://devall96.github.io/Nettle/">⬇ Download Nettle for Windows, Linux or Android TV</a></b>
   &nbsp;·&nbsp; <a href="#-testers-wanted">Testers wanted</a>
   &nbsp;·&nbsp; <a href="#features">Features</a>
   &nbsp;·&nbsp; <a href="#install">Install</a>
@@ -60,7 +60,7 @@ laptops, other Linux distros and desktops (KDE, XFCE…), multi-monitor and HDR 
 devices other than the onn 4K (NVIDIA Shield, Chromecast with Google TV, Google TV Streamer, TVs with
 Google TV built in…).** If you have a Jellyfin server and a few minutes, you'd help a lot:
 
-1. [Download](https://github.com/devall96/Nettle/releases/latest) the Windows installer, the Linux AppImage or the Android TV app.
+1. [Download](https://devall96.github.io/Nettle/) the Windows installer, the Linux AppImage or the Android TV app.
 2. Sign in and play a few different things: 4K / HDR / Dolby Vision files, older SD shows, surround
    audio, subtitles, and Live TV if you use NostalgiaTV.
 3. Tell us what broke, or that it worked, by

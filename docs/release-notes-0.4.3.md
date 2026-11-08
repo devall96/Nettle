@@ -2,6 +2,8 @@
 
 > [!TIP]
 > ### ⬇️ Downloads: these are the only files you need
+> Easiest: **[devall96.github.io/Nettle](https://devall96.github.io/Nettle/)** picks the right one for your device.
+>
 > - **Windows:** [**Nettle-win-Setup.exe**](https://github.com/devall96/Nettle/releases/download/v0.4.3/Nettle-win-Setup.exe) (installer) · or [Nettle-win-Portable.zip](https://github.com/devall96/Nettle/releases/download/v0.4.3/Nettle-win-Portable.zip) to run without installing
 > - **Linux:** [**Nettle.AppImage**](https://github.com/devall96/Nettle/releases/download/v0.4.3/Nettle.AppImage)
 > - **Android TV / Google TV:** [**Nettle-AndroidTV.apk**](https://github.com/devall96/Nettle/releases/download/v0.4.3/Nettle-AndroidTV.apk)
