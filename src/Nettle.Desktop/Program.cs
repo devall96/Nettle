@@ -60,6 +60,8 @@ internal static class Program
         if (bannerArg >= 0 && bannerArg + 1 < args.Length) App.RenderBannerPath = Path.GetFullPath(args[bannerArg + 1]);
         var iconArg = Array.IndexOf(args, "--render-icon");
         if (iconArg >= 0 && iconArg + 1 < args.Length) App.RenderIconFolder = Path.GetFullPath(args[iconArg + 1]);
+        var androidArg = Array.IndexOf(args, "--render-android");
+        if (androidArg >= 0 && androidArg + 1 < args.Length) App.RenderAndroidResFolder = Path.GetFullPath(args[androidArg + 1]);
         AppServices.Updater = new VelopackUpdater();
         AppServices.KeepAwake = OperatingSystem.IsWindows() ? new WindowsKeepAwake() : new LinuxKeepAwake();
 

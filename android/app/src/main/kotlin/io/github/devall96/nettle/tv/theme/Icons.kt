@@ -25,7 +25,7 @@ object Icons {
     val Pause get() = icon("Pause", "M14,19H18V5H14M6,19H10V5H6V19Z")
     val Settings get() = icon("Settings", "M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z")
     val Tv get() = icon("Tv", "M21,17H3V5H21M21,3H3A2,2 0 0,0 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5A2,2 0 0,0 21,3Z")
-    /** Live TV: an old set with rabbit ears (MDI "television-classic"), so it differs from the Shows libraries. TV app only; desktop still uses Tv. */
+    /** Live TV: an old set with rabbit ears (MDI "television-classic"), so it differs from the Shows libraries. Same on Windows / Linux (Icon.LiveTv). */
     val LiveTv get() = icon("LiveTv", "M8.16,3L6.75,4.41L9.34,7H4C2.89,7 2,7.89 2,9V19C2,20.1 2.9,21 4,21H20C21.1,21 22,20.1 22,19V9C22,7.89 21.1,7 20,7H14.66L17.25,4.41L15.84,3L12,6.84L8.16,3M4,9H17V19H4V9M19.5,9A1,1 0 0,1 20.5,10A1,1 0 0,1 19.5,11A1,1 0 0,1 18.5,10A1,1 0 0,1 19.5,9M19.5,12A1,1 0 0,1 20.5,13A1,1 0 0,1 19.5,14A1,1 0 0,1 18.5,13A1,1 0 0,1 19.5,12Z")
     val Movie get() = icon("Movie", "M18,4L20,8H17L15,4H13L15,8H12L10,4H8L10,8H7L5,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V4H18Z")
     val Request get() = icon("Request", "M17,13H13V17H11V13H7V11H11V7H13V11H17M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z")

@@ -45,7 +45,7 @@ fun LiveTvScreen(vm: LiveTvModel) {
             val setup = remember { androidx.compose.ui.focus.FocusRequester() }
             LaunchedEffect(Unit) { runCatching { setup.requestFocus() } }
             Column(Modifier.widthIn(max = 520.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Icon(Icons.Tv, size = 64.dp, tint = p.accent)
+                Icon(Icons.LiveTv, size = 64.dp, tint = p.accent)
                 T("Live TV with NostalgiaTV", style = Nettle.type.h2)
                 T("Point Nettle at your NostalgiaTV server to get its channels and full program guide. Streams play directly in Nettle's player.",
                     muted = true, align = TextAlign.Center)

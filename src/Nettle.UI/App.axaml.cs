@@ -21,8 +21,10 @@ public partial class App : Application
     public static string? RenderBannerPath { get; set; }
     /// <summary>Build-time mode: render the app icon files (nettle.png / nettle.ico) into this folder, then exit.</summary>
     public static string? RenderIconFolder { get; set; }
+    /// <summary>Build-time mode: render Android TV's launcher icons and home banner into this res folder, then exit.</summary>
+    public static string? RenderAndroidResFolder { get; set; }
 
-    public static bool IsRenderMode => RenderSplashPath != null || RenderBannerPath != null || RenderIconFolder != null;
+    public static bool IsRenderMode => RenderSplashPath != null || RenderBannerPath != null || RenderIconFolder != null || RenderAndroidResFolder != null;
 
     public override void OnFrameworkInitializationCompleted()
     {
@@ -34,6 +36,7 @@ public partial class App : Application
                 if (RenderSplashPath != null) InstallerSplash.RenderTo(RenderSplashPath, AppServices.Version);
                 if (RenderBannerPath != null) InstallerSplash.RenderBanner(RenderBannerPath);
                 if (RenderIconFolder != null) AppIcon.RenderFiles(RenderIconFolder);
+                if (RenderAndroidResFolder != null) AppIcon.RenderAndroidFiles(RenderAndroidResFolder);
             }
             catch (Exception ex) { Console.Error.WriteLine(ex); code = 1; }
             Environment.Exit(code);

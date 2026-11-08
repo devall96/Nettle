@@ -47,7 +47,7 @@
   <Grid RowDefinitions="Auto,Auto,*" Classes="page">
     <!-- Not configured -->
     <StackPanel Grid.RowSpan="3" IsVisible="{Binding NotConfigured}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14" MaxWidth="520">
-      <PathIcon Data="{StaticResource Icon.Tv}" Width="64" Height="64" Foreground="{DynamicResource AccentBrush}" />
+      <PathIcon Data="{StaticResource Icon.LiveTv}" Width="64" Height="64" Foreground="{DynamicResource AccentBrush}" />
       <TextBlock Classes="h2" Text="Live TV with NostalgiaTV" HorizontalAlignment="Center" />
       <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
                  Text="Point Nettle at your NostalgiaTV server to get its channels and full program guide. Streams play directly in Nettle's player." />

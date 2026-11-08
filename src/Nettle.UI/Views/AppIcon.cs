@@ -15,7 +15,7 @@ public static class AppIcon
 {
     public static Control CreateTile(double size, ThemePalette? palette = null)
     {
-        var p = palette ?? ThemeManager.Find(null);
+        var p = palette ?? ThemeManager.Default;
         return new Border
         {
             Width = size, Height = size,
@@ -71,6 +71,64 @@ public static class AppIcon
         foreach (var img in images) w.Write(img);
         w.Flush();
         return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Android TV's static icons in the default theme, written into the app's <c>res</c> folder:
+    /// the launcher icon at every density and the TV home-screen banner (320×180 dp: the icon
+    /// tile and the "Nettle" wordmark on the theme's background). Rendered with
+    /// <c>Nettle --render-android android/app/src/main/res</c>; inside the app the logo follows the chosen theme.
+    /// </summary>
+    public static void RenderAndroidFiles(string resFolder)
+    {
+        var p = ThemeManager.Default;
+        foreach (var (dir, px) in new[] { ("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192) })
+        {
+            Directory.CreateDirectory(Path.Combine(resFolder, "mipmap-" + dir));
+            File.WriteAllBytes(Path.Combine(resFolder, "mipmap-" + dir, "ic_launcher.png"), RenderPng(px, p));
+        }
+        foreach (var (dir, scale) in new[] { ("xhdpi", 1.0), ("xxhdpi", 1.5), ("xxxhdpi", 2.0) })
+        {
+            Directory.CreateDirectory(Path.Combine(resFolder, "drawable-" + dir));
+            SaveTvBanner(Path.Combine(resFolder, "drawable-" + dir, "banner.png"), scale, p);
+        }
+    }
+
+    /// <summary>The TV launcher banner at <paramref name="scale"/> × 320×180.</summary>
+    private static void SaveTvBanner(string path, double scale, ThemePalette p)
+    {
+        int w = (int)Math.Round(320 * scale), h = (int)Math.Round(180 * scale);
+        double tileSize = 118 * scale;
+        var root = new Grid
+        {
+            Width = w, Height = h,
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops = { new GradientStop(p.Background, 0), new GradientStop(p.SurfaceHigh, 1) }
+            },
+        };
+        var row = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 12 * scale,
+            Margin = new Thickness(16 * scale, 0, 0, 0),
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        row.Children.Add(CreateTile(tileSize, p));
+        row.Children.Add(new TextBlock
+        {
+            Text = "Nettle", FontFamily = new FontFamily("fonts:Inter#Inter"), FontSize = 54 * scale, FontWeight = FontWeight.ExtraBold,
+            LetterSpacing = -1.5 * scale, Foreground = new SolidColorBrush(p.Text), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        });
+        root.Children.Add(row);
+        root.Measure(new Size(w, h));
+        root.Arrange(new Rect(0, 0, w, h));
+        root.UpdateLayout();
+        using var bmp = new RenderTargetBitmap(new PixelSize(w, h), new Vector(96, 96));
+        bmp.Render(root);
+        bmp.Save(path);
     }
 
     /// <summary>Writes nettle.png (256 px) and nettle.ico (16–256 px) in the default theme into <paramref name="folder"/>.</summary>

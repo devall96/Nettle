@@ -52,7 +52,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         _main = main;
         NavTop.Add(new NavItemViewModel("home", "Home", "Icon.Home", () => NavigateRoot(_home)));
         NavTop.Add(new NavItemViewModel("search", "Search", "Icon.Search", () => NavigateRoot(new SearchViewModel())));
-        NavBottom.Add(new NavItemViewModel("livetv", "Live TV", "Icon.Tv", () => NavigateRoot(new LiveTvViewModel())));
+        NavBottom.Add(new NavItemViewModel("livetv", "Live TV", "Icon.LiveTv", () => NavigateRoot(new LiveTvViewModel())));
         NavBottom.Add(new NavItemViewModel("requests", "Requests", "Icon.Request", () => NavigateRoot(new RequestsViewModel())));
         NavBottom.Add(new NavItemViewModel("settings", "Settings", "Icon.Settings", () => NavigateRoot(new SettingsViewModel())));
     }
