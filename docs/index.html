@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
-    // Themes: "sky" (default) and "midnight" were made for this page; the rest are Nettle's own app
+    // Themes: "sky" and "midnight" were made for this page; the rest are Nettle's own app (default: Deep Sea)
     // themes, same colours. Order per theme: background, background alt, surface, surface high,
     // accent, accent 2, text on accent, text, muted text, border, light?
     var NETTLE_THEMES = {
@@ -32,7 +32,7 @@
       lavender: ["Lavender", "Soft lilac, light", "#f5f2fb", "#ece6f7", "#ffffff", "#faf8fe", "#7c4dff", "#e0569b", "#ffffff", "#1c1528", "#6a5f7e", "#dcd3ec", true],
       sand:     ["Sandstone", "Warm paper tones, light", "#f7f2ea", "#efe7da", "#fffdf9", "#fbf7f0", "#c2571a", "#2f7d6d", "#ffffff", "#2a2118", "#7a6a58", "#e2d6c4", true]
     };
-    var NETTLE_DEFAULT_THEME = "sky";
+    var NETTLE_DEFAULT_THEME = "ocean"; // Deep Sea
 
     // Sky and Midnight were designed first, with their own finishing details: kept exactly as made.
     var NETTLE_EXACT = {
@@ -82,28 +82,30 @@
   </script>
   <style>
     :root {
-      /* Sky, also set by the script above; kept here so the page has colours without JavaScript. */
-      --bg: #eaf5ff;
-      --bg-alt: #f3f9ff;
-      --surface: #ffffff;
-      --surface-high: #e2f0ff;
-      --border: #c7e1fb;
-      --text: #0d2a4a;
-      --muted: #4f6b8a;
-      --accent: #1f86ec;
-      --accent-2: #4fa8ff;
-      --on-accent: #ffffff;
-      --ok: #22c55e;
-      --glow-1: rgba(79, 168, 255, 0.35);
-      --glow-2: rgba(140, 205, 255, 0.45);
-      --link: #1f86ec;
-      --os-icon: #1f86ec;
-      --card-shadow: 0 12px 34px -22px rgba(31, 134, 236, 0.18);
-      --mine-shadow: 0 0 0 1px #4fa8ff, 0 20px 50px -18px rgba(31, 134, 236, 0.45);
-      --mine-border: #4fa8ff;
-      --primary-bg: linear-gradient(90deg, #1f86ec, #4fa8ff);
-      --hover: brightness(1.06) saturate(1.05);
-      --shot-shadow: 0 30px 70px -30px rgba(13, 42, 74, 0.45);
+      /* Deep Sea (the default), also set by the script above; kept here so the page has colours without JavaScript. */
+      --bg: #07101c;
+      --bg-alt: #0c1828;
+      --surface: #102036;
+      --surface-high: #172b47;
+      --border: #1f3a5c;
+      --text: #eaf6ff;
+      --muted: #8ca6c2;
+      --accent: #38bdf8;
+      --accent-2: #22d3ee;
+      --on-accent: #03131f;
+      --ok: #86efac;
+      --glow-1: rgba(56, 189, 248, 0.22);
+      --glow-2: rgba(34, 211, 238, 0.14);
+      --link: #38bdf8;
+      --os-icon: #38bdf8;
+      --card-shadow: none;
+      --mine-shadow: 0 0 0 1px #38bdf8, 0 18px 50px -20px rgba(56, 189, 248, 0.55);
+      --mine-border: #38bdf8;
+      --primary-bg: linear-gradient(90deg, #38bdf8, #22d3ee);
+      --hover: brightness(1.08);
+      --shot-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.8);
+      --glyph-filter: brightness(0);
+      color-scheme: dark;
     }
     * { box-sizing: border-box; }
     html { -webkit-text-size-adjust: 100%; }
@@ -310,7 +312,7 @@
         <div class="theme-wrap">
           <button class="theme-btn" id="theme-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="theme-panel">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
-            <span class="label">Theme: <span id="theme-name">Sky</span></span>
+            <span class="label">Theme: <span id="theme-name">Deep Sea</span></span>
           </button>
           <div class="theme-panel" id="theme-panel" role="group" aria-label="Page theme" hidden></div>
         </div>
