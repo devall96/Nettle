@@ -34,6 +34,11 @@ A hotfix that brings all three apps level with each other: the desktop apps get 
 - **Type a channel number** with the number keys (top row or numpad). It tunes after a short pause, or straight away on Enter.
 - **Last channel:** press **R**, or use the new button next to the channel arrows.
 - **Number keys on videos:** 0–9 jump to 0–90 % of the way in.
+- **Live TV has its own icon** on Windows and Linux too (an old TV set with rabbit ears), so it no longer looks like the TV Shows library.
+
+### 🌊 Deep Sea is the new look
+- New installs on Windows, Linux and Android TV start in the **Deep Sea** theme (cool blue). If you already picked a theme, nothing changes; all 16 themes are still in **Settings → Appearance**.
+- The app icon follows: Windows, the Linux menu entry, the installer, the Android TV launcher and its home-screen banner are all Deep Sea now.
 
 ### Install
 - **Windows:** run `Nettle-win-Setup.exe`. It installs for your user only, no admin rights needed. If Windows shows *"Windows protected your PC"* (Nettle isn't code-signed yet), click **More info → Run anyway**.
