@@ -1,0 +1,37 @@
+<!--
+  10-foot (TV) tweaks, loaded after Controls.axaml only when the platform says it's a TV.
+  The remote can't hover, so focus has to carry all the feedback, and nothing may rely on a mouse.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Every control has its own focus look; Avalonia's default rectangle only adds a second box. -->
+  <Style Selector=":is(Control)">
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <!-- Scrolling to the focused item is done by SpatialNavigation (it keeps a margin around it). -->
+    <Setter Property="ScrollViewer.BringIntoViewOnFocusChange" Value="False" />
+  </Style>
+
+  <!-- Text boxes: focusing one with the D-pad only highlights it; OK opens the on-screen keyboard
+       (MainView turns the input method on, and back off when the box loses focus). -->
+  <Style Selector="TextBox">
+    <Setter Property="(InputMethod.IsInputMethodEnabled)" Value="False" />
+  </Style>
+
+  <!-- No scroll bars on a TV (views set their visibility directly, so fade them instead). -->
+  <Style Selector="ScrollBar">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+  <!-- Cards: no zoom on focus (rows clip it at the edges); a stronger frame instead. -->
+  <Style Selector=":is(Control).motion Button.card:focus-visible">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+  <Style Selector="Button.card Border.frame">
+    <Setter Property="BorderThickness" Value="3" />
+  </Style>
+  <Style Selector="Button.card:focus-visible Border.frame">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+</Styles>

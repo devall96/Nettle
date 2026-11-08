@@ -31,11 +31,16 @@ public sealed class VideoSurface : NativeControlHost
     private IPlatformHandle? _native;
     private Window? _overlay;
     private Window? _owner;
+    // The controls shrink with the rest of the UI in a small window (AppServices.ContentScale).
+    private readonly LayoutTransformControl _scaler = new();
+
+    private void ApplyScale(double scale) =>
+        _scaler.LayoutTransform = scale < 0.999 ? new ScaleTransform(scale, scale) : null;
 
     static VideoSurface()
     {
         PlayerProperty.Changed.AddClassHandler<VideoSurface>((s, _) => s.AttachPlayer());
-        ContentProperty.Changed.AddClassHandler<VideoSurface>((s, _) => { if (s._overlay != null) s._overlay.Content = s.Content; });
+        ContentProperty.Changed.AddClassHandler<VideoSurface>((s, _) => s._scaler.Child = s.Content);
         IsVisibleProperty.Changed.AddClassHandler<VideoSurface>((s, _) => s.UpdateOverlay());
         BoundsProperty.Changed.AddClassHandler<VideoSurface>((s, _) => s.UpdateOverlay());
     }
@@ -82,8 +87,11 @@ public sealed class VideoSurface : NativeControlHost
             ShowActivated = true,
             SizeToContent = SizeToContent.Manual,
             Title = "Nettle player controls",
-            Content = Content,
+            Content = _scaler,
         };
+        _scaler.Child = Content;
+        ApplyScale(AppServices.ContentScale);
+        AppServices.ContentScaleChanged += ApplyScale;
         // Window managers can resize/move the overlay themselves (e.g. restoring its old size when
         // leaving full screen). Re-check whenever that happens.
         _overlay.PropertyChanged += (_, e) =>
@@ -98,6 +106,7 @@ public sealed class VideoSurface : NativeControlHost
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
+        AppServices.ContentScaleChanged -= ApplyScale;
         if (_owner != null)
         {
             _owner.LayoutUpdated -= OnOwnerMoved;
@@ -105,6 +114,7 @@ public sealed class VideoSurface : NativeControlHost
         }
         if (_overlay != null)
         {
+            _scaler.Child = null;
             _overlay.Content = null;
             _overlay.Close();
             _overlay = null;

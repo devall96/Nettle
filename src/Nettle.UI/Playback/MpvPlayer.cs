@@ -4,46 +4,13 @@ using System.Runtime.InteropServices;
 namespace Nettle.UI.Playback;
 
 /// <summary>
-/// One audio / subtitle track as mpv reports it. <see cref="FfIndex"/> is the stream's index in
-/// the file (what Jellyfin calls the stream index); <see cref="ExternalUrl"/> is set for
-/// subtitles loaded from a separate file.
-/// </summary>
-public sealed record MpvTrack(int Id, string Type, string Name, bool Selected, int? FfIndex = null, string? ExternalUrl = null);
-
-/// <summary>What to play and how: everything a single "loadfile" needs.</summary>
-public sealed class MpvLoad
-{
-    public required string Url { get; init; }
-    public double? StartSeconds { get; init; }
-    public string? AudioLanguage { get; init; }
-    public string? SubtitleLanguage { get; init; }
-    /// <summary>Default, Always, OnlyForced, Smart or None (Jellyfin's subtitle modes).</summary>
-    public string SubtitleMode { get; init; } = "Default";
-    public IReadOnlyList<(string Url, string Title, string? Language)> ExternalSubtitles { get; init; } = [];
-    /// <summary>Seconds of read-ahead to aim for (live feeds want a bit more).</summary>
-    public int CacheSeconds { get; init; } = 10;
-    /// <summary>Read-ahead memory cap in bytes, sized from the file's bitrate (null = mpv's default from the options).</summary>
-    public long? CacheBytes { get; init; }
-    /// <summary>
-    /// "Authorization" header value sent with every request for this file and its subtitles
-    /// (the token stays out of the URL). Only ever set for the user's own Jellyfin server.
-    /// </summary>
-    public string? AuthHeader { get; init; }
-    /// <summary>Take the audio device exclusively (Windows: needed only to bitstream TrueHD / DTS-HD).</summary>
-    public bool ExclusiveAudio { get; init; }
-}
-
-/// <summary>A chapter of the playing file (from the file itself).</summary>
-public sealed record MpvChapter(double Seconds, string? Title);
-
-/// <summary>
 /// One libmpv instance driving one video surface. libmpv's API is thread-safe, so calls are
 /// made directly; everything is guarded so nothing touches the handle once it's destroyed.
 /// The core is only initialized once the surface hands over its native window ("wid"), so mpv
 /// never opens a window of its own. State is cached from mpv's property notifications, so
 /// reading it (e.g. from a UI timer) never blocks.
 /// </summary>
-public sealed class MpvPlayer : IDisposable
+public sealed class MpvPlayer : IVideoPlayer
 {
     private readonly object _gate = new();
     private IntPtr _h;
@@ -57,7 +24,7 @@ public sealed class MpvPlayer : IDisposable
     private double _timeSec = -1, _durationSec;
     private long _width, _height, _audioRate;
     private long _currentEntry = -1;
-    private MpvLoad? _currentLoad;
+    private PlayerLoad? _currentLoad;
     private readonly HashSet<string> _loggedThisFile = new();
 
     /// <summary>First frame of a newly loaded file is ready .</summary>
@@ -277,6 +244,18 @@ public sealed class MpvPlayer : IDisposable
     /// <summary>True once audio is actually being decoded and sent to an output.</summary>
     public bool HasActiveAudio => _audioRate > 0;
 
+    public PlayerFeatures Features => PlayerFeatures.All;
+
+    // What mpv is really sending to the screen: "pq" / "hlg" = HDR signal.
+    public string? HdrOutputSignal => GetProperty("video-target-params/gamma");
+
+    // mpv reports an "spdif-…" output format when the bitstream goes to the receiver untouched.
+    public bool IsAudioPassthrough => GetProperty("audio-out-params/format")?.StartsWith("spdif", StringComparison.OrdinalIgnoreCase) == true;
+
+    public string DescribeOutput() =>
+        $"hwdec {GetProperty("hwdec-current") ?? "no"}, vo {GetProperty("current-vo")}, " +
+        $"audio {GetProperty("audio-codec-name")} → {GetProperty("audio-out-params/format") ?? "?"} via {GetProperty("current-ao")}";
+
     /// <summary>A property as a string (null if unavailable). Thread-safe; briefly waits on the core.</summary>
     public string? GetProperty(string name)
     {
@@ -288,7 +267,7 @@ public sealed class MpvPlayer : IDisposable
 
     // ---------------- control ----------------
 
-    public void Load(MpvLoad load)
+    public void Load(PlayerLoad load)
     {
         _currentLoad = load;
         _restarted = _fileLoaded = _ended = false;
@@ -316,7 +295,7 @@ public sealed class MpvPlayer : IDisposable
         });
     }
 
-    private void AddExternalSubtitles(MpvLoad? load)
+    private void AddExternalSubtitles(PlayerLoad? load)
     {
         if (load == null) return;
         foreach (var (url, title, lang) in load.ExternalSubtitles)
@@ -381,9 +360,9 @@ public sealed class MpvPlayer : IDisposable
         Run(h => Mpv.CommandAsync(h, "sub-add", url, "select", title, language ?? ""));
 
     /// <summary>The file's chapters (empty when it has none).</summary>
-    public IReadOnlyList<MpvChapter> GetChapters()
+    public IReadOnlyList<PlayerChapter> GetChapters()
     {
-        var list = new List<MpvChapter>();
+        var list = new List<PlayerChapter>();
         lock (_gate)
         {
             if (!_initialized || _h == IntPtr.Zero || _terminating) return list;
@@ -392,7 +371,7 @@ public sealed class MpvPlayer : IDisposable
             {
                 if (!double.TryParse(Mpv.GetString(_h, $"chapter-list/{i}/time"), NumberStyles.Float, CultureInfo.InvariantCulture, out var t)) continue;
                 var title = Mpv.GetString(_h, $"chapter-list/{i}/title");
-                list.Add(new MpvChapter(t, string.IsNullOrWhiteSpace(title) ? null : title));
+                list.Add(new PlayerChapter(t, string.IsNullOrWhiteSpace(title) ? null : title));
             }
         }
         return list;
@@ -406,9 +385,9 @@ public sealed class MpvPlayer : IDisposable
         return r >= 0;
     }
 
-    public IReadOnlyList<MpvTrack> GetTracks()
+    public IReadOnlyList<PlayerTrack> GetTracks()
     {
-        var list = new List<MpvTrack>();
+        var list = new List<PlayerTrack>();
         lock (_gate)
         {
             if (!_initialized || _h == IntPtr.Zero || _terminating) return list;
@@ -420,27 +399,11 @@ public sealed class MpvPlayer : IDisposable
                 if (type is not ("audio" or "sub") || !int.TryParse(P("id"), out var tid)) continue;
                 bool external = P("external") == "yes";
                 int? ff = int.TryParse(P("ff-index"), out var f) ? f : null;
-                list.Add(new MpvTrack(tid, type, DescribeTrack(P("title"), P("lang"), P("codec"), P("demux-channel-count"), external, type == "sub" && P("forced") == "yes"),
+                list.Add(new PlayerTrack(tid, type, PlayerText.DescribeTrack(P("title"), P("lang"), P("codec"), P("demux-channel-count"), external, type == "sub" && P("forced") == "yes"),
                     P("selected") == "yes", external ? null : ff, external ? P("external-filename") : null));
             }
         }
         return list;
     }
 
-    private static string DescribeTrack(string title, string lang, string codec, string channels, bool external, bool forced)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrEmpty(title)) parts.Add(title);
-        if (!string.IsNullOrEmpty(lang) && !title.Contains(lang, StringComparison.OrdinalIgnoreCase))
-        {
-            try { parts.Add(new CultureInfo(lang).EnglishName); } catch { parts.Add(lang.ToUpperInvariant()); }
-        }
-        var tech = new List<string>();
-        if (!string.IsNullOrEmpty(codec)) tech.Add(codec.ToUpperInvariant());
-        if (int.TryParse(channels, out var ch) && ch > 0) tech.Add(ch switch { 1 => "mono", 2 => "stereo", 6 => "5.1", 8 => "7.1", _ => ch + "ch" });
-        if (forced) tech.Add("forced");
-        if (external) tech.Add("external");
-        var name = parts.Count > 0 ? string.Join(" · ", parts) : "Track";
-        return tech.Count > 0 ? $"{name}  ({string.Join(", ", tech)})" : name;
-    }
 }

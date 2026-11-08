@@ -13,6 +13,8 @@ public partial class PlayerView : UserControl
     public PlayerView()
     {
         InitializeComponent();
+        // Video below the UI (Android TV): the page must be see-through or it hides the picture.
+        if (AppServices.Profile.VideoBehindUi) Background = Avalonia.Media.Brushes.Transparent;
 
         // The overlay may live in its own window (Windows), so wire its input directly.
         Overlay.PointerMoved += (_, _) => Vm?.UserActivity();

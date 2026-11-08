@@ -7,6 +7,17 @@ public enum SegmentAction
     AutoSkip = 2,
 }
 
+/// <summary>How the desktop window is shown (Windows and Linux; a TV is always full screen).</summary>
+public enum DisplayMode
+{
+    /// <summary>A normal window with the system's title bar and borders: move it, resize it to any size.</summary>
+    Windowed = 0,
+    /// <summary>A borderless window covering the whole monitor (alt-tab friendly).</summary>
+    Borderless = 1,
+    /// <summary>Full screen that takes over the display: kept on top, and the monitor's refresh rate follows the video.</summary>
+    Exclusive = 2,
+}
+
 public sealed class PlaybackSettings
 {
     public bool HardwareDecoding { get; set; } = true;
@@ -73,6 +84,11 @@ public sealed class AppSettings
 
     /// <summary>Main window size and position from the last session (null = first run).</summary>
     public WindowPlacement? Window { get; set; }
+
+    /// <summary>Settings → Display mode: what Nettle opens in (desktop only).</summary>
+    public DisplayMode DisplayMode { get; set; } = DisplayMode.Windowed;
+    /// <summary>The full-screen type F11 and the player switch to (Borderless or Exclusive).</summary>
+    public DisplayMode FullScreenKind { get; set; } = DisplayMode.Borderless;
 }
 
 public sealed class WindowPlacement

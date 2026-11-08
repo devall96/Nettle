@@ -34,10 +34,14 @@ public static class Log
     /// <summary>Masks access tokens / API keys anywhere in a message (including URLs from the player).</summary>
     public static string Redact(string? text) => string.IsNullOrEmpty(text) ? "" : Secrets.Replace(text, "$1$2***");
 
+    /// <summary>Extra place to copy log lines to (already redacted), e.g. Android's logcat in test builds.</summary>
+    public static Action<string, string>? Mirror { get; set; }
+
     private static void Write(string level, string msg)
     {
         if (_path == null) return;
         msg = Redact(msg);
+        Mirror?.Invoke(level, msg);
         try
         {
             lock (Gate) File.AppendAllText(_path, $"{DateTime.Now:HH:mm:ss.fff} {level} [{Environment.CurrentManagedThreadId}] {msg}{Environment.NewLine}");

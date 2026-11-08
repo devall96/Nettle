@@ -61,7 +61,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private int _channelIndex;
     private DateTime _bannerUntil;
 
-    public MpvPlayer Player { get; }
+    public IVideoPlayer Player { get; }
 
     [ObservableProperty] private string _title = "";
     [ObservableProperty] private string? _sourceLabel;
@@ -133,23 +133,24 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         if (hdr != null)
         {
             var display = AppServices.Window?.GetHdrState() ?? HdrDisplayState.Unknown;
-            // What mpv is really sending to the screen: "pq" / "hlg" = HDR signal.
-            var target = await Task.Run(() => Player.GetProperty("video-target-params/gamma"));
-            bool hdrOut = target is "pq" or "hlg";
+            // What the engine really sends to the screen: "pq" / "hlg" = HDR signal, "dovi" = Dolby Vision to the TV.
+            var target = await Task.Run(() => Player.HdrOutputSignal);
+            bool hdrOut = target is "pq" or "hlg" or "dovi";
             bool isDv = hdr.StartsWith("Dolby Vision");
-            string signal = target == "hlg" ? "HLG" : "HDR10 (PQ)";
+            string signal = target == "hlg" ? "HLG" : target == "dovi" ? "Dolby Vision" : "HDR10 (PQ)";
             if (hdrWarning != null)
                 badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), hdrWarning, false));
+            else if (isDv && target is "pq" && !Player.Features.HasFlag(PlayerFeatures.DolbyVisionMapping))
+                badges.Add(new FormatBadgeViewModel("HDR10", "Dolby Vision file, shown as its HDR10 version (this TV or player doesn't take Dolby Vision)", true));
             else if (hdrOut && display != HdrDisplayState.Sdr)
                 badges.Add(isDv
-                    ? new FormatBadgeViewModel("DOLBY VISION", $"Dolby Vision picture data applied, output as {signal} to your HDR display", true)
+                    ? new FormatBadgeViewModel("DOLBY VISION", target == "dovi" ? "Dolby Vision sent to your TV, which applies it" : $"Dolby Vision picture data applied, output as {signal} to your HDR display", true)
                     : new FormatBadgeViewModel(hdr.ToUpperInvariant(), $"HDR output active on this display ({signal})", true));
             else if (display == HdrDisplayState.Hdr)
                 badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), "Your display is in HDR, but this is being tone-mapped to SDR", false));
-            else if (display == HdrDisplayState.Sdr || !OperatingSystem.IsWindows())
-                badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), OperatingSystem.IsWindows()
-                    ? "Display is in SDR, so this is tone-mapped. Turn on Windows HDR for true HDR."
-                    : "Tone-mapped to SDR (HDR output isn't available on Linux yet)", false));
+            else if (display == HdrDisplayState.Sdr || AppServices.Profile.NoHdrOutputNote != null)
+                badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(),
+                    display == HdrDisplayState.Sdr ? AppServices.Profile.SdrDisplayNote : AppServices.Profile.NoHdrOutputNote!, false));
             else
                 badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), "Couldn't confirm your display's HDR mode", false));
         }
@@ -160,9 +161,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         var audioLabel = VideoFormat.AudioLabel(audio);
         if (audioPlaying && audioLabel != null)
         {
-            // mpv reports an "spdif-…" output format when the bitstream goes to the receiver untouched.
-            var outFormat = await Task.Run(() => Player.GetProperty("audio-out-params/format"));
-            bool passthrough = outFormat?.StartsWith("spdif", StringComparison.OrdinalIgnoreCase) == true;
+            bool passthrough = await Task.Run(() => Player.IsAudioPassthrough);
             var layout = VideoFormat.ChannelLayout(audio!.Channels);
             var detail = passthrough ? "Passed through untouched: your receiver decodes it"
                 : audioLabel is "Dolby Atmos" or "DTS:X"
@@ -197,6 +196,16 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     public bool HasNext => _nextEpisode != null;
     public bool IsVod => !IsLive;
 
+    /// <summary>Highest volume step: mpv can boost past 100%, other engines stop at 100.</summary>
+    public int MaxVolume => Player.Features.HasFlag(PlayerFeatures.VolumeBoost) ? 125 : 100;
+    public bool CanAdjustAudioDelay => Player.Features.HasFlag(PlayerFeatures.AudioDelay);
+    public bool CanAdjustSubtitleDelay => Player.Features.HasFlag(PlayerFeatures.SubtitleDelay);
+    /// <summary>TV: no window to make full screen, and the remote controls the TV's own volume.</summary>
+    public bool IsTv => AppServices.Profile.IsTv;
+    /// <summary>Live TV: the channel's logo sits on top of the format badges and fades with them.</summary>
+    public bool ShowBadgeLogo => IsLive && LogoUrl != null;
+    partial void OnLogoUrlChanged(string? value) => OnPropertyChanged(nameof(ShowBadgeLogo));
+
     /// <summary>False when the user turned on Reduce motion (fades and slides are skipped).</summary>
     public bool MotionEnabled { get; } = !AppServices.Settings.Current.ReduceMotion;
 
@@ -204,7 +213,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         _main = main;
         Player = PlaybackEngine.CreatePlayer(_settings.HardwareDecoding, _settings.AudioPassthrough);
-        _volume = Math.Clamp(_settings.Volume, 0, 125);
+        _volume = Math.Clamp(_settings.Volume, 0, MaxVolume);
         Player.SetVolume(_volume);
         Player.EndReached += () => Dispatcher.UIThread.Post(OnEnded);
         Player.Error += reason =>
@@ -216,11 +225,14 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         {
             // One line per file on how it's really being played (decoder, output), for bug reports.
             var (w, h) = Player.VideoSize;
-            Nettle.Core.Services.Log.Info($"playing: {w}x{h}, hwdec {Player.GetProperty("hwdec-current") ?? "no"}, vo {Player.GetProperty("current-vo")}, " +
-                $"audio {Player.GetProperty("audio-codec-name")} → {Player.GetProperty("audio-out-params/format") ?? "?"} via {Player.GetProperty("current-ao")}");
+            Nettle.Core.Services.Log.Info($"playing: {w}x{h}, {Player.DescribeOutput()}");
             Dispatcher.UIThread.Post(() =>
             {
                 IsBuffering = false;
+                IsTuning = false;
+                // Exclusive full screen: the monitor's refresh rate follows the video (Jellyfin's measured frame rate).
+                var video = _sourceStreams?.FirstOrDefault(s => s.Type == "Video");
+                AppServices.Window?.SetVideoFrameRate(video?.RealFrameRate ?? video?.AverageFrameRate);
                 LoadTracks();
                 LoadChapters();
                 _ = ShowFormatBadgesAsync(_tuneVersion, _mediaGeneration);
@@ -389,12 +401,12 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     /// external subtitles, language / subtitle preferences, a read-ahead sized from its bitrate,
     /// and the token as a header (never in the URL).
     /// </summary>
-    private MpvLoad LibraryLoad(string itemId, MediaSourceInfo source, string? playSessionId, double? startSeconds)
+    private PlayerLoad LibraryLoad(string itemId, MediaSourceInfo source, string? playSessionId, double? startSeconds)
     {
         var jf = AppServices.Jellyfin;
         _sourceStreams = source.MediaStreams;
         var audio = PickAudioStream();
-        return new MpvLoad
+        return new PlayerLoad
         {
             Url = jf.DirectStreamUrl(itemId, source.Id, playSessionId),
             StartSeconds = startSeconds,
@@ -481,7 +493,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     /// <summary>Sends a progress report about a second from now (coalesces bursts of seeks).</summary>
     private void ReportSoon() { if (!IsLive && _item != null) _reportAfter = DateTime.UtcNow.AddSeconds(1); }
 
-    private int? StreamIndexOf(MpvTrack t) =>
+    private int? StreamIndexOf(PlayerTrack t) =>
         t.FfIndex ?? (t.ExternalUrl != null ? _externalSubs.FirstOrDefault(s => s.Url == t.ExternalUrl)?.StreamIndex : null);
 
     // ===================== Live (NostalgiaTV) =====================
@@ -508,7 +520,11 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private void TuneTo(int index)
     {
         if (_channels == null || _channels.Count == 0) return;
-        _channelIndex = (index % _channels.Count + _channels.Count) % _channels.Count;
+        var target = (index % _channels.Count + _channels.Count) % _channels.Count;
+        if (_hasTuned && target != _channelIndex) _previousChannelIndex = _channelIndex;
+        _hasTuned = true;
+        _channelIndex = target;
+        IsTuning = true;
         var ch = _channels[_channelIndex];
         var version = ++_tuneVersion;
         _feedWatchStart = null;
@@ -558,7 +574,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _feedWatchStart = DateTime.UtcNow;
         LiveSourceLabel = "NostalgiaTV broadcast feed";
         // NostalgiaTV's own feed: no Jellyfin token goes to it (AuthHeader stays empty).
-        SwapMedia(new MpvLoad { Url = ch.StreamUrl, CacheSeconds = Math.Max(20, BufferSeconds), CacheBytes = 150L << 20 });
+        SwapMedia(new PlayerLoad { Url = ch.StreamUrl, CacheSeconds = Math.Max(20, BufferSeconds), CacheBytes = 150L << 20 });
         UpdateLiveInfo();
     }
 
@@ -650,11 +666,84 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     [RelayCommand] private void ChannelUp() => TuneTo(_channelIndex + 1);
     [RelayCommand] private void ChannelDown() => TuneTo(_channelIndex - 1);
 
+    // ---- Tuning screen (like a cable box's) ----
+
+    /// <summary>A channel or program switch is under way and its first picture isn't up yet.</summary>
+    [ObservableProperty] private bool _isTuning;
+
+    /// <summary>
+    /// Live TV covers each switch with the channel's logo, number and what's on until the new
+    /// picture is up, so the old frame never shows stretched while the next program starts.
+    /// </summary>
+    public bool IsTuningScreenVisible => IsLive && IsTuning && Error == null;
+
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName is nameof(IsTuning) or nameof(Error) or nameof(IsLive))
+            OnPropertyChanged(nameof(IsTuningScreenVisible));
+    }
+
+    // ---- Typed channel numbers and last channel ----
+
+    /// <summary>Digits typed during Live TV, shown on screen; tunes 1.5 s after the last digit (or on Enter).</summary>
+    [ObservableProperty] private string? _typedChannel;
+    private CancellationTokenSource? _typedCts;
+    private int? _previousChannelIndex;
+    private bool _hasTuned;
+
+    public void TypeChannelDigit(int digit)
+    {
+        if (!IsLive) return;
+        var typed = (TypedChannel ?? "") + digit;
+        TypedChannel = typed.Length > 5 ? typed[^5..] : typed;
+        _typedCts?.Cancel();
+        var cts = _typedCts = new CancellationTokenSource();
+        _ = CommitTypedChannelLaterAsync(cts.Token);
+    }
+
+    private async Task CommitTypedChannelLaterAsync(CancellationToken ct)
+    {
+        try { await Task.Delay(1500, ct); } catch (OperationCanceledException) { return; }
+        CommitTypedChannel();
+    }
+
+    /// <summary>Tunes to the typed channel number; true if there was one to commit.</summary>
+    public bool CommitTypedChannel()
+    {
+        var n = TypedChannel;
+        if (n == null) return false;
+        _typedCts?.Cancel();
+        TypedChannel = null;
+        if (_channels == null) return true;
+        int i = -1;
+        for (int k = 0; k < _channels.Count && i < 0; k++) if (_channels[k].Number == n) i = k;
+        for (int k = 0; k < _channels.Count && i < 0; k++) if (_channels[k].Number?.TrimStart('0') == n.TrimStart('0')) i = k;
+        if (i < 0) _main.Toast($"No channel {n}");
+        else TuneTo(i);
+        return true;
+    }
+
+    /// <summary>Jumps back to the channel watched before this one.</summary>
+    [RelayCommand]
+    private void LastChannel()
+    {
+        if (IsLive && _previousChannelIndex is { } i) TuneTo(i);
+    }
+
+    /// <summary>Number keys on a video: 0 = start, 5 = halfway, 9 = 90 %.</summary>
+    private void SeekToPercent(int percent)
+    {
+        if (IsLive || LengthMs <= 1) return;
+        ShowOsd();
+        SeekToMs(LengthMs * percent / 100.0);
+    }
+
     // ===================== Common =====================
 
     // mpv's client API is thread-safe and "loadfile replace" atomically swaps files, so fast
     // channel changes and program rollovers need no extra serialization (unlike libVLC).
-    private void SwapMedia(MpvLoad load)
+    private void SwapMedia(PlayerLoad load)
     {
         if (_disposed) return;
         _currentUrl = load.Url;
@@ -667,6 +756,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _chapters = new();
         ChapterMarks = Array.Empty<double>();
         ResetPerFileTuning();
+        // Live: program rollovers get the tuning screen too, until the new file's first picture.
+        if (IsLive) IsTuning = true;
         Nettle.Core.Services.Log.Info($"play {(IsLive ? (IsLiveDirect ? "live-direct" : "live-feed") : "vod")}: {Redact(load.Url)}" +
             (load.AuthHeader != null ? " (token sent as a header)" : ""));
         Player.Load(load);
@@ -796,7 +887,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     /// <summary>Live TV asks after this long with no input at all.</summary>
     private static readonly TimeSpan LiveStillWatchingAfter =
-#if DEBUG
+#if DEBUG || NETTLE_DEV
         // Testing: NETTLE_DEV_STILL=<seconds> makes the live prompt appear quickly.
         int.TryParse(Environment.GetEnvironmentVariable("NETTLE_DEV_STILL"), out var devStill) ? TimeSpan.FromSeconds(devStill) :
 #endif
@@ -1099,6 +1190,49 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     public void Close() => _main.ClosePlayer();
 
     /// <summary>Keyboard / remote handling. Returns true when the key was consumed.</summary>
+    public enum TvKeyResult { Handled, MoveFocus, LetFocusedControlHandle }
+
+    /// <summary>
+    /// TV remote, the way TV players behave: with the controls hidden, OK pauses / plays, left /
+    /// right seek and up / down bring the controls up (or change channel in Live TV). With the
+    /// controls showing, the D-pad moves between them and OK presses the focused one. Back hides
+    /// the controls first, then leaves the player.
+    /// </summary>
+    /// <param name="focusOnButton">A button (not the seek bar) inside the player has focus.</param>
+    public TvKeyResult HandleTvKey(Key key, bool focusOnButton)
+    {
+        if (IsStillWatchingVisible)
+            return focusOnButton && key is Key.Space or Key.Enter ? TvKeyResult.LetFocusedControlHandle
+                : HandleKey(key) ? TvKeyResult.Handled : TvKeyResult.MoveFocus;
+        if (key is Key.Enter && TypedChannel != null && CommitTypedChannel()) return TvKeyResult.Handled;
+        bool osd = IsOsdVisible;
+        bool panel = IsTracksOpen || IsSubtitleSearchOpen;
+        switch (key)
+        {
+            case Key.Space or Key.Enter:
+                _lastUserInput = DateTime.UtcNow;
+                _autoPlayedInARow = 0;
+                if ((osd || panel) && focusOnButton) { ShowOsd(); return TvKeyResult.LetFocusedControlHandle; }
+                if (IsSkipVisible && !osd) { Skip(); return TvKeyResult.Handled; }
+                TogglePlay();
+                ShowOsd();
+                return TvKeyResult.Handled;
+            case Key.Left or Key.Right:
+                if (((osd || panel) && focusOnButton) || IsLive) { ShowOsd(); return TvKeyResult.MoveFocus; }
+                break;
+            case Key.Up or Key.Down:
+                if (IsLive && !osd && !panel) break; // channel up / down
+                _lastUserInput = DateTime.UtcNow;
+                ShowOsd();
+                return TvKeyResult.MoveFocus;
+            case Key.Escape or Key.Back or Key.BrowserBack:
+                if (panel) break;
+                if (osd) { IsOsdVisible = false; return TvKeyResult.Handled; }
+                break;
+        }
+        return HandleKey(key) ? TvKeyResult.Handled : TvKeyResult.MoveFocus;
+    }
+
     public bool HandleKey(Key key)
     {
         _lastUserInput = DateTime.UtcNow;
@@ -1112,8 +1246,19 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 default: return true; // the prompt has focus until it's answered
             }
         }
+        // Number keys: a channel number on Live TV (tunes after a pause or on Enter), 0–9 = 0–90 % into a video.
+        int? digit = key is >= Key.D0 and <= Key.D9 ? key - Key.D0
+            : key is >= Key.NumPad0 and <= Key.NumPad9 ? key - Key.NumPad0 : null;
+        if (digit is { } d && !IsTracksOpen && !IsSubtitleSearchOpen)
+        {
+            if (IsLive) TypeChannelDigit(d); else SeekToPercent(d * 10);
+            return true;
+        }
+        if (key is Key.Enter && TypedChannel != null && CommitTypedChannel()) return true;
         switch (key)
         {
+            case Key.R when IsLive:
+                LastChannel(); return true;
             case Key.Space or Key.MediaPlayPause or Key.K:
                 TogglePlay(); return true;
             case Key.Enter when !IsOsdVisible:
@@ -1131,7 +1276,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             case Key.MediaPreviousTrack when IsLive:
                 ChannelDown(); return true;
             case Key.Up when IsVod && !IsTracksOpen:
-                Volume = Math.Min(125, Volume + 5); ShowOsd(); return true;
+                Volume = Math.Min(MaxVolume, Volume + 5); ShowOsd(); return true;
             case Key.Down when IsVod && !IsTracksOpen:
                 Volume = Math.Max(0, Volume - 5); ShowOsd(); return true;
             case Key.I:
@@ -1280,6 +1425,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _tick.Stop();
         AppServices.KeepAwake?.SetActive(false);
         if (!IsLive) Stopped = ReportStoppedAsync();
+        AppServices.Window?.SetVideoFrameRate(null);
         if (!_wasFullScreen) AppServices.Window?.SetFullScreen(false);
         _ = AppServices.Settings.SaveAsync();
         Nettle.Core.Services.Log.Info("player closed");

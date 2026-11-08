@@ -39,7 +39,7 @@ internal static class SelfTest
             player.LogMessage += (_, line) => Console.WriteLine("  " + line);
             player.Initialize(null);
             if (file == list[0]) Console.WriteLine($"{player.GetProperty("mpv-version")} / {player.GetProperty("ffmpeg-version")}");
-            player.Load(new MpvLoad { Url = file.Contains("://") ? file : Path.GetFullPath(file) });
+            player.Load(new PlayerLoad { Url = file.Contains("://") ? file : Path.GetFullPath(file) });
 
             // Wait for ~1.5 s of playback (or failure).
             var until = DateTime.UtcNow.AddSeconds(20);

@@ -34,7 +34,7 @@
                 <DataTemplate x:DataType="vm:SeerrSuggestionViewModel">
                   <Button Classes="card" Command="{Binding OpenCommand}" Padding="0" Background="Transparent" Width="150">
                     <StackPanel Spacing="6">
-                      <Border Width="150" Height="225" CornerRadius="10" ClipToBounds="True" Background="{DynamicResource SurfaceHighBrush}">
+                      <Border Classes="frame" Width="150" Height="225" CornerRadius="10" ClipToBounds="True" Background="{DynamicResource SurfaceHighBrush}">
                         <Grid>
                           <TextBlock Text="{Binding Title}" TextWrapping="Wrap" Margin="10" Classes="muted" VerticalAlignment="Center" TextAlignment="Center" />
                           <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="300" c:ImageLoader.Source="{Binding PosterUrl}" />

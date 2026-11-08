@@ -52,7 +52,7 @@
     </TransitioningContentControl>
 
     <!-- Back button (floating) -->
-    <Button Classes="glass icon" Command="{Binding GoBackCommand}" IsVisible="{Binding CanGoBack}"
+    <Button Classes="glass icon" Command="{Binding GoBackCommand}" IsVisible="{Binding ShowBackButton}"
             HorizontalAlignment="Left" VerticalAlignment="Top" Margin="100,36,0,0" ZIndex="5" ToolTip.Tip="Back (Esc)">
       <PathIcon Data="{StaticResource Icon.Back}" />
     </Button>

@@ -23,6 +23,11 @@
       <Setter Property="Background" Value="#33FFFFFF" />
       <Setter Property="Foreground" Value="White" />
     </Style>
+    <Style Selector="Button.osd:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#40FFFFFF" />
+      <Setter Property="BorderBrush" Value="White" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
     <Style Selector="Button.osd PathIcon">
       <Setter Property="Width" Value="26" />
       <Setter Property="Height" Value="26" />
@@ -30,6 +35,14 @@
     <Style Selector="Button.osd.big PathIcon">
       <Setter Property="Width" Value="40" />
       <Setter Property="Height" Value="40" />
+    </Style>
+    <!-- Remote focus on the seek bar: a bigger, glowing thumb instead of the default rectangle. -->
+    <Style Selector="Slider">
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+    </Style>
+    <Style Selector="Slider:focus-visible /template/ Thumb">
+      <Setter Property="RenderTransform" Value="scale(1.6)" />
+      <Setter Property="Background" Value="White" />
     </Style>
     <Style Selector="Panel#Overlay TextBlock">
       <Setter Property="Foreground" Value="White" />
@@ -51,6 +64,35 @@
     <Panel x:Name="Overlay" Background="#01000000" Classes.motion="{Binding MotionEnabled}">
       <!-- Buffering -->
       <Arc Classes="spin" Width="64" Height="64" StrokeThickness="5" IsVisible="{Binding IsBuffering}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+      <!-- Live TV tuning screen (like a cable box's): covers channel / program switches until the new picture is up,
+           so letterboxed channels never flash the old frame stretched in between. -->
+      <Panel Background="{DynamicResource BgBrush}" IsHitTestVisible="False"
+             Opacity="{Binding IsTuningScreenVisible, Converter={x:Static c:BoolToOpacity.Instance}}">
+        <Panel.Transitions>
+          <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.22" Easing="CubicEaseOut" /></Transitions>
+        </Panel.Transitions>
+        <Border Background="{DynamicResource AmbientGlowBrush}" />
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+          <Border Width="260" Height="156" CornerRadius="18" Padding="22" Background="{DynamicResource SurfaceBrush}" HorizontalAlignment="Center">
+            <Panel>
+              <TextBlock Text="{Binding Title, Converter={x:Static c:Initials.Instance}}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding LogoUrl, Converter={x:Static ObjectConverters.IsNull}}" />
+              <Image Classes="fade" Opacity="0" Stretch="Uniform" c:ImageLoader.DecodeWidth="432" c:ImageLoader.Source="{Binding LogoUrl}" />
+            </Panel>
+          </Border>
+          <StackPanel Orientation="Horizontal" Spacing="14" HorizontalAlignment="Center">
+            <TextBlock Classes="h2" Text="{Binding ChannelNumber}" Foreground="{DynamicResource AccentBrush}" />
+            <TextBlock Classes="h2" Text="{Binding Title}" Foreground="{DynamicResource TextBrush}" MaxLines="1" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <TextBlock Classes="h3" Text="{Binding NowTitle}" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" MaxLines="1" TextTrimming="CharacterEllipsis"
+                     IsVisible="{Binding NowTitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" Margin="0,8,0,0">
+            <Arc Classes="spin" Width="22" Height="22" StrokeThickness="3" VerticalAlignment="Center" />
+            <TextBlock Text="Tuning…" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+        </StackPanel>
+      </Panel>
 
       <!-- Error -->
       <Border IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Background="#DD111111" CornerRadius="16" Padding="28"
@@ -86,7 +128,7 @@
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
             <Button Classes="osd" Command="{Binding ToggleTracksCommand}" ToolTip.Tip="Audio &amp; subtitles"><PathIcon Data="{StaticResource Icon.Subtitles}" /></Button>
-            <Button Classes="osd" Command="{Binding ToggleFullScreenCommand}" ToolTip.Tip="Full screen (F)"><PathIcon Data="{StaticResource Icon.Fullscreen}" /></Button>
+            <Button Classes="osd" Command="{Binding ToggleFullScreenCommand}" IsVisible="{Binding !IsTv}" ToolTip.Tip="Full screen (F)"><PathIcon Data="{StaticResource Icon.Fullscreen}" /></Button>
           </StackPanel>
         </Grid>
 
@@ -124,8 +166,8 @@
           </Grid>
           <Grid ColumnDefinitions="*,Auto,*">
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-              <Button Classes="osd" Command="{Binding ToggleMuteCommand}"><PathIcon Data="{StaticResource Icon.Volume}" /></Button>
-              <Slider Width="130" Minimum="0" Maximum="125" Value="{Binding Volume}" VerticalAlignment="Center" />
+              <Button Classes="osd" Command="{Binding ToggleMuteCommand}" IsVisible="{Binding !IsTv}"><PathIcon Data="{StaticResource Icon.Volume}" /></Button>
+              <Slider Width="130" IsVisible="{Binding !IsTv}" Minimum="0" Maximum="{Binding MaxVolume}" Value="{Binding Volume}" VerticalAlignment="Center" />
               <TextBlock Text="{Binding EndsAtText}" Opacity="0.7" VerticalAlignment="Center" Margin="16,0,0,0" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="18">
@@ -172,6 +214,7 @@
             <TextBlock Text="{Binding NextTitle}" Opacity="0.65" TextTrimming="CharacterEllipsis" />
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Button Classes="osd" Command="{Binding LastChannelCommand}" ToolTip.Tip="Last channel (R). Type a number to jump to a channel."><PathIcon Data="{StaticResource Icon.Back}" /></Button>
             <Button Classes="osd" Command="{Binding ChannelDownCommand}" ToolTip.Tip="Channel down"><PathIcon Data="{StaticResource Icon.ChevronLeft}" /></Button>
             <Button Classes="osd big" Command="{Binding TogglePlayCommand}">
               <Panel>
@@ -195,12 +238,25 @@
                  HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" FontSize="26" FontWeight="Bold" />
 
       <!-- Channel banner (always shows briefly when tuning) -->
-      <Border IsVisible="{Binding IsChannelBannerVisible}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,40,44,0"
+      <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,40,44,0"
               Background="#CC000000" CornerRadius="14" Padding="22,14">
+        <Border.IsVisible>
+          <MultiBinding Converter="{x:Static BoolConverters.And}">
+            <Binding Path="IsChannelBannerVisible" />
+            <Binding Path="!IsTuningScreenVisible" />
+            <Binding Path="TypedChannel" Converter="{x:Static ObjectConverters.IsNull}" />
+          </MultiBinding>
+        </Border.IsVisible>
         <StackPanel>
           <TextBlock Text="{Binding ChannelNumber}" FontSize="34" FontWeight="ExtraBold" HorizontalAlignment="Right" />
           <TextBlock Text="{Binding Title}" FontWeight="SemiBold" HorizontalAlignment="Right" />
         </StackPanel>
+      </Border>
+
+      <!-- Channel number being typed (number keys on Live TV) -->
+      <Border IsVisible="{Binding TypedChannel, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalAlignment="Right" VerticalAlignment="Top"
+              Margin="0,40,44,0" Background="#CC000000" CornerRadius="14" Padding="22,14" IsHitTestVisible="False">
+        <TextBlock Text="{Binding TypedChannel, StringFormat='{}{0}_'}" FontSize="34" FontWeight="ExtraBold" />
       </Border>
 
       <!-- Skip segment -->
@@ -235,14 +291,18 @@
         </Grid>
       </Border>
 
-      <!-- TV-style format badges (verified output; press I to show again) -->
-      <ItemsControl ItemsSource="{Binding FormatBadges}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,104,40,0"
-                    Opacity="{Binding IsFormatBadgesVisible, Converter={x:Static c:BoolToOpacity.Instance}}" IsHitTestVisible="False">
-        <ItemsControl.Transitions>
+      <!-- TV-style format badges (verified output; press I to show again). Live TV: the channel's logo on top, same chip style. -->
+      <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,104,40,0" Spacing="10"
+                  Opacity="{Binding IsFormatBadgesVisible, Converter={x:Static c:BoolToOpacity.Instance}}" IsHitTestVisible="False">
+        <StackPanel.Transitions>
           <Transitions>
             <DoubleTransition Property="Opacity" Duration="0:0:0.45" Easing="CubicEaseOut" />
           </Transitions>
-        </ItemsControl.Transitions>
+        </StackPanel.Transitions>
+        <Border IsVisible="{Binding ShowBadgeLogo}" HorizontalAlignment="Right" Width="112" Height="60" CornerRadius="12" Padding="10,8" Background="#D90A0A0F">
+          <Image Classes="fade" Opacity="0" Stretch="Uniform" c:ImageLoader.DecodeWidth="224" c:ImageLoader.Source="{Binding LogoUrl}" />
+        </Border>
+      <ItemsControl ItemsSource="{Binding FormatBadges}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
@@ -252,7 +312,7 @@
                     BorderBrush="{DynamicResource AccentBrush}" Classes.dim="{Binding NotVerified}">
               <StackPanel Spacing="2">
                 <TextBlock Text="{Binding Label}" FontSize="20" FontWeight="ExtraBold" LetterSpacing="1.5" HorizontalAlignment="Right" />
-                <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" TextAlignment="Right" HorizontalAlignment="Right" />
+                <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" HorizontalAlignment="Right" />
               </StackPanel>
             </Border>
           </DataTemplate>
@@ -264,6 +324,7 @@
           </Style>
         </ItemsControl.Styles>
       </ItemsControl>
+      </StackPanel>
 
       <!-- "Are you still watching?" (Settings → Playback can turn this off) -->
       <Panel IsVisible="{Binding IsStillWatchingVisible}" Background="#B3000000">
@@ -321,13 +382,13 @@
                 <TextBlock Grid.Column="2" Text="{Binding SpeedText}" MinWidth="64" TextAlignment="Center" VerticalAlignment="Center" FontFeatures="tnum" />
                 <Button Grid.Column="3" Content="+" Command="{Binding FasterCommand}" Padding="10,2" />
               </Grid>
-              <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,0">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,0" IsVisible="{Binding CanAdjustSubtitleDelay}">
                 <TextBlock Text="Subtitle timing  Z X" VerticalAlignment="Center" />
                 <Button Grid.Column="1" Content="−" Command="{Binding SubtitleEarlierCommand}" Padding="10,2" />
                 <TextBlock Grid.Column="2" Text="{Binding SubtitleDelayText}" MinWidth="64" TextAlignment="Center" VerticalAlignment="Center" FontFeatures="tnum" />
                 <Button Grid.Column="3" Content="+" Command="{Binding SubtitleLaterCommand}" Padding="10,2" />
               </Grid>
-              <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,0">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,0" IsVisible="{Binding CanAdjustAudioDelay}">
                 <TextBlock Text="Audio timing" VerticalAlignment="Center" />
                 <Button Grid.Column="1" Content="−" Command="{Binding AudioEarlierCommand}" Padding="10,2" />
                 <TextBlock Grid.Column="2" Text="{Binding AudioDelayText}" MinWidth="64" TextAlignment="Center" VerticalAlignment="Center" FontFeatures="tnum" />

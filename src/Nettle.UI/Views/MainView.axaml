@@ -4,11 +4,12 @@
              xmlns:v="using:Nettle.UI.Views"
              x:Class="Nettle.UI.Views.MainView"
              x:DataType="vm:MainViewModel"
-             Background="{DynamicResource BgBrush}">
+             Background="Transparent">
   <!-- "motion" turns on the fades / slides in Controls.axaml (off with Settings → Reduce motion). -->
   <Grid Classes.motion="{Binding MotionEnabled}">
     <!-- Soft ambient glow behind everything -->
-    <Border Background="{DynamicResource AmbientGlowBrush}" IsHitTestVisible="False" />
+    <Border Background="{DynamicResource BgBrush}" IsHitTestVisible="False" IsVisible="{Binding ShowAppBackground}" />
+    <Border Background="{DynamicResource AmbientGlowBrush}" IsHitTestVisible="False" IsVisible="{Binding ShowAppBackground}" />
 
     <TransitioningContentControl x:Name="RootHost" Content="{Binding Root}" IsVisible="{Binding !IsPlayerOpen}">
       <TransitioningContentControl.PageTransition>

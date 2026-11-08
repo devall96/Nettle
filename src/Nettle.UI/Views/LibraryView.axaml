@@ -4,35 +4,34 @@
              x:Class="Nettle.UI.Views.LibraryView"
              x:DataType="vm:LibraryViewModel">
   <Grid RowDefinitions="Auto,*" Classes="page">
-    <Grid ColumnDefinitions="*,Auto" Margin="56,40,56,12">
+    <!-- Filters get their own row: on narrow screens (a TV is 960 wide) they wrap instead of squeezing the title. -->
+    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="56,40,56,12">
       <StackPanel Spacing="2" VerticalAlignment="Center">
         <TextBlock Classes="h1" Text="{Binding Title}" />
         <TextBlock Classes="muted" Text="{Binding CountText}" />
       </StackPanel>
-      <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Center" HorizontalAlignment="Right">
-        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
-          <Button Classes="primary" Command="{Binding PlayAllCommand}" ToolTip.Tip="Play everything here, in this order">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <PathIcon Data="{StaticResource Icon.Play}" Width="16" Height="16" Foreground="{DynamicResource OnAccentBrush}" />
-              <TextBlock Text="Play all" Foreground="{DynamicResource OnAccentBrush}" />
-            </StackPanel>
-          </Button>
-          <Button Command="{Binding ShuffleCommand}" ToolTip.Tip="Play everything here in random order">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <PathIcon Data="{StaticResource Icon.Shuffle}" Width="16" Height="16" />
-              <TextBlock Text="Shuffle" />
-            </StackPanel>
-          </Button>
-        </StackPanel>
-        <WrapPanel HorizontalAlignment="Right" ItemSpacing="10" LineSpacing="8">
-          <ComboBox ItemsSource="{Binding GenreOptions}" SelectedItem="{Binding Genre}" MinWidth="140" IsVisible="{Binding ShowExtraFilters}" />
-          <ComboBox ItemsSource="{Binding DecadeOptions}" SelectedItem="{Binding Decade}" MinWidth="120" IsVisible="{Binding ShowExtraFilters}" />
-          <ComboBox ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding Quality}" MinWidth="120" IsVisible="{Binding ShowExtraFilters}" />
-          <ComboBox ItemsSource="{Binding FilterOptions}" SelectedItem="{Binding Filter}" MinWidth="140" />
-          <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Sort}" MinWidth="160" />
-        </WrapPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" VerticalAlignment="Center">
+        <Button Classes="primary" Command="{Binding PlayAllCommand}" ToolTip.Tip="Play everything here, in this order">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource Icon.Play}" Width="16" Height="16" Foreground="{DynamicResource OnAccentBrush}" />
+            <TextBlock Text="Play all" Foreground="{DynamicResource OnAccentBrush}" />
+          </StackPanel>
+        </Button>
+        <Button Command="{Binding ShuffleCommand}" ToolTip.Tip="Play everything here in random order">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource Icon.Shuffle}" Width="16" Height="16" />
+            <TextBlock Text="Shuffle" />
+          </StackPanel>
+        </Button>
       </StackPanel>
-    </Grid>
+      <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Right" ItemSpacing="10" LineSpacing="8" Margin="0,10,0,0">
+        <ComboBox ItemsSource="{Binding GenreOptions}" SelectedItem="{Binding Genre}" MinWidth="140" IsVisible="{Binding ShowExtraFilters}" />
+        <ComboBox ItemsSource="{Binding DecadeOptions}" SelectedItem="{Binding Decade}" MinWidth="120" IsVisible="{Binding ShowExtraFilters}" />
+        <ComboBox ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding Quality}" MinWidth="120" IsVisible="{Binding ShowExtraFilters}" />
+        <ComboBox ItemsSource="{Binding FilterOptions}" SelectedItem="{Binding Filter}" MinWidth="140" />
+        <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Sort}" MinWidth="160" />
+      </WrapPanel>
+  </Grid>
 
     <!-- Rows are virtualized: only on-screen rows of cards exist. -->
     <ItemsControl Grid.Row="1" x:Name="RowsHost" ItemsSource="{Binding Rows}" Padding="56,8,40,40">

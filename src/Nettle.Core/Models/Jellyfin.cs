@@ -125,6 +125,8 @@ public sealed class MediaStream
     public int? Channels { get; set; }
     public string? ChannelLayout { get; set; }
     public int? BitRate { get; set; }
+    public float? RealFrameRate { get; set; }
+    public float? AverageFrameRate { get; set; }
 }
 
 public sealed class MediaSourceInfo

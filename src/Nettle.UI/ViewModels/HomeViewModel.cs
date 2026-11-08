@@ -133,7 +133,7 @@ public sealed partial class HomeViewModel : PageViewModel
             heroPool.AddRange(items.Where(i => (i.IsMovie || i.IsSeries) && i.BackdropImageTags is { Count: > 0 }).Take(4));
         }
 
-        rows.Add(new CardRowViewModel("My Libraries", s.Views.Select(l => new MediaCardViewModel(l, CardShape.Landscape)).ToList()));
+        rows.Add(new CardRowViewModel("My Libraries", s.Views.Where(l => l.CollectionType is not ("music" or "playlists" or "livetv")).Select(l => new MediaCardViewModel(l, CardShape.Landscape)).ToList()));
 
         // Update in place (e.g. after closing the player), so the page and each row keep
         // their scroll position and only changed cards are redrawn.

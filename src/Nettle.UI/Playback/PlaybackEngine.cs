@@ -72,7 +72,7 @@ public static class PlaybackEngine
     {
         yield return new("audio-spdif", "ac3,eac3,dts,dts-hd,truehd");
         // Windows only sends TrueHD / DTS-HD bitstreams with exclusive access to the device, so
-        // that's requested per file, only for those (see MpvLoad.ExclusiveAudio).
+        // that's requested per file, only for those (see PlayerLoad.ExclusiveAudio).
     }
 
     /// <summary>
@@ -92,11 +92,20 @@ public static class PlaybackEngine
         return false;
     }
 
-    public static MpvPlayer CreatePlayer(bool hardwareDecoding, bool passthrough = false) =>
-        new(BaseOptions(hardwareDecoding).Concat(PlatformOptions).Concat(passthrough ? PassthroughOptions() : []));
+    /// <summary>
+    /// Replaces mpv with another engine (Android TV: Media3). Arguments: hardware decoding,
+    /// audio passthrough. The engine must only ever play the direct-play URL it is given.
+    /// </summary>
+    public static Func<bool, bool, IVideoPlayer>? Factory { get; set; }
+
+    public static IVideoPlayer CreatePlayer(bool hardwareDecoding, bool passthrough = false) =>
+        Factory?.Invoke(hardwareDecoding, passthrough)
+        ?? new MpvPlayer(BaseOptions(hardwareDecoding).Concat(PlatformOptions).Concat(passthrough ? PassthroughOptions() : []));
 
     /// <summary>Loads libmpv off the UI thread so the first play is instant.</summary>
-    public static void Prewarm() => Task.Run(() =>
+    public static void Prewarm() { if (Factory == null) PrewarmMpv(); }
+
+    private static void PrewarmMpv() => Task.Run(() =>
     {
         try { Mpv.EnsureResolver(); _ = Mpv.mpv_client_api_version(); }
         catch (Exception ex) { Nettle.Core.Services.Log.Error("libmpv failed to load", ex); }

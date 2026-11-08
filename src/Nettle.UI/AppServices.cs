@@ -15,7 +15,18 @@ public static class AppServices
     /// <summary>App version, taken from the build (Directory.Build.props &lt;Version&gt;).</summary>
     public static readonly string Version = typeof(AppServices).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
+    /// <summary>Optional release label from the build (Directory.Build.props &lt;NettleReleaseLabel&gt;), e.g. "parity hotfix".</summary>
+    public static readonly string ReleaseLabel =
+        typeof(AppServices).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .OfType<System.Reflection.AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "NettleReleaseLabel")?.Value?.Trim() ?? "";
+
+    /// <summary>"0.4.3" or "0.4.3 · parity hotfix".</summary>
+    public static string VersionWithLabel => ReleaseLabel.Length > 0 ? $"{Version} · {ReleaseLabel}" : Version;
+
     public static IPlatformInfo Platform { get; private set; } = null!;
+    /// <summary>Per-platform wording and switches (set by the head before the UI starts).</summary>
+    public static PlatformProfile Profile { get; set; } = PlatformProfile.Desktop();
     public static ISecureStore Secure { get; private set; } = null!;
     public static IWindowHost? Window { get; set; }
     public static IUpdater? Updater { get; set; }
@@ -23,6 +34,8 @@ public static class AppServices
     public static IDesktopIntegration? Desktop { get; set; }
     /// <summary>Keeps the screen on while video plays (null where nothing is needed).</summary>
     public static IKeepAwake? KeepAwake { get; set; }
+    /// <summary>TV: go back to the launcher (Back pressed on Home). Null on desktop.</summary>
+    public static Action? LeaveApp { get; set; }
     public static SettingsStore Settings { get; private set; } = null!;
     public static AccountStore Accounts { get; private set; } = null!;
     public static JellyfinClient Jellyfin { get; private set; } = null!;
@@ -37,6 +50,18 @@ public static class AppServices
     public static RemoteControl Remote { get; private set; } = null!;
     /// <summary>Display scaling of the main window (2 on a 4K screen at 200%), for sizing images.</summary>
     public static double UiScale { get; set; } = 1;
+
+    private static double _contentScale = 1;
+    /// <summary>
+    /// Desktop: how much the whole UI is shrunk to fit a small window (1 = full size). Windows
+    /// that sit over the video (the player controls) follow it too.
+    /// </summary>
+    public static double ContentScale
+    {
+        get => _contentScale;
+        set { if (Math.Abs(_contentScale - value) < 0.0001) return; _contentScale = value; ContentScaleChanged?.Invoke(value); }
+    }
+    public static event Action<double>? ContentScaleChanged;
 
     public static void Initialize(IPlatformInfo platform, ISecureStore secure)
     {
@@ -85,9 +110,17 @@ public static class AppServices
 public interface IWindowHost
 {
     bool IsFullScreen { get; }
+    /// <summary>On: the full-screen type chosen in Settings (borderless or exclusive). Off: windowed.</summary>
     void SetFullScreen(bool on);
     /// <summary>Whether the monitor showing the app is currently in HDR mode.</summary>
     HdrDisplayState GetHdrState();
+
+    /// <summary>Windowed / borderless / exclusive switching is available (desktop, not a TV).</summary>
+    bool SupportsDisplayModes => false;
+    Nettle.Core.Models.DisplayMode DisplayMode => IsFullScreen ? Nettle.Core.Models.DisplayMode.Borderless : Nettle.Core.Models.DisplayMode.Windowed;
+    void SetDisplayMode(Nettle.Core.Models.DisplayMode mode) => SetFullScreen(mode != Nettle.Core.Models.DisplayMode.Windowed);
+    /// <summary>Frame rate of the video now playing (null when none), for exclusive full screen's refresh-rate matching.</summary>
+    void SetVideoFrameRate(double? fps) { }
 }
 
 public enum HdrDisplayState { Unknown, Sdr, Hdr }

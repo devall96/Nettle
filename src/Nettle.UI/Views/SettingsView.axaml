@@ -63,6 +63,14 @@
             </StackPanel>
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding ReduceMotion}" OnContent="" OffContent="" VerticalAlignment="Center" />
           </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding ShowDisplayModes}">
+            <StackPanel>
+              <TextBlock Text="Display mode" FontWeight="SemiBold" />
+              <TextBlock TextWrapping="Wrap" Classes="muted caption"
+                         Text="Windowed: a normal window you can move and resize to any size; the app scales to fit. Borderless: full screen, easy to alt-tab. Exclusive: full screen kept on top, and on Windows the monitor's refresh rate follows the video. F11 switches between windowed and full screen." />
+            </StackPanel>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding DisplayModes}" SelectedItem="{Binding DisplayModeChoice}" MinWidth="220" VerticalAlignment="Center" />
+          </Grid>
         </StackPanel>
       </Border>
 
@@ -71,10 +79,10 @@
         <StackPanel Spacing="4">
           <TextBlock Classes="section" Text="PLAYBACK" Margin="0,0,0,8" />
           <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="10" Padding="14,10" Margin="0,0,0,8">
-            <TextBlock TextWrapping="Wrap" Text="Nettle always direct-plays the original file with mpv. It never asks your server to transcode or remux, so quality is untouched and server CPU stays idle." />
+            <TextBlock TextWrapping="Wrap" Text="{Binding DirectPlayText}" />
           </Border>
-          <Grid Classes="row" ColumnDefinitions="*,Auto">
-            <StackPanel><TextBlock Text="Hardware decoding" FontWeight="SemiBold" /><TextBlock Text="Use the GPU (D3D11VA on Windows, VA-API on Linux) for smooth 4K/HDR playback" Classes="muted caption" /></StackPanel>
+          <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding Profile.ShowHardwareDecoding}">
+            <StackPanel><TextBlock Text="Hardware decoding" FontWeight="SemiBold" /><TextBlock Text="{Binding Profile.HardwareDecodingHint}" Classes="muted caption" /></StackPanel>
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding HardwareDecoding}" OnContent="" OffContent="" />
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
@@ -253,7 +261,7 @@
       </Border>
 
       <!-- Updates -->
-      <Border Classes="panel">
+      <Border Classes="panel" IsVisible="{Binding Profile.ShowUpdates}">
         <StackPanel Spacing="10">
           <TextBlock Classes="section" Text="UPDATES" />
           <TextBlock Text="{Binding InstallKind}" FontWeight="SemiBold" />
@@ -281,7 +289,7 @@
           <TextBlock Classes="section" Text="ABOUT" />
           <TextBlock Text="{Binding VersionText}" FontWeight="SemiBold" />
           <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="Nettle is an independent client and is not affiliated with Jellyfin, mpv, Seerr or NostalgiaTV. Playback is powered by mpv (GPL-2.0+). Open-source licenses are listed in THIRD_PARTY_NOTICES.md next to the app." />
+                     Text="{Binding AboutText}" />
           <Button Content="Clear image cache" Command="{Binding ClearImageCacheCommand}" HorizontalAlignment="Left" />
         </StackPanel>
       </Border>

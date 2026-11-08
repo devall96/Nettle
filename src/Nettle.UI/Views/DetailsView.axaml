@@ -135,7 +135,7 @@
                 <DataTemplate x:DataType="vm:PersonViewModel">
                   <Button Classes="card" Command="{Binding OpenCommand}" ToolTip.Tip="Everything with them in your libraries" Padding="0" Background="Transparent">
                   <StackPanel Width="112" Spacing="6">
-                    <Border Width="104" Height="104" CornerRadius="999" ClipToBounds="True" Background="{DynamicResource SurfaceHighBrush}">
+                    <Border Classes="frame" Width="104" Height="104" CornerRadius="999" ClipToBounds="True" Background="{DynamicResource SurfaceHighBrush}">
                       <Grid>
                         <TextBlock Text="{Binding Initial}" FontSize="32" FontWeight="Bold" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         <Image Classes="fade" Opacity="0" Stretch="UniformToFill" c:ImageLoader.DecodeWidth="200" c:ImageLoader.Source="{Binding ImageUrl}" />

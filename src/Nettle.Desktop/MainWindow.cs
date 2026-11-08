@@ -2,21 +2,37 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Platform;
+using Nettle.Core.Models;
 using Nettle.UI;
 using Nettle.UI.ViewModels;
 using Nettle.UI.Views;
 
 namespace Nettle.Desktop;
 
-/// <summary>Borderless-feel window that extends content into the title bar for a cinematic look.</summary>
+/// <summary>
+/// The desktop window, in one of three display modes (Settings → Display mode):
+/// windowed (a real window with the system title bar and borders, any size, the UI scaling
+/// down to fit), borderless full screen, or exclusive full screen.
+/// </summary>
 internal sealed class MainWindow : Window, IWindowHost
 {
-    private WindowState _restoreState = WindowState.Maximized;
+    private WindowState _restoreState = WindowState.Normal;
     private readonly MainViewModel _vm;
     private bool _readyToClose;
     // Last size/position while in a normal (not maximized / full-screen) state.
     private Size _normalSize;
     private PixelPoint? _normalPos;
+
+    // The layout the UI is designed for. Smaller windows shrink the whole UI to fit instead of
+    // cutting it off; bigger ones just get more room.
+    private const double DesignWidth = 1280, DesignHeight = 720;
+    private readonly LayoutTransformControl _scaler;
+
+    private DisplayMode _mode = DisplayMode.Windowed;
+    private double? _videoFps;
+    private readonly ExclusiveDisplay _exclusive = new();
+
+    private static Nettle.Core.Models.AppSettings S => AppServices.Settings.Current;
 
     public MainWindow(MainViewModel vm)
     {
@@ -24,13 +40,14 @@ internal sealed class MainWindow : Window, IWindowHost
         Title = "Nettle";
         Width = 1440;
         Height = 900;
-        MinWidth = 960;
-        MinHeight = 600;
+        // Windowed: as small as you like (the UI scales down), as big as the screen allows.
+        MinWidth = 320;
+        MinHeight = 180;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        // A real system title bar and borders: dragging and resizing are handled by the OS itself.
+        SystemDecorations = SystemDecorations.Full;
+        CanResize = true;
         RestorePlacement();
-        ExtendClientAreaToDecorationsHint = true;
-        ExtendClientAreaChromeHints = ExtendClientAreaChromeHints.PreferSystemChrome;
-        ExtendClientAreaTitleBarHeightHint = 32;
         Background = Brushes.Black;
         Icon = LoadIcon();
         // The window / taskbar icon takes the chosen theme's colours (the files on disk use the default theme).
@@ -38,13 +55,112 @@ internal sealed class MainWindow : Window, IWindowHost
         Nettle.UI.Theming.ThemeManager.Applied += SetThemedIcon;
         Closed += (_, _) => Nettle.UI.Theming.ThemeManager.Applied -= SetThemedIcon;
 
-        Content = new MainView { DataContext = vm };
+        _scaler = new LayoutTransformControl { Child = new MainView { DataContext = vm } };
+        Content = _scaler;
         this[!BackgroundProperty] = this.GetResourceObservable("BgBrush").ToBinding();
         AppServices.Window = this;
-        PositionChanged += (_, _) => { if (WindowState == WindowState.Normal) _normalPos = Position; };
-        // Images are fetched at the screen's real pixel size (e.g. 200% on a 4K display).
-        Opened += (_, _) => AppServices.UiScale = RenderScaling;
+        PositionChanged += (_, _) => { if (WindowState == WindowState.Normal && !IsFullScreen) _normalPos = Position; };
+
+        // Open straight into the saved display mode (borderless / exclusive start full screen).
+        if (S.DisplayMode != DisplayMode.Windowed)
+        {
+            _restoreState = WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+            _mode = S.DisplayMode;
+            WindowState = WindowState.FullScreen;
+        }
+
+        Opened += (_, _) =>
+        {
+            // Images are fetched at the screen's real pixel size (e.g. 200% on a 4K display).
+            AppServices.UiScale = RenderScaling;
+            if (_mode == DisplayMode.Exclusive) EnterExclusive();
+        };
         ScalingChanged += (_, _) => AppServices.UiScale = RenderScaling;
+        // Exclusive full screen gives the display back while you're in another app.
+        Activated += (_, _) => { if (_mode == DisplayMode.Exclusive) EnterExclusive(); };
+        Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(OnMaybeLeftApp, TimeSpan.FromMilliseconds(200));
+        Closed += (_, _) => _exclusive.Restore();
+    }
+
+    // ---------- Display modes: windowed, borderless, exclusive ----------
+
+    public bool SupportsDisplayModes => true;
+    public DisplayMode DisplayMode => _mode;
+    public bool IsFullScreen => _mode != DisplayMode.Windowed;
+
+    /// <summary>F11 and the player: on = the full-screen type chosen in Settings.</summary>
+    public void SetFullScreen(bool on) =>
+        SetDisplayMode(on ? (S.FullScreenKind == DisplayMode.Exclusive ? DisplayMode.Exclusive : DisplayMode.Borderless) : DisplayMode.Windowed);
+
+    public void SetDisplayMode(DisplayMode mode)
+    {
+        if (mode == _mode) return;
+        var old = _mode;
+        _mode = mode;
+        Nettle.Core.Services.Log.Info($"display mode: {old} → {mode}");
+        if (old == DisplayMode.Exclusive) LeaveExclusive();
+        if (mode == DisplayMode.Windowed)
+        {
+            // Linux: a window can be full screen while Avalonia reports "Maximized"; pass through
+            // FullScreen first so the change back actually clears the full-screen flag.
+            if (WindowState != WindowState.FullScreen) WindowState = WindowState.FullScreen;
+            WindowState = _restoreState;
+        }
+        else
+        {
+            if (old == DisplayMode.Windowed)
+                _restoreState = WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+            if (WindowState != WindowState.FullScreen) WindowState = WindowState.FullScreen;
+            if (mode == DisplayMode.Exclusive) EnterExclusive();
+        }
+    }
+
+    public void SetVideoFrameRate(double? fps)
+    {
+        _videoFps = fps is > 1 ? fps : null;
+        if (_mode == DisplayMode.Exclusive && IsActive) EnterExclusive();
+    }
+
+    /// <summary>
+    /// Exclusive full screen: the window stays on top of everything and the monitor's refresh rate
+    /// follows the video (23.976 / 24 / 25 / 50 / 59.94 Hz…, so films don't judder). Windows only
+    /// for the refresh-rate part; Linux asks the compositor to step aside (unredirect) instead.
+    /// </summary>
+    private void EnterExclusive()
+    {
+        Topmost = true;
+        var handle = TryGetPlatformHandle();
+        if (OperatingSystem.IsWindows() && handle != null)
+            _exclusive.MatchRefreshRate(handle.Handle, _videoFps);
+        else if (OperatingSystem.IsLinux() && handle != null)
+            LinuxCompositorHint.SetBypass(handle.Handle, true);
+    }
+
+    private void LeaveExclusive()
+    {
+        Topmost = false;
+        _exclusive.Restore();
+        if (OperatingSystem.IsLinux() && TryGetPlatformHandle() is { } handle)
+            LinuxCompositorHint.SetBypass(handle.Handle, false);
+    }
+
+    /// <summary>Focus went somewhere: if it left Nettle (not just to the player-controls window), let go of the display.</summary>
+    private void OnMaybeLeftApp()
+    {
+        if (_mode != DisplayMode.Exclusive || IsActive || OwnedWindows.Any(w => w.IsActive)) return;
+        Topmost = false;
+        _exclusive.Restore();
+    }
+
+    /// <summary>Shrinks the whole UI when the window is smaller than the layout it was designed for.</summary>
+    private void UpdateContentScale()
+    {
+        var size = ClientSize;
+        // Window's own constructor reports a size before this class's fields are set up.
+        if (_scaler == null || size.Width < 1 || size.Height < 1) return;
+        var scale = Math.Clamp(Math.Min(size.Width / DesignWidth, size.Height / DesignHeight), 0.25, 1);
+        _scaler.LayoutTransform = scale < 0.999 ? new ScaleTransform(scale, scale) : null;
+        AppServices.ContentScale = scale;
     }
 
     // ---------- Remember the window's size and place ----------
@@ -56,20 +172,35 @@ internal sealed class MainWindow : Window, IWindowHost
         Width = p.Width;
         Height = p.Height;
         _normalSize = new Size(p.Width, p.Height);
-        if (p.X is { } x && p.Y is { } y)
+        // The position is applied before the window is shown, so it becomes the restore position
+        // underneath a maximized window. (Setting Position after a maximized window opened moved the
+        // maximized window itself: it started half off screen and couldn't be dragged.)
+        if (p.X is { } x && p.Y is { } y && FitOnScreen(new PixelPoint(x, y), _normalSize) is { } pos)
         {
-            // Only reuse the position if it's still on a connected screen (monitors change).
-            Opened += (_, _) =>
-            {
-                var pos = new PixelPoint(x, y);
-                if (Screens.All.Any(s => s.WorkingArea.Contains(pos + new PixelPoint(40, 40))))
-                {
-                    Position = pos;
-                    _normalPos = pos;
-                }
-            };
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = pos;
+            _normalPos = pos;
         }
         if (p.Maximized) WindowState = WindowState.Maximized;
+    }
+
+    /// <summary>
+    /// The saved position, nudged so the whole window lies inside the screen it's on; null when that
+    /// screen is gone (monitors change) or the window no longer fits there.
+    /// </summary>
+    private PixelPoint? FitOnScreen(PixelPoint pos, Size size)
+    {
+        var screens = Screens?.All;
+        if (screens == null || screens.Count == 0) return null;
+        var screen = screens.FirstOrDefault(s => s.WorkingArea.Contains(pos + new PixelPoint(40, 40)));
+        if (screen == null) return null;
+        var area = screen.WorkingArea;
+        var px = PixelSize.FromSize(size, screen.Scaling);
+        // Leave room for the frame Windows adds around the client area.
+        if (px.Width > area.Width || px.Height + 40 > area.Height) return null;
+        var nx = Math.Clamp(pos.X, area.X, area.Right - px.Width);
+        var ny = Math.Clamp(pos.Y, area.Y, area.Bottom - px.Height - 40);
+        return new PixelPoint(nx, ny);
     }
 
     private void SavePlacement()
@@ -157,8 +288,18 @@ internal sealed class MainWindow : Window, IWindowHost
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == ClientSizeProperty && WindowState == WindowState.Normal && !IsFullScreen)
-            _normalSize = ClientSize;
+        if (change.Property == ClientSizeProperty)
+        {
+            if (WindowState == WindowState.Normal && !IsFullScreen) _normalSize = ClientSize;
+            UpdateContentScale();
+        }
+        // Full screen left from outside Nettle (the window manager, a system shortcut): follow it.
+        if (change.Property == WindowStateProperty && WindowState is WindowState.Normal or WindowState.Maximized && _mode != DisplayMode.Windowed
+            && !(OperatingSystem.IsLinux() && CoversScreen()))
+        {
+            if (_mode == DisplayMode.Exclusive) LeaveExclusive();
+            _mode = DisplayMode.Windowed;
+        }
         if (!OperatingSystem.IsLinux()) return;
         if (change.Property == WindowStateProperty || change.Property == ClientSizeProperty)
         {
@@ -198,22 +339,4 @@ internal sealed class MainWindow : Window, IWindowHost
         }
     }
 
-    public bool IsFullScreen => WindowState == WindowState.FullScreen || (OperatingSystem.IsLinux() && CoversScreen());
-
-    public void SetFullScreen(bool on)
-    {
-        if (on == IsFullScreen) return;
-        if (on)
-        {
-            _restoreState = WindowState;
-            WindowState = WindowState.FullScreen;
-        }
-        else
-        {
-            // Linux: a window can be full screen while Avalonia reports "Maximized"; pass through
-            // FullScreen first so the change back actually clears the full-screen flag.
-            if (WindowState != WindowState.FullScreen) WindowState = WindowState.FullScreen;
-            WindowState = _restoreState == WindowState.FullScreen ? WindowState.Normal : _restoreState;
-        }
-    }
 }

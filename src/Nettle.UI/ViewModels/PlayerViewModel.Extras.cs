@@ -33,7 +33,7 @@ public sealed partial class PlayerViewModel
 {
     // ===================== Chapters (from the file itself) =====================
 
-    private List<MpvChapter> _chapters = new();
+    private List<PlayerChapter> _chapters = new();
     /// <summary>Where each chapter starts, as a fraction of the length (for the marks on the seek bar).</summary>
     [ObservableProperty] private IReadOnlyList<double> _chapterMarks = Array.Empty<double>();
 
@@ -43,7 +43,11 @@ public sealed partial class PlayerViewModel
         _ = Task.Run(Player.GetChapters).ContinueWith(t =>
         {
             if (t.IsFaulted || generation != _mediaGeneration || _disposed) return;
-            _chapters = t.Result.Where(c => c.Seconds >= 0).OrderBy(c => c.Seconds).ToList();
+            IEnumerable<PlayerChapter> found = t.Result;
+            // Engines that can't read chapters from the file (Media3) use the server's list.
+            if (!found.Any() && _item?.Chapters is { Count: > 0 } server)
+                found = server.Select(c => new PlayerChapter(c.StartPositionTicks / 10_000_000.0, string.IsNullOrWhiteSpace(c.Name) ? null : c.Name));
+            _chapters = found.Where(c => c.Seconds >= 0).OrderBy(c => c.Seconds).ToList();
             UpdateChapterMarks();
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
@@ -58,7 +62,7 @@ public sealed partial class PlayerViewModel
             : _chapters.Where(c => c.Seconds > 1).Select(c => Math.Clamp(c.Seconds * 1000 / len, 0, 1)).ToList();
     }
 
-    private MpvChapter? ChapterAt(double ms) => _chapters.LastOrDefault(c => c.Seconds * 1000 <= ms + 1);
+    private PlayerChapter? ChapterAt(double ms) => _chapters.LastOrDefault(c => c.Seconds * 1000 <= ms + 1);
 
     public void NextChapter()
     {
@@ -278,9 +282,9 @@ public sealed partial class PlayerViewModel
 
     public void RemotePrevious() { if (IsLive) ChannelDown(); else PlayPrevious(); }
 
-    public void RemoteSetVolume(int volume) { Volume = Math.Clamp(volume, 0, 125); ShowOsd(); }
+    public void RemoteSetVolume(int volume) { Volume = Math.Clamp(volume, 0, MaxVolume); ShowOsd(); }
 
-    public void RemoteVolumeStep(int delta) { Volume = Math.Clamp(Volume + delta, 0, 125); ShowOsd(); }
+    public void RemoteVolumeStep(int delta) { Volume = Math.Clamp(Volume + delta, 0, MaxVolume); ShowOsd(); }
 
     public void RemoteMute(bool? mute)
     {

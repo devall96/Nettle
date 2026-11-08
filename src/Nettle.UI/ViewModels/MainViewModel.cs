@@ -17,6 +17,12 @@ public sealed partial class MainViewModel : ViewModelBase
 
     public ShellViewModel? Shell => Root as ShellViewModel;
     public bool IsPlayerOpen => Player != null;
+    /// <summary>
+    /// True while video plays on a surface BELOW the app's own UI (Android TV): every background
+    /// behind the player must then be transparent, or it would paint over the picture.
+    /// </summary>
+    public bool IsVideoBehindUi => Player != null && AppServices.Profile.VideoBehindUi;
+    public bool ShowAppBackground => !IsVideoBehindUi;
 
     private CancellationTokenSource? _toastCts;
 
@@ -27,7 +33,12 @@ public sealed partial class MainViewModel : ViewModelBase
         AppServices.Jellyfin.SessionRejected += () => Dispatcher.UIThread.Post(() => SessionExpired(null));
     }
 
-    partial void OnPlayerChanged(PlayerViewModel? value) => OnPropertyChanged(nameof(IsPlayerOpen));
+    partial void OnPlayerChanged(PlayerViewModel? value)
+    {
+        OnPropertyChanged(nameof(IsPlayerOpen));
+        OnPropertyChanged(nameof(IsVideoBehindUi));
+        OnPropertyChanged(nameof(ShowAppBackground));
+    }
 
     public async Task StartAsync()
     {
@@ -36,7 +47,7 @@ public sealed partial class MainViewModel : ViewModelBase
         await AppServices.LoadIntegrationsAsync();
         _ = MaybeAutoCheckUpdatesAsync();
 
-#if DEBUG
+#if DEBUG || NETTLE_DEV
         // Developer convenience: NETTLE_DEV_SERVER / NETTLE_DEV_USER sign in without saving anything.
         var devServer = Environment.GetEnvironmentVariable("NETTLE_DEV_SERVER");
         if (!string.IsNullOrEmpty(devServer))
@@ -141,7 +152,7 @@ public sealed partial class MainViewModel : ViewModelBase
         // Lets other Jellyfin apps control this one, and keeps the screen in step with changes made elsewhere.
         AppServices.Remote.Start();
         MaybeOfferMenuEntry();
-#if DEBUG
+#if DEBUG || NETTLE_DEV
         // Developer convenience: NETTLE_DEV_PLAY=<itemId> starts playing that item after sign-in.
         var devPlay = Environment.GetEnvironmentVariable("NETTLE_DEV_PLAY");
         if (!string.IsNullOrEmpty(devPlay))
@@ -154,12 +165,13 @@ public sealed partial class MainViewModel : ViewModelBase
         // NETTLE_DEV_AUTOSETUP=<jellyfin url> runs the Seerr / NostalgiaTV detection for that host (no password, so Seerr is only found, not signed in).
         var devAuto = Environment.GetEnvironmentVariable("NETTLE_DEV_AUTOSETUP");
         if (!string.IsNullOrEmpty(devAuto)) _ = Services.IntegrationAutoSetup.RunAsync(devAuto, null, null);
-        // NETTLE_DEV_PAGE=livetv|settings|requests opens that page after sign-in.
+        // NETTLE_DEV_PAGE=livetv|settings|requests|search opens that page after sign-in.
         PageViewModel? devPage = Environment.GetEnvironmentVariable("NETTLE_DEV_PAGE") switch
         {
             "livetv" => new LiveTvViewModel(),
             "settings" => new SettingsViewModel(),
             "requests" => new RequestsViewModel(),
+            "search" => new SearchViewModel(),
             _ => null,
         };
         if (devPage != null)
@@ -176,6 +188,39 @@ public sealed partial class MainViewModel : ViewModelBase
             });
 #endif
     }
+
+#if DEBUG || NETTLE_DEV
+    /// <summary>
+    /// Developer hook for on-device test runs (Android: a new launch intent while the app runs):
+    /// switch theme, page or start playing without restarting the app.
+    /// Pages: home | movies | shows | search | livetv | requests | settings.
+    /// </summary>
+    public void DevCommand(string? page, string? theme, string? play)
+    {
+        if (!string.IsNullOrEmpty(theme)) ThemeManager.Apply(theme);
+        if (Player != null && (!string.IsNullOrEmpty(page) || !string.IsNullOrEmpty(play))) ClosePlayer();
+        if (Shell is not { } shell) return;
+        if (!string.IsNullOrEmpty(page))
+        {
+            PageViewModel? target = page switch
+            {
+                "livetv" => new LiveTvViewModel(),
+                "settings" => new SettingsViewModel(),
+                "requests" => new RequestsViewModel(),
+                "search" => new SearchViewModel(),
+                _ => null,
+            };
+            if (target != null) shell.NavigateRoot(target);
+            else shell.NavigateNav(page);
+        }
+        if (!string.IsNullOrEmpty(play))
+            _ = Task.Run(async () =>
+            {
+                var item = await AppServices.Jellyfin.GetItemAsync(play);
+                await Dispatcher.UIThread.InvokeAsync(() => PlayItem(item, resume: false));
+            });
+    }
+#endif
 
     // ---------- "Add to applications menu?" (Linux AppImage, asked once) ----------
 

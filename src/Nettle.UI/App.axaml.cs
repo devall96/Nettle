@@ -40,7 +40,20 @@ public partial class App : Application
             return;
         }
 
-        ThemeManager.Apply(AppServices.Settings.Current.Theme);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var theme = AppServices.Settings.Current.Theme;
+#if DEBUG || NETTLE_DEV
+        // Developer hook: NETTLE_DEV_THEME=<key> starts in that theme without saving it.
+        theme = Environment.GetEnvironmentVariable("NETTLE_DEV_THEME") ?? theme;
+#endif
+        ThemeManager.Apply(theme);
+        Nettle.Core.Services.Log.Info($"startup: theme {sw.ElapsedMilliseconds} ms");
+        // TV: 10-foot tweaks (focus, scrolling, no scroll bars), see Styles/Tv.axaml.
+        if (AppServices.Profile.IsTv)
+            Styles.Add(new Avalonia.Markup.Xaml.Styling.StyleInclude(new Uri("avares://Nettle.UI/"))
+            {
+                Source = new Uri("avares://Nettle.UI/Styles/Tv.axaml"),
+            });
         var vm = new MainViewModel();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && CreateDesktopWindow != null)
@@ -50,6 +63,7 @@ public partial class App : Application
         else if (ApplicationLifetime is ISingleViewApplicationLifetime single)
         {
             single.MainView = new MainView { DataContext = vm };
+            Nettle.Core.Services.Log.Info($"startup: main view {sw.ElapsedMilliseconds} ms");
         }
 
         PlaybackEngine.Prewarm();

@@ -53,7 +53,7 @@ public sealed partial class SettingsViewModel : PageViewModel
         new(SegmentAction.Off, "Do nothing"),
     };
 
-    public string VersionText => $"Nettle {AppServices.Version}  •  {AppServices.Platform.PlatformName}";
+    public string VersionText => $"Nettle {AppServices.VersionWithLabel}  •  {AppServices.Platform.PlatformName}";
     public string ServerText => $"{AppServices.Session.Current?.ServerName}  •  {AppServices.Session.Current?.ServerUrl}";
     public string UserText => AppServices.Session.Current?.UserName ?? "";
 
@@ -133,9 +133,7 @@ public sealed partial class SettingsViewModel : PageViewModel
     public decimal NetworkBuffer { get => P.NetworkBufferSeconds; set { P.NetworkBufferSeconds = (int)value; Save(); OnPropertyChanged(); } }
     public decimal SeekStep { get => P.SeekStepSeconds; set { P.SeekStepSeconds = (int)value; Save(); OnPropertyChanged(); } }
     public bool AudioPassthrough { get => P.AudioPassthrough; set { P.AudioPassthrough = value; Save(); OnPropertyChanged(); } }
-    public string PassthroughHint => OperatingSystem.IsWindows()
-        ? "Sends Dolby (incl. Atmos and TrueHD) and DTS (incl. DTS-HD and DTS:X) untouched to your AV receiver or soundbar over HDMI / S/PDIF. While it plays, Nettle's volume control has no effect. For TrueHD and DTS-HD only, other apps' sound is paused (Windows needs exclusive use of the device for those). Leave off for TV speakers and headphones."
-        : "Sends Dolby (incl. Atmos and TrueHD) and DTS (incl. DTS-HD and DTS:X) untouched to your AV receiver or soundbar over HDMI / S/PDIF. Your sound server must allow passthrough for that output. Nettle's volume control has no effect on it. Leave off for TV speakers and headphones.";
+    public string PassthroughHint => AppServices.Profile.PassthroughHint;
 
     public bool StillWatchingPrompt
     {
@@ -157,9 +155,34 @@ public sealed partial class SettingsViewModel : PageViewModel
         }
     }
 
-    public string SecureStoreText => OperatingSystem.IsWindows()
-        ? "Saved profiles on this PC (tokens encrypted with Windows DPAPI):"
-        : "Saved profiles on this PC (tokens kept in your desktop keyring):";
+    // ---------- Display mode (desktop) ----------
+    public bool ShowDisplayModes => !Profile.IsTv && AppServices.Window?.SupportsDisplayModes == true;
+    public IReadOnlyList<ChoiceOption> DisplayModes { get; } =
+    [
+        new("Windowed", nameof(Nettle.Core.Models.DisplayMode.Windowed)),
+        new("Borderless full screen", nameof(Nettle.Core.Models.DisplayMode.Borderless)),
+        new("Exclusive full screen", nameof(Nettle.Core.Models.DisplayMode.Exclusive)),
+    ];
+
+    /// <summary>What Nettle opens in, applied right away. F11 switches between windowed and the full-screen type picked here.</summary>
+    public ChoiceOption DisplayModeChoice
+    {
+        get => DisplayModes.FirstOrDefault(m => m.Value == S.DisplayMode.ToString()) ?? DisplayModes[0];
+        set
+        {
+            if (value?.Value is not { } v || !Enum.TryParse<Nettle.Core.Models.DisplayMode>(v, out var mode)) return;
+            S.DisplayMode = mode;
+            if (mode != Nettle.Core.Models.DisplayMode.Windowed) S.FullScreenKind = mode;
+            AppServices.Window?.SetDisplayMode(mode);
+            Save();
+            OnPropertyChanged();
+        }
+    }
+
+    public string SecureStoreText => AppServices.Profile.SecureStoreText;
+    public PlatformProfile Profile => AppServices.Profile;
+    public string DirectPlayText => $"Nettle always direct-plays the original file with {Profile.EngineName}. It never asks your server to transcode or remux, so quality is untouched and server CPU stays idle.";
+    public string AboutText => $"Nettle is an independent client and is not affiliated with Jellyfin, {Profile.EngineName}, Seerr or NostalgiaTV. {Profile.AboutPlayback} Open-source licenses are listed in THIRD_PARTY_NOTICES.md.";
 
     public SegmentChoice IntroChoice { get => Choice(P.IntroAction); set { P.IntroAction = value.Value; Save(); OnPropertyChanged(); } }
     public SegmentChoice RecapChoice { get => Choice(P.RecapAction); set { P.RecapAction = value.Value; Save(); OnPropertyChanged(); } }

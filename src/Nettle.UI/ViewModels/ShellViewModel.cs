@@ -41,7 +41,9 @@ public sealed partial class ShellViewModel : ViewModelBase
     public string ServerName => AppServices.Session.Current?.ServerName ?? "";
     public string? AvatarUrl => AppServices.Jellyfin.UserImageUrl(AppServices.Session.Current?.UserId, AppServices.Session.Current?.AvatarTag, 120);
     public bool CanGoBack => _back.Count > 0;
-    public string VersionText => $"build {AppServices.Version}";
+    /// <summary>The on-screen back arrow; TVs use the remote's Back button instead.</summary>
+    public bool ShowBackButton => CanGoBack && !AppServices.Profile.IsTv;
+    public string VersionText => $"build {AppServices.VersionWithLabel}";
 
     private readonly HomeViewModel _home = new();
 
@@ -54,6 +56,12 @@ public sealed partial class ShellViewModel : ViewModelBase
         NavBottom.Add(new NavItemViewModel("requests", "Requests", "Icon.Request", () => NavigateRoot(new RequestsViewModel())));
         NavBottom.Add(new NavItemViewModel("settings", "Settings", "Icon.Settings", () => NavigateRoot(new SettingsViewModel())));
     }
+
+    /// <summary>Opens a rail entry by key ("home", "search") or label ("Movies"); used by developer test hooks.</summary>
+    public void NavigateNav(string keyOrLabel) =>
+        NavTop.Concat(NavLibraries).Concat(NavBottom)
+            .FirstOrDefault(n => n.Key == keyOrLabel || n.Label.Equals(keyOrLabel, StringComparison.OrdinalIgnoreCase))
+            ?.GoCommand.Execute(null);
 
     public async Task InitializeAsync()
     {
@@ -76,7 +84,7 @@ public sealed partial class ShellViewModel : ViewModelBase
 
     private void SetNavLibraries(List<BaseItemDto> views)
     {
-        var shown = views.Where(v => v.CollectionType is not ("livetv" or "playlists")).ToList();
+        var shown = views.Where(v => v.CollectionType is not ("livetv" or "playlists" or "music")).ToList();
         if (NavLibraries.Select(n => n.Key).SequenceEqual(shown.Select(v => "lib:" + v.Id))) return;
         NavLibraries.Clear();
         foreach (var v in shown)
@@ -112,9 +120,11 @@ public sealed partial class ShellViewModel : ViewModelBase
     partial void OnCurrentChanged(PageViewModel? oldValue, PageViewModel? newValue)
     {
         oldValue?.OnDeactivated();
+        Nettle.UI.Controls.SpatialNavigation.PageChanged();
         var key = newValue?.NavKey ?? "";
         foreach (var n in NavTop.Concat(NavLibraries).Concat(NavBottom)) n.IsSelected = n.Key == key;
         OnPropertyChanged(nameof(CanGoBack));
+        OnPropertyChanged(nameof(ShowBackButton));
         if (newValue != null) _ = newValue.ActivateAsync();
     }
 
@@ -140,6 +150,8 @@ public sealed partial class ShellViewModel : ViewModelBase
         if (Current?.HandleBack() == true) return;
         if (_back.Count > 0) Current = _back.Pop();
         else if (Current != _home) Current = _home;
+        // TV: Back on Home leaves for the launcher (the app keeps running, like other TV apps).
+        else if (AppServices.Profile.IsTv) AppServices.LeaveApp?.Invoke();
     }
 
     public void OpenItem(BaseItemDto item)
