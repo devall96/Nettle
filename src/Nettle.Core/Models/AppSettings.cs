@@ -57,8 +57,11 @@ public sealed class AppSettings
 
     public bool ReduceMotion { get; set; }
 
-    /// <summary>Where updates come from (GitHub repo URL, web folder or local folder). Empty = updates off.</summary>
-    public string UpdateSource { get; set; } = "";
+    /// <summary>Nettle's own releases. Filled in for everyone so nobody has to copy and paste it; nothing is contacted until the user checks.</summary>
+    public const string OfficialUpdateSource = "https://github.com/devall96/Nettle";
+
+    /// <summary>Where updates come from (GitHub repo URL, web folder or local folder).</summary>
+    public string UpdateSource { get; set; } = OfficialUpdateSource;
     /// <summary>Privacy: off by default. When on, checks the update source once per launch.</summary>
     public bool AutoCheckUpdates { get; set; }
 

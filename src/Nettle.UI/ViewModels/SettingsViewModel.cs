@@ -207,7 +207,7 @@ public sealed partial class SettingsViewModel : PageViewModel
     private async Task CheckUpdates()
     {
         if (AppServices.Updater == null) { UpdateStatus = "Updates aren't supported on this platform."; return; }
-        if (string.IsNullOrWhiteSpace(S.UpdateSource)) { UpdateStatus = "Enter an update source first (e.g. your GitHub repo URL)."; return; }
+        if (string.IsNullOrWhiteSpace(S.UpdateSource)) { UpdateStatus = "Enter an update source first (Nettle's own is https://github.com/devall96/Nettle)."; return; }
         UpdateStatus = "Checking…";
         IsUpdateAvailable = false;
         try

@@ -93,6 +93,23 @@ public class SettingsTests
     }
 
     [Fact]
+    public void UpdateSource_IsPrefilled_AndOldEmptyValueIsFilledIn()
+    {
+        Assert.Equal("https://github.com/devall96/Nettle", new AppSettings().UpdateSource);
+        Assert.False(new AppSettings().AutoCheckUpdates); // still opt-in: nothing is contacted until the user checks
+
+        using var p = new TempPlatform();
+        var store = new SettingsStore(p);
+        File.WriteAllText(Path.Combine(p.DataDirectory, "settings.json"), "{\"UpdateSource\":\"\"}");
+        store.Load();
+        Assert.Equal(AppSettings.OfficialUpdateSource, store.Current.UpdateSource);
+
+        File.WriteAllText(Path.Combine(p.DataDirectory, "settings.json"), "{\"UpdateSource\":\"D:\\\\my-releases\"}");
+        store.Load();
+        Assert.Equal(@"D:\my-releases", store.Current.UpdateSource); // a user's own source is kept
+    }
+
+    [Fact]
     public void StillWatching_IsOnByDefault()
     {
         var s = new PlaybackSettings();

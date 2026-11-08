@@ -258,8 +258,8 @@
           <TextBlock Classes="section" Text="UPDATES" />
           <TextBlock Text="{Binding InstallKind}" FontWeight="SemiBold" />
           <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="Nettle never checks for updates on its own unless you turn that on. It only ever contacts the source you enter here: your GitHub repository's Releases, or a folder." />
-          <TextBox Text="{Binding UpdateSource}" Watermark="https://github.com/you/Nettle  (or a folder path)" />
+                     Text="Nettle never checks for updates on its own unless you turn that on. It only ever contacts the source below: Nettle's GitHub Releases (filled in for you), another GitHub repository, or a folder." />
+          <TextBox Text="{Binding UpdateSource}" Watermark="https://github.com/devall96/Nettle  (or a folder path)" />
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <StackPanel>
               <TextBlock Text="Check automatically when Nettle starts" FontWeight="SemiBold" />

@@ -215,7 +215,7 @@ Posters load through your Seerr server's image proxy, so TMDB never sees your IP
 ### Updates
 Updates are **off unless you use them**:
 
-1. Go to **Settings → Updates** and enter `https://github.com/devall96/Nettle`.
+1. Go to **Settings → Updates**. The address of Nettle's releases (`https://github.com/devall96/Nettle`) is already filled in.
 2. Press **Check now**, or turn on the once-per-launch check.
 3. Updates only download what changed, and install with **Install & restart**.
 
@@ -239,7 +239,7 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.4.0 beta)
+## Known limitations (0.4.1 beta)
 - **Both platforms are beta.** Expect some bugs, and please report them.
 - **Linux:**
   - It's untested so far on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
