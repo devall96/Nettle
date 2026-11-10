@@ -229,6 +229,19 @@
     .code-box span { color: var(--muted); font-size: 14px; }
     .code-box strong { font-size: 26px; letter-spacing: 3px; }
 
+    /* Amber in every theme, mixed into the theme's own surface so it suits light and dark ones. */
+    .ai-warning {
+      display: flex; gap: 14px; align-items: flex-start;
+      margin: 34px 0 0; padding: 16px 20px;
+      background: color-mix(in srgb, #f0a830 14%, var(--surface));
+      border: 1px solid color-mix(in srgb, #f0a830 55%, var(--border));
+      border-radius: 16px;
+      color: var(--text); font-size: 15px;
+    }
+    .ai-warning svg { width: 26px; height: 26px; flex: none; fill: #e89a1c; margin-top: 1px; }
+    .ai-warning p { margin: 0; }
+    .ai-warning + .cards { margin-top: 18px; }
+
     .note {
       background: var(--bg-alt);
       border: 1px solid var(--border);
@@ -323,6 +336,11 @@
     </header>
 
     <main>
+      <aside class="ai-warning" role="note" aria-label="Made with AI">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+        <p><b>Entirely AI-coded.</b> All of Nettle's code was written by Claude, Anthropic's AI, directed and reviewed by one person, and so far tested by that one person on one Windows PC, one Ubuntu PC and one Google TV box. If you don't want to run code made that way, don't install it. As with anything from the internet, you run it at your own risk.</p>
+      </aside>
+
       <section class="cards" aria-label="Downloads">
         <!-- Windows -->
         <article class="card" id="card-windows">
