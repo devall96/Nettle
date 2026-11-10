@@ -1,19 +1,21 @@
 # Native Android TV app (Kotlin + Compose): plan
 
-Status: **approved 2026-11-07, being built.**
+Status: **shipped.** First public release in 0.4.2 (2026-11-07); built-in updater since 0.4.3;
+same features and version number as Windows and Linux since then (0.5.0 at the time of writing).
+This page is the original plan, kept as design notes; the README describes what the app does today.
 
 Decisions (2026-11-07):
 - Canvas 1440 units wide by default, with an "Interface size" setting (1280 / 1440 / 1600 / 1920).
 - **Music and music videos are both hidden everywhere.**
-- No updater for now (APKs installed by hand).
+- ~~No updater for now (APKs installed by hand).~~ Since 0.4.3: the same opt-in Settings → Updates
+  as desktop (GitHub Releases, `REQUEST_INSTALL_PACKAGES`, Android's own install prompt).
 - No FFmpeg audio decoder in the first builds; with passthrough off, a track the box can't decode
   falls back to another audio track, with a message. Can be added later.
 - Same version number as Windows and Linux: the Android build reads `<Version>` from
   `Directory.Build.props` (versionCode = major·10000 + minor·100 + patch).
 - Toolchain: AGP 8.13, Gradle 8.14.3, Kotlin 2.3, JDK 17, compileSdk 36, Media3 1.11.1.
 
-This is a second Android TV front end, built next to the Avalonia port (`src/Nettle.Android`), not
-instead of it. It is written natively in Kotlin + Jetpack Compose so it starts and scrolls like a
+It replaced an earlier experiment that ran the Avalonia UI on Android (never released). It is written natively in Kotlin + Jetpack Compose so it starts and scrolls like a
 native TV app. The goal is **1:1 parity with the Windows app, and the same look**: layouts,
 spacing, type, cards, rail, player OSD, badges, and all 16 themes with their exact colours.
 
@@ -276,7 +278,10 @@ the allowlist interceptor logs and blocks anything else.
 9. WebSocket live updates + remote control.
 10. Performance pass (baseline profile, start-up and scroll measurements), notices, README section.
 
-## Questions for you
+## Questions for you (answered)
+
+Answers: 1 → 1440 by default, with the Interface size setting. 2 → no FFmpeg decoder yet (see the
+README's known limitations). 3 → updater added in 0.4.3. 4 → music and music videos both hidden.
 
 1. **Size on the TV.** Draw on a 1440-unit-wide canvas (same proportions as the Windows app at its
    default window size; body text ≈ 19 px at 1080p)? Or 1920 (exactly like a full-screen 1080p
@@ -294,7 +299,9 @@ the allowlist interceptor logs and blocks anything else.
 ## Remote buttons in the player (TV defaults)
 
 Videos (Jellyfin library):
-- **Controls hidden:** Left / Right seek (hold to go faster); Up, Down or OK show the controls.
+- **Controls hidden:** Left / Right scrub (since 0.5.0: the video pauses and a preview moves along
+  the seek bar; a tap moves one seek step, holding glides faster the longer you hold; OK jumps
+  there, Back cancels); Up, Down or OK show the controls.
 - **Controls showing:** the D-pad moves around the controls.
 - **Play/Pause, Play, Pause** as labelled; **Fast-forward / Rewind** jump 3 × the seek step; **Next / Previous** go to the next / previous item.
 - **Channel up / down:** next / previous chapter.

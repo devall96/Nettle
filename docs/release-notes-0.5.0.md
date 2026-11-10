@@ -54,7 +54,7 @@ Some TVs delay their picture without delaying their sound to match, often only i
 ### Install
 - **Windows:** run `Nettle-win-Setup.exe`. It installs for your user only, no admin rights needed. If Windows shows *"Windows protected your PC"* (Nettle isn't code-signed yet), click **More info → Run anyway**.
 - **Linux:** make `Nettle.AppImage` executable (`chmod +x Nettle.AppImage`, or *Properties → Allow executing as program*) and double-click it.
-- **Android TV:** **Settings → Updates → Check now** if you're on 0.4.3. New install: in **Downloader**, enter `https://github.com/devall96/Nettle/releases/latest/download/Nettle-AndroidTV.apk` (full steps in the [0.4.2 notes](https://github.com/devall96/Nettle/releases/tag/v0.4.2)).
+- **Android TV:** **Settings → Updates → Check now** if you're on 0.4.3. New install: in the **Downloader** app, enter the code **3148086** ([full steps](https://github.com/devall96/Nettle#android-tv)).
 
 **Privacy:** no new connections. The lip sync check plays a clip stored inside the app.
 

@@ -24,10 +24,17 @@ It also brings in a TV-style live guide for **NostalgiaTV**, **Seerr** requests,
 and credits, multiple profiles, and sixteen hand-made themes. It has **no telemetry of any kind**.
 
 > [!IMPORTANT]
-> ### 📺 New in 0.4.2: Nettle for Android TV
-> Nettle now runs natively on **Android TV and Google TV** boxes and televisions. It isn't a port
-> of the desktop window: it was rebuilt in Kotlin and Jetpack Compose for the remote, with the same
-> look, themes and features as the PC version.
+> ### 🆕 New in 0.5.0
+> A **lip sync check** that saves audio timing for each refresh rate, **scrubbing the way TV
+> streaming apps do it** (the video pauses and a preview moves along the seek bar), a tidier
+> Settings page, and Linux fixes from hands-on testing.
+> [What's in 0.5.0](https://github.com/devall96/Nettle/releases/tag/v0.5.0)
+
+> [!IMPORTANT]
+> ### 📺 Nettle for Android TV
+> Since 0.4.2, Nettle runs natively on **Android TV and Google TV** boxes and televisions. It isn't
+> a port of the desktop window: it was rebuilt in Kotlin and Jetpack Compose for the remote, with
+> the same look, themes and features as the PC version.
 > - **Original files only**, through Media3 and the TV's hardware decoders: HDR10, HLG, HDR10+ and
 >   Dolby Vision go to your TV as they are, refresh rate follows the video, and audio passthrough
 >   sends Dolby and DTS to your receiver.
@@ -37,7 +44,10 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > - Home, libraries, details, search, NostalgiaTV, Seerr, intro skipping, Quick Connect and
 >   multiple profiles, all driven by the D-pad.
 >
-> [Install it on your TV ↓](#android-tv) · [What's in 0.4.2](https://github.com/devall96/Nettle/releases/tag/v0.4.2)
+> - **Updates itself** from Settings → Updates, like the PC version.
+>
+> **Install:** in the **Downloader** app on your TV, enter the code **3148086**.
+> [Full steps ↓](#android-tv)
 
 > [!NOTE]
 > **Nettle is in beta on Windows, Linux and Android TV.** It works well on the devices it has been
@@ -126,7 +136,11 @@ Everything above and below works on the TV too, with these differences:
 - **Remote buttons:** Left / Right scrub (see above: OK jumps, Back cancels), Up / Down surf channels
   on Live TV when the controls are hidden, number keys type a channel number (or jump 10 % at a time
   in a video), and Channel up / down, Last channel, Guide, Audio track, Captions and Info buttons work
-  on remotes that have them. Press Back twice on the home screen to close Nettle.
+  on remotes that have them. In a video, Channel up / down jump between chapters, Fast-forward /
+  Rewind jump three seek steps, and Next / Previous move through the queue. Press Back twice on the
+  home screen to close Nettle.
+- **Interface size** (Settings → Appearance): Small, Medium, Standard (the same proportions as the
+  Windows app) or Large, to suit how far you sit from the TV.
 - **No volume slider:** your remote sets the TV's (or receiver's) own volume, and Nettle always plays
   at full level.
 - **Settings work with the remote:** every row, dropdowns and number settings included, takes focus
@@ -164,12 +178,13 @@ Everything above and below works on the TV too, with these differences:
 - **Sets up Live TV and Requests by itself:** NostalgiaTV and Seerr running on the same machine as Jellyfin are found and connected after you sign in.
 - Sign in with profile tiles, a password, or **Quick Connect**.
 - **Multiple profiles** with a "Who's watching?" picker, quick switching, and optional automatic sign-in.
-- **Passwords are never stored.** Only Jellyfin's session token is kept: on Windows it's encrypted with DPAPI for your Windows account, and on Linux it goes into your desktop keyring (GNOME Keyring, KWallet, KeePassXC…).
+- **Passwords are never stored.** Only Jellyfin's session token is kept: on Windows it's encrypted with DPAPI for your Windows account, on Linux it goes into your desktop keyring (GNOME Keyring, KWallet, KeePassXC…), and on Android TV it's encrypted with a key kept in the TV's secure hardware (Android Keystore).
 
 ### Look and feel
 - **Sixteen original themes** (Settings → Appearance → Change theme): Midnight, Obsidian (true black for OLED), Aurora, Ember, Sakura, Deep Sea, Evergreen, Neon Nights, Crimson, Slate, Mocha, Phosphor, High Contrast, and three light ones: Daylight, Lavender and Sandstone. Switching is instant.
 - Smooth, lightweight animations, a navigation rail that expands over the page, and fade-in artwork. **Reduce motion** in Settings turns the animations off.
 - **Ready for keyboard and TV remotes.** Arrow keys move focus the way a TV remote's d-pad does.
+- **Display mode** (Settings → Appearance, Windows and Linux): *Windowed*, *Borderless* full screen (easy to Alt-Tab), or *Exclusive* full screen, where on Windows the monitor's refresh rate follows the video. **F11** switches between windowed and full screen.
 - Remembers its window size and position, and only one copy runs at a time (opening it again brings the open window forward).
 
 ## Install
@@ -194,12 +209,6 @@ Prefer not to install? Download **`Nettle-win-Portable.zip`**, extract it, and r
 So far the Linux version has been tested mainly on Ubuntu 26.04 with GNOME and an AMD graphics
 card. If you're on something else, please [report how it went](#-testers-wanted).
 
-> [!WARNING]
-> **The 0.3.x Linux builds are untested for a short while.** The Linux test bench is being
-> reconfigured, so this release was only tested by hand on Windows. The Linux build still passes the
-> automated decode tests on clean Ubuntu, Debian, Fedora and Arch machines. Hands-on Linux testing
-> will follow soon.
-
 1. Download **`Nettle.AppImage`** from the [latest release](https://github.com/devall96/Nettle/releases/latest) and put it wherever you keep apps, for example `~/Applications`.
 2. Make it executable: right-click → Properties → *Allow executing file as program*, or run `chmod +x Nettle.AppImage`.
 3. Double-click it. On first run, Nettle offers to **add itself to your applications menu**, with its icon. This is also in **Settings → Desktop**. Nothing is installed system-wide and no root is needed.
@@ -220,10 +229,10 @@ the app file yourself ("sideloading"). It only takes a minute:
 1. On the TV, install **Downloader** (by AFTVnews) from the Play Store.
 2. Allow it to install apps: **Settings → Apps → Security & restrictions → Unknown sources**
    (on some TVs: *Settings → Device preferences → Security*), and turn on **Downloader**.
-3. Open Downloader and enter this address:
-   `https://github.com/devall96/Nettle/releases/latest/download/Nettle-AndroidTV.apk`
+3. Open Downloader and enter the code **`3148086`**. (Or the full address:
+   `https://github.com/devall96/Nettle/releases/latest/download/Nettle-AndroidTV.apk`)
 4. When it finishes, choose **Install**, then **Open**. Nettle appears on your home screen with
-   your other apps.
+   your other apps. You can delete the downloaded file in Downloader afterwards.
 
 *With a computer and adb instead:* download `Nettle-AndroidTV.apk` from the
 [latest release](https://github.com/devall96/Nettle/releases/latest) and run
@@ -233,8 +242,10 @@ the app file yourself ("sideloading"). It only takes a minute:
 code on your phone or PC in Jellyfin (Settings → Quick Connect). Typing a username and password
 with the remote works too.
 
-**Updates:** the TV app has no built-in updater yet. When a new version comes out, install the new
-`Nettle-AndroidTV.apk` the same way; it replaces the old one and keeps your settings and sign-ins.
+**Updates:** you only sideload once. After that, **Settings → Updates → Check now** downloads the
+newest version and hands it to Android's installer, which asks you to confirm. The first time,
+the TV asks you to allow Nettle to install apps. Your settings and sign-ins are kept. (Coming
+from 0.4.2, which had no updater? Install the new version once with Downloader, as above.)
 
 **Uninstall:** Settings → Apps → Nettle → Uninstall. That removes everything, including saved sign-ins.
 
@@ -295,8 +306,11 @@ Posters load through your Seerr server's image proxy, so TMDB never sees your IP
 Updates are **off unless you use them**:
 
 1. Go to **Settings → Updates**. The address of Nettle's releases (`https://github.com/devall96/Nettle`) is already filled in.
-2. Press **Check now**, or turn on the once-per-launch check.
-3. Updates only download what changed, and install with **Install & restart**.
+2. Press **Check now**, or turn on *Check automatically when Nettle starts* (off by default).
+3. **Windows and Linux:** updates only download what changed, and install with **Install & restart**.
+4. **Android TV:** **Download & install** fetches the new `Nettle-AndroidTV.apk`, checks it is a
+   newer Nettle, and hands it to Android's installer, which asks you to confirm. The first time,
+   the TV asks you to allow Nettle to install apps.
 
 ## Privacy
 
@@ -313,7 +327,7 @@ Other privacy details:
 - The Android TV app contains no Google Play Services, Firebase, analytics or crash reporting; its build fails if any such library ever appears. Every connection, including the video player's and image loading, goes through one allowlist of the servers you set up.
 - Images only load from the servers you configured.
 - The player runs sealed off: it ignores any mpv config or scripts on your PC, never looks links up through youtube-dl, saves no watch history of its own, and identifies itself only as "Nettle".
-- Diagnostic logs stay on your PC and have tokens masked.
+- Diagnostic logs stay on your PC or TV and have tokens masked.
 - Even the build process has Avalonia's build statistics turned off.
 
 > This program will not transfer any information to other networked systems unless specifically
