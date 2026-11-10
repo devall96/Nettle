@@ -1,4 +1,4 @@
-<#
+﻿<#
   Builds a Nettle release: self-contained publish + Velopack installer and update packages.
 
     .\build-release.ps1                 # uses <Version> from Directory.Build.props
@@ -17,7 +17,10 @@ Set-Location $PSScriptRoot
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $env:AVALONIA_TELEMETRY_OPTOUT = '1'
 
-if (-not $Version) { $Version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version }
+# Directory.Build.props has several PropertyGroups: take the one <Version> there is, trimmed (reading them all
+# joins the empty ones with spaces, "0.5.0  ", and the publish folder then can't be found).
+if (-not $Version) { $Version = (([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1) }
+$Version = "$Version".Trim()
 $publishDir = "dist\publish-$Version"
 Write-Host "== Nettle $Version" -ForegroundColor Cyan
 
@@ -30,7 +33,7 @@ if ($LASTEXITCODE -ne 0) { throw "publish failed" }
 
 # Installer splash art, drawn by the app itself so it matches the current theme / logo / version.
 $splash = Join-Path (Resolve-Path dist).Path "installer-splash-$Version.png"
-$r = Start-Process (Join-Path $publishDir 'Nettle.exe') -ArgumentList '--render-splash', "`"$splash`"" -PassThru
+$r = Start-Process (Join-Path (Join-Path $PSScriptRoot $publishDir) 'Nettle.exe') -ArgumentList '--render-splash', "`"$splash`"" -PassThru
 if (-not $r.WaitForExit(60000) -or $r.ExitCode -ne 0 -or -not (Test-Path $splash)) { if (-not $r.HasExited) { $r.Kill() }; throw "splash render failed" }
 
 # packId stays SlopfinApp (the app's name before 0.3.0): installed copies find their updates by it.
