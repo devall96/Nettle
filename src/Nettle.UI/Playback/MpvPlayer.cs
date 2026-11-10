@@ -246,6 +246,10 @@ public sealed class MpvPlayer : IVideoPlayer
 
     public PlayerFeatures Features => PlayerFeatures.All;
 
+    /// <summary>mpv's idea of the display's refresh rate (it follows exclusive full screen's switches).</summary>
+    public double? DisplayFps =>
+        double.TryParse(GetProperty("display-fps"), NumberStyles.Float, CultureInfo.InvariantCulture, out var hz) && hz > 1 ? hz : null;
+
     // What mpv is really sending to the screen: "pq" / "hlg" = HDR signal.
     public string? HdrOutputSignal => GetProperty("video-target-params/gamma");
 
@@ -286,9 +290,10 @@ public sealed class MpvPlayer : IVideoPlayer
             Mpv.mpv_set_property_string(h, "http-header-fields", load.AuthHeader != null ? "Authorization: " + load.AuthHeader : "");
             if (OperatingSystem.IsWindows())
                 Mpv.mpv_set_property_string(h, "audio-exclusive", load.ExclusiveAudio ? "yes" : "no");
-            // Per-file fine tuning starts from zero again (speed and subtitle size carry over).
+            // Subtitle timing starts from zero again per file (speed and subtitle size carry over). Audio timing
+            // is the screen's calibration, set by the player view model, so it stays.
             Mpv.mpv_set_property_string(h, "sub-delay", "0");
-            Mpv.mpv_set_property_string(h, "audio-delay", "0");
+            Mpv.mpv_set_property_string(h, "loop-file", load.Loop ? "inf" : "no");
             Mpv.mpv_set_property_string(h, "pause", "no");
             int r = Mpv.Command(h, "loadfile", load.Url, "replace");
             if (r < 0) Error?.Invoke(Mpv.ErrorString(r));

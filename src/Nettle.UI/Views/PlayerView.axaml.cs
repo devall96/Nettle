@@ -33,6 +33,13 @@ public partial class PlayerView : UserControl
             _overlayTop = TopLevel.GetTopLevel(Overlay);
             if (_overlayTop != null && _overlayTop != TopLevel.GetTopLevel(this))
                 _overlayTop.AddHandler(KeyDownEvent, OnOverlayKey, RoutingStrategies.Bubble);
+            _overlayTop?.AddHandler(KeyDownEvent, OnCheckKey, RoutingStrategies.Tunnel);
+            _overlayTop?.AddHandler(KeyUpEvent, OnKeyUp, RoutingStrategies.Tunnel, handledEventsToo: true);
+        };
+        AttachedToVisualTree += (_, _) =>
+        {
+            TopLevel.GetTopLevel(this)?.AddHandler(KeyDownEvent, OnCheckKey, RoutingStrategies.Tunnel);
+            TopLevel.GetTopLevel(this)?.AddHandler(KeyUpEvent, OnKeyUp, RoutingStrategies.Tunnel, handledEventsToo: true);
         };
 
         SeekBar.AddHandler(PointerPressedEvent, (_, _) => { if (Vm != null) Vm.IsSeeking = true; }, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -115,9 +122,26 @@ public partial class PlayerView : UserControl
         if (Vm.HandleKey(e.Key)) e.Handled = true;
     }
 
+    /// <summary>
+    /// Lip sync check: its keys are taken before any control sees them (tunnel). A focused button or the
+    /// seek bar used to eat ← / → (Linux keeps the controls in a separate overlay window), so only Esc worked.
+    /// </summary>
+    private void OnCheckKey(object? sender, KeyEventArgs e)
+    {
+        if (Vm is not { IsLipSyncCheck: true } vm || e.Handled) return;
+        if (vm.HandleKey(e.Key)) e.Handled = true;
+    }
+
+    /// <summary>Key-ups tell scrubbing when ← / → are let go (holding glides; a new press steps).</summary>
+    private void OnKeyUp(object? sender, KeyEventArgs e) => Vm?.ScrubKeyUp(e.Key);
+
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
+        _overlayTop?.RemoveHandler(KeyUpEvent, OnKeyUp);
+        TopLevel.GetTopLevel(this)?.RemoveHandler(KeyUpEvent, OnKeyUp);
         _overlayTop?.RemoveHandler(KeyDownEvent, OnOverlayKey);
+        _overlayTop?.RemoveHandler(KeyDownEvent, OnCheckKey);
+        TopLevel.GetTopLevel(this)?.RemoveHandler(KeyDownEvent, OnCheckKey);
     }
 }

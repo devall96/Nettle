@@ -176,6 +176,13 @@ public sealed partial class MainViewModel : ViewModelBase
         };
         if (devPage != null)
             Dispatcher.UIThread.Post(() => shell.NavigateRoot(devPage), DispatcherPriority.Background);
+        // NETTLE_DEV_FILE=<path> plays a local file (e.g. one with chapters) as a video after sign-in.
+        var devFile = Environment.GetEnvironmentVariable("NETTLE_DEV_FILE");
+        if (!string.IsNullOrEmpty(devFile))
+            Dispatcher.UIThread.Post(() => { ClosePlayer(); Player = PlayerViewModel.ForLocalFile(this, devFile); }, DispatcherPriority.Background);
+        // NETTLE_DEV_LIPSYNC=1 opens Settings → Lip sync check after sign-in.
+        if (Environment.GetEnvironmentVariable("NETTLE_DEV_LIPSYNC") == "1")
+            Dispatcher.UIThread.Post(PlayLipSyncCheck, DispatcherPriority.Background);
         // NETTLE_DEV_LIVE=<channel number> tunes that NostalgiaTV channel after sign-in.
         var devLive = Environment.GetEnvironmentVariable("NETTLE_DEV_LIVE");
         if (!string.IsNullOrEmpty(devLive))
@@ -277,6 +284,13 @@ public sealed partial class MainViewModel : ViewModelBase
         ClosePlayer();
         long? start = resume && item.UserData?.PlaybackPositionTicks is > 0 ? item.UserData.PlaybackPositionTicks : null;
         Player = PlayerViewModel.ForItem(this, item, start, mediaSourceId);
+    }
+
+    /// <summary>Settings → Lip sync check: the box + beep clip with the Audio timing control on screen.</summary>
+    public void PlayLipSyncCheck()
+    {
+        ClosePlayer();
+        Player = PlayerViewModel.ForLipSyncCheck(this);
     }
 
     /// <summary>Plays a list in order from <paramref name="index"/> (Play all, Shuffle, remote control).</summary>

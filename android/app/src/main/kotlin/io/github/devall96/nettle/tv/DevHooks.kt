@@ -14,7 +14,37 @@ import kotlinx.coroutines.launch
  */
 object DevHooks {
     fun handle(intent: Intent?) {
-        if (!BuildConfig.DEBUG || intent == null) return
+        if (intent == null) return
+        // Android keeps the launch that started the task and re-delivers it when the app is reopened from the
+        // home screen or recents: act on a test launch once, never again on a reopen.
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0 || intent.getBooleanExtra("devHandled", false)) return
+        intent.putExtra("devHandled", true)
+        // Sync-test builds (-Pnettle.syncTest=true) also take: --es synctest aac|ac3 (bundled flash + beep clip).
+        // Optional, saved as settings: --es offsets 24=210,60=20 (Audio timing per refresh rate), --es match <FrameRateMatching>.
+        if (BuildConfig.SYNC_TEST) intent.getStringExtra("synctest")?.takeIf { it == "aac" || it == "ac3" }?.let { kind ->
+            val p = AppServices.settings.current.playback
+            // --es offsets 24=180,60=20 (Audio timing per refresh rate)
+            intent.getStringExtra("offsets")?.let { s ->
+                p.audioOffsets = s.split(',').mapNotNull { e -> e.split('=').takeIf { it.size == 2 }?.let { (k, v) -> v.trim().toIntOrNull()?.let { k.trim() to it } } }.toMap()
+            }
+            // --es match Off|RefreshRate|RefreshRateAndResolution (Match frame rate)
+            intent.getStringExtra("match")?.let { m -> io.github.devall96.nettle.core.models.FrameRateMatching.entries.firstOrNull { it.name == m }?.let { p.frameRateMatching = it } }
+            io.github.devall96.nettle.core.services.Log.info("sync test: $kind, audio timing ${p.audioOffsets}, match ${p.frameRateMatching}")
+            AppServices.scope.launch {
+                repeat(40) { if (Main.shell == null) delay(250) }
+                Main.playSyncTest(kind)
+            }
+            return
+        }
+        // ... and --es lipsync films|usual (Settings → Lip sync check).
+        if (BuildConfig.SYNC_TEST) intent.getStringExtra("lipsync")?.let { which ->
+            AppServices.scope.launch {
+                repeat(40) { if (Main.shell == null) delay(250) }
+                Main.playLipSyncCheck(films = which == "films")
+            }
+            return
+        }
+        if (!BuildConfig.DEBUG) return
         val page = intent.getStringExtra("page")
         val query = intent.getStringExtra("query")
         val play = intent.getStringExtra("play")

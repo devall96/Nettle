@@ -32,6 +32,8 @@ public interface IVideoPlayer : IDisposable
     string DescribeOutput();
     /// <summary>What this engine can do, so the player screen hides what it can't.</summary>
     PlayerFeatures Features { get; }
+    /// <summary>The screen's refresh rate right now (Hz), when the engine knows it; Audio timing is kept per rate.</summary>
+    double? DisplayFps => null;
 
     void Load(PlayerLoad load);
     void SetPause(bool pause);
@@ -94,6 +96,8 @@ public sealed class PlayerLoad
     public string? AuthHeader { get; init; }
     /// <summary>Take the audio device exclusively (Windows: needed only to bitstream TrueHD / DTS-HD).</summary>
     public bool ExclusiveAudio { get; init; }
+    /// <summary>Play the file over and over (Settings → Lip sync check).</summary>
+    public bool Loop { get; init; }
 }
 
 /// <summary>A chapter of the playing file.</summary>

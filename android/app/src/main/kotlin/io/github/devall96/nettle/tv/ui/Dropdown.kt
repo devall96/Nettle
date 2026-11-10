@@ -39,19 +39,26 @@ fun <T> Dropdown(
     modifier: Modifier = Modifier,
     minWidth: Dp = 180.dp,
     label: (T) -> String = { it.toString() },
+    // Row mode (Settings): the whole row takes focus and opens the list with OK, so the remote can't skip a small
+    // box at the right edge. Then this box is only a picture: [expanded] is the row's, focus goes back to [returnFocus].
+    expanded: androidx.compose.runtime.MutableState<Boolean>? = null,
+    returnFocus: FocusRequester? = null,
 ) {
     val p = Nettle.colors
-    var open by remember { mutableStateOf(false) }
+    val ownOpen = remember { mutableStateOf(false) }
+    val openState = expanded ?: ownOpen
+    var open by openState
     val source = remember { MutableInteractionSource() }
-    val focused by source.collectIsFocusedAsState()
-    val self = remember { FocusRequester() }
+    val ownFocused by source.collectIsFocusedAsState()
+    val focused = ownFocused
+    val ownSelf = remember { FocusRequester() }
+    val self = returnFocus ?: ownSelf
     val shape = RoundedCornerShape(10.dp)
     Box(modifier) {
         Row(
             Modifier.widthIn(min = minWidth).clip(shape).background(if (p.isLight) Color(0xB3FFFFFF) else Color(0x0FFFFFFF))
                 .border(if (focused) 2.dp else 1.dp, if (focused) p.accent else p.textMuted.copy(alpha = 0.7f), shape)
-                .focusRequester(self)
-                .clickable(source, indication = null) { open = true }
+                .then(if (expanded == null) Modifier.focusRequester(self).clickable(source, indication = null) { open = true } else Modifier)
                 .padding(start = 12.dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
         ) {

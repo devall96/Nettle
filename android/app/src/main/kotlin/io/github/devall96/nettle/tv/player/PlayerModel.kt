@@ -47,6 +47,10 @@ class PlayerModel private constructor() {
     val stopped = CompletableDeferred<Unit>()
     private var disposed = false
     private var currentUrl: String? = null
+    /** Sync-test clips: their frame rate, so the TV switches to 24 Hz as it does for films. */
+    private var testClipFps = 0f
+    /** Settings → Lip sync check is playing (see forLipSyncCheck). */
+    var isLipSyncCheck = false; private set
 
     // Library playback state
     private var item: BaseItemDto? = null
@@ -96,7 +100,9 @@ class PlayerModel private constructor() {
     var positionText by mutableStateOf("0:00")
     var remainingText by mutableStateOf("")
     var endsAtText by mutableStateOf<String?>(null)
-    var volume by mutableStateOf(settings.volume.coerceIn(0, 100))
+    // Always full: the TV's own volume is the volume (there's no slider on the TV; a saved lower level used to
+    // linger from older builds and quietly halve the sound). Other Jellyfin apps can still change it for a session.
+    var volume by mutableStateOf(100)
     var isMuted by mutableStateOf(false)
     var isTracksOpen by mutableStateOf(false)
     var skipLabel by mutableStateOf<String?>(null)
@@ -132,6 +138,28 @@ class PlayerModel private constructor() {
     private var chapters: List<Chapter> = emptyList()
     var playbackSpeed by mutableStateOf(settings.playbackSpeed.coerceIn(0.25, 3.0))
     var subtitleScale by mutableStateOf(settings.subtitleScale.coerceIn(0.5, 2.5))
+    // Audio timing is kept per refresh rate: a TV can add picture processing in one mode only (a TCL measured
+    // sound 207 ms early at 24 Hz but ~20 ms at 60 Hz), so the value follows the TV as Match frame rate switches it.
+    private val displays = AppServices.context.getSystemService(android.hardware.display.DisplayManager::class.java)
+    private fun currentRefreshKey(): String =
+        displays?.getDisplay(android.view.Display.DEFAULT_DISPLAY)?.mode?.refreshRate?.let { Math.round(it).toString() } ?: "60"
+    private fun offsetFor(key: String) = (settings.audioOffsets[key] ?: 0).coerceIn(-Engine.AUDIO_OFFSET_LIMIT_MS, Engine.AUDIO_OFFSET_LIMIT_MS)
+    /** The TV's refresh rate right now, rounded ("24", "60"…). */
+    var refreshKey by mutableStateOf(currentRefreshKey()); private set
+    /** Audio timing in ms (+ = audio later) for [refreshKey]; saved, since it belongs to the TV / sound system. */
+    var audioOffsetMs by mutableStateOf(offsetFor(refreshKey)); private set
+    private val displayListener = object : android.hardware.display.DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {
+            val key = currentRefreshKey()
+            if (disposed || key == refreshKey) return
+            refreshKey = key
+            audioOffsetMs = offsetFor(key)
+            engine.setAudioOffset(audioOffsetMs)
+            Log.info("TV now at $key Hz: audio timing $audioOffsetMs ms")
+        }
+    }
     // Hold-to-seek: where the seek will land when the key is released (null = not seeking).
     var pendingSeekMs by mutableStateOf<Long?>(null)
     // Trickplay preview
@@ -150,6 +178,7 @@ class PlayerModel private constructor() {
     val nextTip get() = if (queue != null) "Next" else "Next episode"
     val speedText get() = "%.2f".format(Locale.ROOT, playbackSpeed).trimEnd('0').trimEnd('.') + "×"
     val subtitleScaleText get() = "${(subtitleScale * 100).toInt()}%"
+    val audioOffsetText get() = if (audioOffsetMs == 0) "0 ms" else "${if (audioOffsetMs > 0) "+" else "−"}${kotlin.math.abs(audioOffsetMs)} ms"
 
     private val audioLang get() = AppServices.session.preferredAudioLanguage(settings.preferredAudioLanguage)
     private val subLang get() = AppServices.session.preferredSubtitleLanguage(settings.preferredSubtitleLanguage)
@@ -162,6 +191,8 @@ class PlayerModel private constructor() {
 
     init {
         engine.setVolume(volume)
+        engine.setAudioOffset(audioOffsetMs)
+        displays?.registerDisplayListener(displayListener, android.os.Handler(android.os.Looper.getMainLooper()))
         if (kotlin.math.abs(playbackSpeed - 1) > 0.001) engine.setSpeed(playbackSpeed)
         engine.onEnded = { onEnded() }
         engine.onError = { reason -> val t = tuneVersion; scope.launch { onPlaybackError(t, reason) } }
@@ -172,8 +203,9 @@ class PlayerModel private constructor() {
             if (engine.frameRate <= 0f) sourceStreams?.firstOrNull { it.type == "Video" }?.let { v ->
                 (v.realFrameRate ?: v.averageFrameRate)?.takeIf { it > 1f }?.let { fps -> engine.onFrameRate?.invoke(fps) }
             }
+            if (engine.frameRate <= 0f && testClipFps > 0f) engine.onFrameRate?.invoke(testClipFps)
             loadTracks()
-            scope.launch { showFormatBadges(tuneVersion, mediaGeneration) }
+            if (!isLipSyncCheck) scope.launch { showFormatBadges(tuneVersion, mediaGeneration) }
             if (engine.audioUnsupported) flash("This audio can't be decoded on this TV. Turn on audio passthrough in Settings, or pick another track.", 6000)
         }
         scope.launch { while (isActive) { onTick(); delay(250) } }
@@ -195,6 +227,22 @@ class PlayerModel private constructor() {
             this.channels = channels
             channels.forEach { AppServices.allowHostOf(it.streamUrl) }
             tuneTo(index)
+        }
+
+        /** Sync-test builds: plays a bundled clip (nothing is reported to the server). */
+        fun forTestClip(url: String): PlayerModel = PlayerModel().apply { testClipFps = 23.976f; swapMedia(PlayerLoad(url)) }
+
+        /**
+         * Lip sync check: a flash + beep clip (bundled, looped) and the Audio timing control on screen, to line
+         * the beep up with the box (a small grey box that blinks once a second: no full-screen flashing). [films] plays it as a 23.976 fps film, so Match frame rate switches the TV
+         * to 24 Hz as it does for films; otherwise the TV stays at its usual rate. Each rate keeps its own value.
+         */
+        fun forLipSyncCheck(films: Boolean): PlayerModel = PlayerModel().apply {
+            isLipSyncCheck = true
+            isOsdVisible = false
+            testClipFps = if (films) 23.976f else 0f
+            engine.exo.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+            swapMedia(PlayerLoad("asset:///lipsync-check.mkv"))
         }
 
         private val clock = DateTimeFormatter.ofPattern("h:mm", Locale.US)
@@ -694,6 +742,7 @@ class PlayerModel private constructor() {
     }
 
     fun togglePlay() {
+        if (isScrubbing) { commitScrub(); return }
         showOsd()
         val it = item
         if (engine.ended && !isLive && it != null) { scope.launch { startItem(it, null, mediaSourceId) }; return }
@@ -724,45 +773,113 @@ class PlayerModel private constructor() {
         seekToMs((from + seconds * 1000L).coerceIn(0, maxOf(0, engine.lengthMs - 1000)))
     }
 
-    fun seekToMs(ms: Long) {
+    fun seekToMs(ms: Long, fast: Boolean = false) {
         if (isLive) return
         lastSeekTargetMs = ms
         lastSeekAt = System.currentTimeMillis()
         positionMs = ms
         lastPositionMs = ms
-        engine.seekTo(ms)
+        engine.seekTo(ms, fast)
         reportSoon()
     }
 
-    // ---- Hold-to-seek: the longer Left / Right is held, the bigger the steps ----
+    // ---- Scrubbing (Left / Right), the way TV streaming apps do it ----
+    // Left / Right while watching pauses and enters scrubbing: the preview (thumbnail, time, chapter) moves,
+    // the video doesn't. A tap moves it one seek step; holding glides it smoothly, faster the longer it's held
+    // (ScrubSpeed, driven by time, not by key repeats, so it never lurches). OK / Play jumps there and resumes;
+    // Back cancels and resumes where it was. pendingSeekMs != null means scrubbing.
 
-    /** Key went down (repeat = how many auto-repeats so far). The jump happens on release. */
+    private var scrubOrigin = 0L
+    private var scrubWasPlaying = false
+    private var scrubGlided = false
+    private var glideJob: Job? = null
+    private var lastScrubKeyAt = 0L
+    private var lastPreviewAt = 0L
+    val isScrubbing get() = pendingSeekMs != null
+
+    /** Left / Right went down ([repeat] = the key's auto-repeat count). */
     fun holdSeek(forward: Boolean, repeat: Int) {
         if (isLive || engine.lengthMs <= 0) return
         showOsd()
-        val step = settings.seekStepSeconds * 1000L * when {
-            repeat < 6 -> 1
-            repeat < 16 -> 3
-            repeat < 30 -> 6
-            else -> 30
+        val now = System.currentTimeMillis()
+        lastScrubKeyAt = now
+        if (pendingSeekMs == null) {
+            scrubOrigin = maxOf(0, engine.timeMs)
+            scrubWasPlaying = engine.isPlaying
+            scrubGlided = false
+            if (scrubWasPlaying) engine.setPause(true)
+            pendingSeekMs = scrubOrigin
         }
-        val base = pendingSeekMs ?: (if (System.currentTimeMillis() - lastSeekAt < 1500) lastSeekTargetMs else maxOf(0, engine.timeMs))
-        val target = (base + if (forward) step else -step).coerceIn(0, maxOf(0, engine.lengthMs - 1000))
-        pendingSeekMs = target
-        showTrickplay(target)
+        val dir = if (forward) 1 else -1
+        if (repeat == 0) {
+            glideJob?.cancel()
+            moveScrub(dir * settings.seekStepSeconds * 1000L, force = true)
+            return
+        }
+        // Held: the remote's auto-repeats (every ~50 ms, only while the button is really down) keep a smooth,
+        // time-driven glide going. It starts on the first repeat and stops within 200 ms of the last, so a lost
+        // key-up (focus moving as the controls appear) can never add movement.
+        if (glideJob?.isActive == true && glideDir == dir) return
+        glideJob?.cancel()
+        glideDir = dir
+        glideJob = scope.launch {
+            val start = System.currentTimeMillis()
+            var last = start
+            while (isActive) {
+                delay(16)
+                val t = System.currentTimeMillis()
+                if (t - lastScrubKeyAt > 200) break
+                val step = io.github.devall96.nettle.core.services.ScrubSpeed.advanceMs(t - start, t - last, engine.lengthMs)
+                last = t
+                scrubGlided = true
+                moveScrub(dir * step)
+            }
+            pendingSeekMs?.let { showTrickplay(it) }
+        }
+    }
+    private var glideDir = 0
+
+    /** Left / Right let go: the glide stops; the preview stays until OK (jump) or Back (cancel). */
+    fun scrubKeyUp() { glideJob?.cancel(); pendingSeekMs?.let { showTrickplay(it) } }
+
+    private fun moveScrub(deltaMs: Long, force: Boolean = false) {
+        val p = pendingSeekMs ?: return
+        val t = (p + deltaMs).coerceIn(0, maxOf(0, engine.lengthMs - 1000))
+        pendingSeekMs = t
+        positionMs = t
+        val now = System.currentTimeMillis()
+        if (force || now - lastPreviewAt > 90) { lastPreviewAt = now; showTrickplay(t) } // thumbnails ~10×/s while gliding
     }
 
-    fun commitHoldSeek() {
+    /** OK / Play while scrubbing: jump to the preview's position and carry on playing (if it was). */
+    fun commitScrub() {
+        glideJob?.cancel()
         val t = pendingSeekMs ?: return
         pendingSeekMs = null
         hideTrickplay()
-        seekToMs(t)
+        // After a glide, land on the nearest keyframe: instant even on 4K remuxes (an exact seek decodes up to
+        // several seconds of video first). Taps only stay exact, so 3 × 10 s really is 30 s.
+        Log.info("seek: ${if (scrubGlided) "scrubbed" else "stepped"} ${(scrubOrigin) / 1000} → ${t / 1000} s")
+        seekToMs(t, fast = scrubGlided)
+        if (scrubWasPlaying) engine.setPause(false)
+        showOsd()
+    }
+
+    /** Back while scrubbing: forget the preview and carry on from where it was. */
+    fun cancelScrub() {
+        glideJob?.cancel()
+        if (pendingSeekMs == null) return
+        pendingSeekMs = null
+        hideTrickplay()
+        Log.info("seek: scrub cancelled, staying at ${scrubOrigin / 1000} s")
+        positionMs = scrubOrigin
+        if (scrubWasPlaying) engine.setPause(false)
+        showOsd()
     }
 
     fun changeVolume(v: Int) {
         volume = v.coerceIn(0, 100)
         engine.setVolume(volume)
-        settings.volume = volume
         showOsd()
     }
 
@@ -831,6 +948,7 @@ class PlayerModel private constructor() {
         if (isLive || engine.lengthMs <= 0) return
         showOsd()
         seekToMs(engine.lengthMs * p / 100)
+        Log.info("seek: $p % → ${engine.lengthMs * p / 100_000} s")
     }
 
     /** Audio / subtitle key: steps to the next track (subtitles include Off). */
@@ -961,6 +1079,7 @@ class PlayerModel private constructor() {
         val next = chapters.firstOrNull { it.ms > pos + 1000 } ?: run { flash("No more chapters"); return }
         seekToMs(next.ms)
         flash(next.title ?: "Chapter ${chapters.indexOf(next) + 1}")
+        Log.info("chapter: next → \"${next.title}\" at ${next.ms / 1000} s")
     }
 
     fun previousChapter() {
@@ -972,6 +1091,7 @@ class PlayerModel private constructor() {
         target ?: return
         seekToMs(target.ms)
         flash(target.title ?: "Chapter ${chapters.indexOf(target) + 1}")
+        Log.info("chapter: previous → \"${target.title}\" at ${target.ms / 1000} s")
     }
 
     // ===================== Short on-screen messages =====================
@@ -994,6 +1114,16 @@ class PlayerModel private constructor() {
     private fun applySubScale(v: Double) { subtitleScale = v; settings.subtitleScale = v }
     fun smallerSubtitles() = applySubScale(maxOf(0.5, Math.round((subtitleScale - 0.1) * 100) / 100.0))
     fun largerSubtitles() = applySubScale(minOf(2.5, Math.round((subtitleScale + 0.1) * 100) / 100.0))
+    private fun applyAudioOffset(ms: Int) {
+        audioOffsetMs = ms.coerceIn(-Engine.AUDIO_OFFSET_LIMIT_MS, Engine.AUDIO_OFFSET_LIMIT_MS)
+        engine.setAudioOffset(audioOffsetMs)
+        settings.audioOffsets = settings.audioOffsets + (refreshKey to audioOffsetMs)
+        if (!isLipSyncCheck) flash("Audio timing $audioOffsetText at $refreshKey Hz")
+    }
+    // 10 ms steps (the desktop uses 50): lip sync shows from about 40 ms, so "slightly early" needs finer steps.
+    // Not part of "Reset to normal": it's the TV's calibration, not a per-file tweak.
+    fun audioEarlier() = applyAudioOffset(audioOffsetMs - 10)
+    fun audioLater() = applyAudioOffset(audioOffsetMs + 10)
     fun resetTuning() { applySpeed(1.0); applySubScale(1.0); flash("Back to normal") }
 
     // ===================== Trickplay (scrubbing thumbnails) =====================
@@ -1152,6 +1282,7 @@ class PlayerModel private constructor() {
     fun dispose() {
         if (disposed) return
         disposed = true
+        runCatching { displays?.unregisterDisplayListener(displayListener) }
         val stop = reportStopped()
         scope.launch { AppServices.settings.save() }
         Log.info("player closed")

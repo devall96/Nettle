@@ -65,6 +65,15 @@ android {
         buildConfig = true
     }
 
+    // Sync-test builds (gradlew assembleRelease -Pnettle.syncTest=true): bundle the flash + beep clips from
+    // tools/avsync/clips and accept `--es synctest aac|ac3`. Normal builds carry neither (only
+    // assets/lipsync-check.mkv, the same flash + beep clip, for Settings → Lip sync check).
+    val syncTest = (findProperty("nettle.syncTest") as String?) == "true"
+    defaultConfig { buildConfigField("boolean", "SYNC_TEST", syncTest.toString()) }
+    if (syncTest) sourceSets["main"].assets.srcDir(rootProject.file("../tools/avsync/clips"))
+    // Played straight from the APK: keep the clips stored, so Media3 can seek in them.
+    androidResources { noCompress += "mkv" }
+
     // Privacy: no dependency metadata blob for app stores (it is only readable by Google Play).
     dependenciesInfo {
         includeInApk = false

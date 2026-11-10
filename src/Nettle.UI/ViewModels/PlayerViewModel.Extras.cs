@@ -72,6 +72,7 @@ public sealed partial class PlayerViewModel
         if (next == null) { Flash("No more chapters"); return; }
         SeekToMs(next.Seconds * 1000);
         Flash(next.Title ?? $"Chapter {_chapters.IndexOf(next) + 1}");
+        Nettle.Core.Services.Log.Info($"chapter: next → \"{next.Title}\" at {next.Seconds:0} s");
     }
 
     public void PreviousChapter()
@@ -84,6 +85,7 @@ public sealed partial class PlayerViewModel
         if (target == null) return;
         SeekToMs(target.Seconds * 1000);
         Flash(target.Title ?? $"Chapter {_chapters.IndexOf(target) + 1}");
+        Nettle.Core.Services.Log.Info($"chapter: previous → \"{target.Title}\" at {target.Seconds:0} s");
     }
 
     // ===================== Short on-screen messages =====================
@@ -129,9 +131,49 @@ public sealed partial class PlayerViewModel
         OnPropertyChanged(nameof(SubtitleDelayText));
     }
 
+    // Audio timing is the screen's calibration, kept per refresh rate (a TV can add picture processing in its
+    // 24 Hz mode only), so it follows the screen as exclusive full screen switches it, and isn't reset per file.
+    private const int AudioOffsetLimitMs = 500;
+    private bool _applyingSavedOffset;
+    /// <summary>The screen's refresh rate right now, rounded ("24", "60"…); "60" until (unless) mpv knows.</summary>
+    [ObservableProperty] private string _refreshKey = "60";
+    /// <summary>mpv reported the refresh rate (with the render API on Linux it may not, and then it isn't shown).</summary>
+    private bool _refreshKnown;
+    private string RateSuffix => _refreshKnown ? $" · {RefreshKey} Hz" : "";
+    public string AudioTimingLabel => "Audio timing" + RateSuffix;
+    public string LipSyncTitle => "Lip sync check" + RateSuffix;
+    public string LipSyncSavedText => _refreshKnown ? $"Saved for {RefreshKey} Hz as you go." : "Saved as you go.";
+
+    private int SavedOffset(string key) =>
+        Math.Clamp(_settings.AudioOffsets.TryGetValue(key, out var ms) ? ms : 0, -AudioOffsetLimitMs, AudioOffsetLimitMs);
+
+    /// <summary>Applies the saved value for <see cref="RefreshKey"/> (at start, and when the screen changes rate).</summary>
+    private void ApplySavedAudioOffset()
+    {
+        _applyingSavedOffset = true;
+        try { AudioDelayMs = SavedOffset(RefreshKey); Player.SetAudioDelay(AudioDelayMs / 1000.0); }
+        finally { _applyingSavedOffset = false; }
+    }
+
+    /// <summary>From the tick: notices the screen's refresh rate changing.</summary>
+    private void UpdateRefreshKey()
+    {
+        if (Player.DisplayFps is not { } hz) return;
+        var key = ((int)Math.Round(hz)).ToString(CultureInfo.InvariantCulture);
+        if (key == RefreshKey && _refreshKnown) return;
+        _refreshKnown = true;
+        RefreshKey = key;
+        OnPropertyChanged(nameof(AudioTimingLabel));
+        OnPropertyChanged(nameof(LipSyncTitle));
+        OnPropertyChanged(nameof(LipSyncSavedText));
+        ApplySavedAudioOffset();
+        Nettle.Core.Services.Log.Info($"screen now at {key} Hz: audio timing {AudioDelayMs} ms");
+    }
+
     partial void OnAudioDelayMsChanged(int value)
     {
         Player.SetAudioDelay(value / 1000.0);
+        if (!_applyingSavedOffset) _settings.AudioOffsets[RefreshKey] = value;
         OnPropertyChanged(nameof(AudioDelayText));
     }
 
@@ -160,8 +202,14 @@ public sealed partial class PlayerViewModel
 
     [RelayCommand] private void SubtitleEarlier() { SubtitleDelayMs -= 100; Flash("Subtitle timing " + SubtitleDelayText); }
     [RelayCommand] private void SubtitleLater() { SubtitleDelayMs += 100; Flash("Subtitle timing " + SubtitleDelayText); }
-    [RelayCommand] private void AudioEarlier() { AudioDelayMs -= 50; Flash("Audio timing " + AudioDelayText); }
-    [RelayCommand] private void AudioLater() { AudioDelayMs += 50; Flash("Audio timing " + AudioDelayText); }
+    // 10 ms steps: lip sync shows from about 40 ms, so "slightly early" needs fine steps (as on Android TV).
+    [RelayCommand] private void AudioEarlier() => NudgeAudio(-10);
+    [RelayCommand] private void AudioLater() => NudgeAudio(10);
+    private void NudgeAudio(int ms)
+    {
+        AudioDelayMs = Math.Clamp(AudioDelayMs + ms, -AudioOffsetLimitMs, AudioOffsetLimitMs);
+        if (!IsLipSyncCheck) Flash($"Audio timing {AudioDelayText} at {RefreshKey} Hz");
+    }
     [RelayCommand] private void SmallerSubtitles() => SubtitleScale = Math.Max(0.5, Math.Round(SubtitleScale - 0.1, 2));
     [RelayCommand] private void LargerSubtitles() => SubtitleScale = Math.Min(2.5, Math.Round(SubtitleScale + 0.1, 2));
 
@@ -170,16 +218,14 @@ public sealed partial class PlayerViewModel
     {
         PlaybackSpeed = 1;
         SubtitleDelayMs = 0;
-        AudioDelayMs = 0;
         SubtitleScale = 1;
         Flash("Back to normal");
     }
 
-    /// <summary>A new file starts with no timing offsets (mpv resets them too).</summary>
+    /// <summary>A new file starts with no subtitle offset (mpv resets it too). Audio timing is the screen's, so it stays.</summary>
     private void ResetPerFileTuning()
     {
         if (SubtitleDelayMs != 0) SubtitleDelayMs = 0;
-        if (AudioDelayMs != 0) AudioDelayMs = 0;
     }
 
     // ===================== Subtitles found by the server =====================

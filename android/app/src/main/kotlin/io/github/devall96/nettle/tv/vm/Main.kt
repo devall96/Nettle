@@ -150,6 +150,18 @@ object Main {
         player = PlayerModel.forQueue(items, index, startTicks)
     }
 
+    /** Sync-test builds only: the bundled flash + beep clip ("aac" or "ac3"). */
+    fun playSyncTest(kind: String) {
+        closePlayer()
+        player = io.github.devall96.nettle.tv.player.PlayerModel.forTestClip("asset:///sync-23976-$kind.mkv")
+    }
+
+    /** Settings → Lip sync check ([films]: at the TV's film rate, else its usual one). */
+    fun playLipSyncCheck(films: Boolean) {
+        closePlayer()
+        player = io.github.devall96.nettle.tv.player.PlayerModel.forLipSyncCheck(films)
+    }
+
     fun playLive(channels: List<NtvChannel>, index: Int) {
         closePlayer()
         player = PlayerModel.forLive(channels, index)

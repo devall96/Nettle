@@ -146,7 +146,7 @@
         <StackPanel VerticalAlignment="Bottom" Margin="44,0,44,30" Spacing="6" IsVisible="{Binding IsVod}">
           <Grid ColumnDefinitions="Auto,*,Auto">
             <TextBlock Text="{Binding PositionText}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0" FontFeatures="tnum" />
-            <Slider Grid.Column="1" x:Name="SeekBar" Minimum="0" Maximum="{Binding LengthMs}" Value="{Binding SeekValue}" VerticalAlignment="Center" />
+            <Slider Grid.Column="1" x:Name="SeekBar" Focusable="{Binding IsTv}" Minimum="0" Maximum="{Binding LengthMs}" Value="{Binding SeekValue}" VerticalAlignment="Center" />
             <!-- Chapter starts (from the file); PgUp / PgDn jump between them -->
             <c:ChapterTicks Grid.Column="1" Marks="{Binding ChapterMarks}" IsHitTestVisible="False" Height="12" VerticalAlignment="Center" />
             <TextBlock Grid.Column="2" Text="{Binding RemainingText}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="14,0,0,0" FontFeatures="tnum" />
@@ -231,6 +231,28 @@
       <Border IsVisible="{Binding OsdMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" HorizontalAlignment="Center" VerticalAlignment="Top"
               Margin="0,120,0,0" Background="#CC000000" CornerRadius="12" Padding="20,10" IsHitTestVisible="False">
         <TextBlock Text="{Binding OsdMessage}" FontSize="18" FontWeight="SemiBold" />
+      </Border>
+
+      <!-- Settings → Lip sync check -->
+      <Border IsVisible="{Binding IsLipSyncCheck}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="16,0,16,56"
+              MaxWidth="720" Background="#E6141414" CornerRadius="16" Padding="28,20">
+        <StackPanel Spacing="8" HorizontalAlignment="Center">
+          <TextBlock HorizontalAlignment="Center" FontSize="20" FontWeight="Bold" Foreground="White" Text="{Binding LipSyncTitle}" />
+          <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="White"
+                     Text="A grey box blinks in the middle of the screen once a second, with a beep. Line them up so they happen at the same moment." />
+          <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="White" Opacity="0.75"
+                     Text="Beep first? Press → (or +) to play the sound later. Box first? Press ← (or −) to play it earlier." />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
+            <Button Content="−" Command="{Binding AudioEarlierCommand}" Padding="14,4" FontSize="22" />
+            <TextBlock Text="{Binding AudioDelayText}" FontSize="30" FontWeight="ExtraBold" Foreground="White" MinWidth="150"
+                       TextAlignment="Center" VerticalAlignment="Center" FontFeatures="tnum" />
+            <Button Content="+" Command="{Binding AudioLaterCommand}" Padding="14,4" FontSize="22" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+            <TextBlock Foreground="White" Opacity="0.6" FontSize="13" VerticalAlignment="Center" Text="{Binding LipSyncSavedText}" />
+            <Button Content="Done" Command="{Binding CloseCommand}" Classes="primary" Padding="16,4" />
+          </StackPanel>
+        </StackPanel>
       </Border>
 
       <!-- Between programs (file ended slightly before its slot) -->
@@ -389,7 +411,7 @@
                 <Button Grid.Column="3" Content="+" Command="{Binding SubtitleLaterCommand}" Padding="10,2" />
               </Grid>
               <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4,0" IsVisible="{Binding CanAdjustAudioDelay}">
-                <TextBlock Text="Audio timing" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding AudioTimingLabel}" VerticalAlignment="Center" />
                 <Button Grid.Column="1" Content="−" Command="{Binding AudioEarlierCommand}" Padding="10,2" />
                 <TextBlock Grid.Column="2" Text="{Binding AudioDelayText}" MinWidth="64" TextAlignment="Center" VerticalAlignment="Center" FontFeatures="tnum" />
                 <Button Grid.Column="3" Content="+" Command="{Binding AudioLaterCommand}" Padding="10,2" />

@@ -45,7 +45,12 @@ data class PlaybackSettings(
     var ntvDirectPlay: Boolean = true,
     /** Android TV: match the TV's refresh rate (and optionally resolution) to the video. */
     var frameRateMatching: FrameRateMatching = FrameRateMatching.RefreshRate,
-)
+    /**
+     * Android TV: audio timing in ms (+ = audio later) for each refresh rate the TV runs at ("24", "60"…),
+     * set from the player's Audio timing row. TVs often add picture processing in one mode only (a TCL
+     * had the sound 207 ms early at 24 Hz but ~20 ms at 60 Hz), and it belongs to the hardware, so it's kept for every file.
+     */
+    var audioOffsets: Map<String, Int> = emptyMap(),)
 
 @Serializable
 data class AppSettings(

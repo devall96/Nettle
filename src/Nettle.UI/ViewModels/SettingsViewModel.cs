@@ -106,7 +106,14 @@ public sealed partial class SettingsViewModel : PageViewModel
         ThemeManager.Apply(t.Palette.Key);
         S.Theme = t.Palette.Key;
         Save();
+        OnPropertyChanged(nameof(CurrentThemeText));
     }
+
+    /// <summary>Settings → Appearance → Change theme: the swatches have their own screen (same as the TV app).</summary>
+    [ObservableProperty] private bool _isThemesOpen;
+    public string CurrentThemeText => Themes.FirstOrDefault(t => t.IsSelected) is { } t ? $"{t.Name} · {t.Tagline}" : "";
+    [RelayCommand] private void OpenThemes() => IsThemesOpen = true;
+    [RelayCommand] private void CloseThemes() => IsThemesOpen = false;
 
     // ---------- Playback ----------
     public bool HardwareDecoding { get => P.HardwareDecoding; set { P.HardwareDecoding = value; Save(); OnPropertyChanged(); } }
@@ -134,6 +141,19 @@ public sealed partial class SettingsViewModel : PageViewModel
     public decimal SeekStep { get => P.SeekStepSeconds; set { P.SeekStepSeconds = (int)value; Save(); OnPropertyChanged(); } }
     public bool AudioPassthrough { get => P.AudioPassthrough; set { P.AudioPassthrough = value; Save(); OnPropertyChanged(); } }
     public string PassthroughHint => AppServices.Profile.PassthroughHint;
+
+    /// <summary>Settings → Lip sync check: the saved Audio timing per refresh rate, then how to set it.</summary>
+    public string LipSyncHint
+    {
+        get
+        {
+            var set = P.AudioOffsets.Where(e => e.Value != 0).OrderBy(e => int.TryParse(e.Key, out var hz) ? hz : 0)
+                .Select(e => $"{(e.Value > 0 ? "+" : "−")}{Math.Abs(e.Value)} ms at {e.Key} Hz").ToList();
+            return "Blinks a small grey box with a beep so you can line up sound and picture on this screen. Many TVs add delay in their " +
+                   "film (24 Hz) mode only, so each refresh rate keeps its own value." + (set.Count > 0 ? " Now: " + string.Join(", ", set) : "");
+        }
+    }
+    [RelayCommand] private void LipSyncCheck() => AppServices.Main.PlayLipSyncCheck();
 
     public bool StillWatchingPrompt
     {
@@ -194,7 +214,9 @@ public sealed partial class SettingsViewModel : PageViewModel
     public bool NtvDirectPlay { get => P.NtvDirectPlay; set { P.NtvDirectPlay = value; Save(); OnPropertyChanged(); } }
 
     // ---------- Desktop (Linux applications menu) ----------
-    public bool HasDesktopIntegration => AppServices.Desktop != null;
+    // Offered only when running as the AppImage: an unpacked or source build's path is temporary (the entry would
+    // point there) and may be a test profile. An entry that already exists can always be removed.
+    public bool HasDesktopIntegration => AppServices.Desktop is { } d && (d.OfferOnFirstRun || d.IsInMenu);
     public bool IsInAppMenu => AppServices.Desktop?.IsInMenu == true;
     public string AppMenuStatus => IsInAppMenu ? "Nettle is in your applications menu." : "Nettle isn't in your applications menu.";
 

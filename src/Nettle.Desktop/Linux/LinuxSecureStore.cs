@@ -13,11 +13,12 @@ namespace Nettle.Desktop.Linux;
 internal sealed class LinuxSecureStore : ISecureStore
 {
     private readonly string _fallbackDir;
-    private readonly Lazy<SecretService?> _service = new(SecretService.TryCreate, isThreadSafe: true);
+    private readonly Lazy<SecretService?> _service;
 
-    public LinuxSecureStore(string fallbackDir)
+    public LinuxSecureStore(string fallbackDir, bool useKeyring = true)
     {
         _fallbackDir = fallbackDir;
+        _service = new(() => useKeyring ? SecretService.TryCreate() : null, isThreadSafe: true);
     }
 
     /// <summary>"Keyring" or "Files": where secrets are being kept, for diagnostics.</summary>

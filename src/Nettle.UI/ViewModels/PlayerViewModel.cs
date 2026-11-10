@@ -232,10 +232,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 IsTuning = false;
                 // Exclusive full screen: the monitor's refresh rate follows the video (Jellyfin's measured frame rate).
                 var video = _sourceStreams?.FirstOrDefault(s => s.Type == "Video");
-                AppServices.Window?.SetVideoFrameRate(video?.RealFrameRate ?? video?.AverageFrameRate);
+                AppServices.Window?.SetVideoFrameRate(IsLipSyncCheck ? _checkFps : video?.RealFrameRate ?? video?.AverageFrameRate);
                 LoadTracks();
                 LoadChapters();
-                _ = ShowFormatBadgesAsync(_tuneVersion, _mediaGeneration);
+                if (!IsLipSyncCheck) _ = ShowFormatBadgesAsync(_tuneVersion, _mediaGeneration);
             });
         };
         // Speed and subtitle size carry over between files and sessions.
@@ -243,6 +243,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _subtitleScale = Math.Clamp(_settings.SubtitleScale, 0.5, 2.5);
         if (Math.Abs(_playbackSpeed - 1) > 0.001) Player.SetSpeed(_playbackSpeed);
         if (Math.Abs(_subtitleScale - 1) > 0.001) Player.SetSubtitleScale(_subtitleScale);
+        ApplySavedAudioOffset();
 
         _tick = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => OnTick());
         _tick.Start();
@@ -273,6 +274,49 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         vm._queueIndex = Math.Clamp(index, 0, items.Count - 1);
         _ = vm.StartItemAsync(vm._queue[vm._queueIndex], startTicks, null);
         return vm;
+    }
+
+    // ===================== Settings → Lip sync check =====================
+
+    /// <summary>The flash + beep clip is playing, with the Audio timing control on screen.</summary>
+    public bool IsLipSyncCheck { get; private set; }
+    private double? _checkFps;
+
+    /// <summary>
+    /// Plays the bundled box + beep clip on a loop to line the beep up with the box (a small grey box that blinks once a second: no full-screen flashing). It's a 23.976 fps
+    /// film, so exclusive full screen switches the monitor to 24 Hz as it does for films; each refresh rate
+    /// keeps its own Audio timing.
+    /// </summary>
+    public static PlayerViewModel ForLipSyncCheck(MainViewModel main)
+    {
+        var vm = new PlayerViewModel(main) { IsLipSyncCheck = true, _checkFps = 24000 / 1001.0 };
+        vm.IsOsdVisible = false;
+        vm.SwapMedia(new PlayerLoad { Url = LipSyncClipPath(), Loop = true });
+        return vm;
+    }
+
+#if DEBUG || NETTLE_DEV
+    /// <summary>Developer hook (NETTLE_DEV_FILE): plays a local file as a video, nothing reported to the server.</summary>
+    public static PlayerViewModel ForLocalFile(MainViewModel main, string path)
+    {
+        var vm = new PlayerViewModel(main);
+        vm.SwapMedia(new PlayerLoad { Url = path });
+        return vm;
+    }
+#endif
+
+    /// <summary>mpv plays files, so the clip (an Avalonia resource) is copied out once.</summary>
+    private static string LipSyncClipPath()
+    {
+        var path = Path.Combine(AppServices.Platform.CacheDirectory, "lipsync-check.mkv"); // Nettle's own cache, not /tmp
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var src = Avalonia.Platform.AssetLoader.Open(new Uri("avares://Nettle.UI/Assets/lipsync-check.mkv"));
+        if (!File.Exists(path) || new FileInfo(path).Length != src.Length)
+        {
+            using var dst = File.Create(path);
+            src.CopyTo(dst);
+        }
+        return path;
     }
 
     // ===================== Play queue =====================
@@ -737,6 +781,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         if (IsLive || LengthMs <= 1) return;
         ShowOsd();
         SeekToMs(LengthMs * percent / 100.0);
+        Nettle.Core.Services.Log.Info($"seek: {percent} % → {LengthMs * percent / 100000.0:0} s");
     }
 
     // ===================== Common =====================
@@ -767,11 +812,14 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private static string Redact(string? url) =>
         string.IsNullOrEmpty(url) ? "" : System.Text.RegularExpressions.Regex.Replace(url, "(?i)(ApiKey|api_key)=[^&]*", "$1=***");
 
+    private int _refreshPolls;
+
     private void OnTick()
     {
         if (_disposed) return;
         IsPlaying = Player.IsPlaying;
         if (Error == null && LiveInterstitial == null) IsBuffering = Player.IsBuffering;
+        if (++_refreshPolls % 4 == 0) UpdateRefreshKey();
 
         if (IsOsdVisible && IsPlaying && !IsTracksOpen && !IsSubtitleSearchOpen && (DateTime.UtcNow - _lastInput).TotalSeconds > 3.5)
             IsOsdVisible = false;
@@ -790,7 +838,11 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         long len = Player.LengthMs;
         long time = Player.TimeMs;
         if (len > 0) LengthMs = len;
-        if (!IsSeeking && time >= 0) SeekValue = time;
+        // mpv keeps reporting the old time until a seek lands (a second or more on a network stream): don't
+        // pull the thumb back there in between, it made the seek bar jump back and forth.
+        bool seekLanding = DateTime.UtcNow - _lastSeekAt < TimeSpan.FromSeconds(3) && Math.Abs(time - _lastSeekTargetMs) > 2000;
+        if (!IsSeeking && !seekLanding && time >= 0) SeekValue = time;
+        if (seekLanding) time = (long)_lastSeekTargetMs;
         var pos = TimeSpan.FromMilliseconds(Math.Max(0, IsSeeking ? SeekValue : time));
         PositionText = Format.Clock(pos);
         if (len > 0)
@@ -1066,6 +1118,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void TogglePlay()
     {
+        if (_scrubbing) { CommitScrub(); return; }
         ShowOsd();
         if (Player.HasEnded && !IsLive && _item != null) { _ = StartItemAsync(_item, null, _mediaSourceId); return; }
         var willPause = Player.IsPlaying;
@@ -1103,6 +1156,101 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private double _lastSeekTargetMs;
     private DateTime _lastSeekAt = DateTime.MinValue;
 
+    // ===================== Scrubbing (← / →), the same as the TV app =====================
+    // ← / → pause and enter scrubbing: the preview (thumbnail, time, chapter) moves over the seek bar, the video
+    // doesn't. A tap moves it one seek step; holding glides it smoothly, faster the longer it's held (ScrubSpeed),
+    // driven by a timer, not by key repeats. Enter / Space / play jumps there and carries on; Esc cancels.
+    // "Held" comes from real key-down / key-up (see ScrubKeyUp), not from guessing at repeat timing.
+
+    private bool _scrubbing;
+    private double _scrubOrigin;
+    private bool _scrubWasPlaying;
+    private bool _arrowDown;
+    private int _glideDir;
+    private DateTime _glideStart, _glideLast;
+    private DispatcherTimer? _glide;
+    public bool IsScrubbing => _scrubbing;
+
+    private void ScrubKey(bool forward)
+    {
+        if (IsLive || Player.LengthMs <= 0) return;
+        ShowOsd();
+        if (!_scrubbing)
+        {
+            _scrubbing = true;
+            _scrubOrigin = Math.Max(0, Player.TimeMs);
+            _scrubWasPlaying = Player.IsPlaying;
+            if (_scrubWasPlaying) Player.SetPause(true);
+            IsSeeking = true; // the view shows the thumbnail over SeekValue while seeking
+            SeekValue = _scrubOrigin;
+        }
+        int dir = forward ? 1 : -1;
+        if (!_arrowDown || dir != _glideDir)
+        {
+            // A new press: one step.
+            _arrowDown = true;
+            StopGlide();
+            _glideDir = dir;
+            MoveScrub(dir * _settings.SeekStepSeconds * 1000.0);
+            return;
+        }
+        // The key is still down (an OS repeat before its key-up): glide.
+        if (_glide != null) return;
+        _glideStart = _glideLast = DateTime.UtcNow;
+        _glide = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) =>
+        {
+            var now = DateTime.UtcNow;
+            var step = Nettle.Core.Services.ScrubSpeed.AdvanceMs((now - _glideStart).TotalMilliseconds, (now - _glideLast).TotalMilliseconds, Player.LengthMs);
+            _glideLast = now;
+            MoveScrub(_glideDir * step);
+        });
+        _glide.Start();
+    }
+
+    /// <summary>← / → let go (from the view's key-up): the glide stops; the preview stays until Enter or Esc.</summary>
+    public void ScrubKeyUp(Key key)
+    {
+        if (key is not (Key.Left or Key.Right or Key.J or Key.L)) return;
+        _arrowDown = false;
+        StopGlide();
+    }
+
+    private void StopGlide() { _glide?.Stop(); _glide = null; }
+
+    private void MoveScrub(double deltaMs)
+    {
+        _lastInput = DateTime.UtcNow;
+        SeekValue = Math.Clamp(SeekValue + deltaMs, 0, Math.Max(0, Player.LengthMs - 1000));
+    }
+
+    /// <summary>Enter / Space / play while scrubbing (or the mouse letting go of the seek bar): jump and carry on.</summary>
+    private void CommitScrub()
+    {
+        StopGlide();
+        _arrowDown = false;
+        _scrubbing = false;
+        IsSeeking = false;
+        HideTrickplay();
+        Nettle.Core.Services.Log.Info($"seek: scrubbed {_scrubOrigin / 1000:0} → {SeekValue / 1000:0} s");
+        SeekToMs(SeekValue);
+        if (_scrubWasPlaying) Player.SetPause(false);
+        ShowOsd();
+    }
+
+    /// <summary>Esc while scrubbing: forget the preview and carry on from where it was.</summary>
+    private void CancelScrub()
+    {
+        StopGlide();
+        _arrowDown = false;
+        _scrubbing = false;
+        IsSeeking = false;
+        HideTrickplay();
+        Nettle.Core.Services.Log.Info($"seek: scrub cancelled, staying at {_scrubOrigin / 1000:0} s");
+        SeekValue = _scrubOrigin;
+        if (_scrubWasPlaying) Player.SetPause(false);
+        ShowOsd();
+    }
+
     public void SeekToMs(double ms)
     {
         if (IsLive) return;
@@ -1117,6 +1265,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     /// <summary>Called by the seek bar when the user releases it.</summary>
     public void CommitSeek()
     {
+        if (_scrubbing) { CommitScrub(); return; }
         IsSeeking = false;
         SeekToMs(SeekValue);
     }
@@ -1201,6 +1350,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     /// <param name="focusOnButton">A button (not the seek bar) inside the player has focus.</param>
     public TvKeyResult HandleTvKey(Key key, bool focusOnButton)
     {
+        if (IsLipSyncCheck) return HandleKey(key) ? TvKeyResult.Handled : TvKeyResult.LetFocusedControlHandle;
         if (IsStillWatchingVisible)
             return focusOnButton && key is Key.Space or Key.Enter ? TvKeyResult.LetFocusedControlHandle
                 : HandleKey(key) ? TvKeyResult.Handled : TvKeyResult.MoveFocus;
@@ -1237,6 +1387,29 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         _lastUserInput = DateTime.UtcNow;
         _autoPlayedInARow = 0;
+        // Lip sync check: Left / Right move the sound, Enter / Escape / Back are done; the rest does nothing.
+        if (IsLipSyncCheck)
+        {
+            switch (key)
+            {
+                case Key.Left or Key.OemMinus or Key.Subtract: AudioEarlier(); return true;
+                case Key.Right or Key.OemPlus or Key.Add: AudioLater(); return true;
+                case Key.Enter or Key.Escape or Key.Back or Key.BrowserBack: Close(); return true;
+                default: return key is not Key.Tab;
+            }
+        }
+        // Scrubbing: Enter / Space / play jump to the preview and carry on; Esc / Back cancel (before Esc's usual
+        // "leave the player").
+        if (_scrubbing)
+        {
+            switch (key)
+            {
+                case Key.Enter or Key.Space or Key.K or Key.MediaPlayPause:
+                    CommitScrub(); return true;
+                case Key.Escape or Key.Back or Key.BrowserBack or Key.MediaStop:
+                    CancelScrub(); return true;
+            }
+        }
         if (IsStillWatchingVisible)
         {
             switch (key)
@@ -1264,9 +1437,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             case Key.Enter when !IsOsdVisible:
                 ShowOsd(); return true;
             case Key.Left or Key.J when IsVod && !IsTracksOpen:
-                SeekBy(-_settings.SeekStepSeconds); return true;
+                ScrubKey(forward: false); return true;
             case Key.Right or Key.L when IsVod && !IsTracksOpen:
-                SeekBy(_settings.SeekStepSeconds); return true;
+                ScrubKey(forward: true); return true;
             case Key.Up when IsLive && !IsTracksOpen:
             case Key.PageUp when IsLive:
             case Key.MediaNextTrack when IsLive:

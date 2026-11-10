@@ -198,3 +198,20 @@ public class PrivacyTests
         Assert.True(hits.Count == 0, string.Join("\n", hits));
     }
 }
+
+public class ScrubSpeedTests
+{
+    [Fact]
+    public void RampsWithTimeHeld_AndCrossesAFilmInSeconds()
+    {
+        const double film = 2 * 3600_000;
+        Assert.Equal(30, ScrubSpeed.Rate(0, film), 3);
+        Assert.Equal(60, ScrubSpeed.Rate(1000, film), 3);
+        Assert.Equal(900, ScrubSpeed.Rate(60_000, film), 3); // 2 h / 8 s
+        Assert.Equal(30, ScrubSpeed.Rate(10_000, 60_000), 3); // short clips never drop below the start speed
+        double held = 0, moved = 0;
+        while (held < 3000) { held += 33; moved += ScrubSpeed.AdvanceMs(held, 33, film); }
+        Assert.InRange(moved, 180_000, 400_000); // a few minutes in 3 s, not the old hour-plus
+        Assert.True(ScrubSpeed.AdvanceMs(1000, 5000, film) <= 30_000); // a stall between repeats can't jump far
+    }
+}

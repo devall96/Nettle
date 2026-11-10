@@ -95,21 +95,30 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
         AudioFormat.ENCODING_DTS_HD, AudioFormat.ENCODING_DOLBY_TRUEHD, AudioFormat.ENCODING_DTS_UHD_P2,
     )
 
+    /** Audio timing (+ = audio later), read by the audio sink on the playback thread. */
+    @Volatile private var audioOffsetUs = 0L
+
     init {
         val renderers = object : DefaultRenderersFactory(context) {
             override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParameters: Boolean): AudioSink {
-                val b = DefaultAudioSink.Builder(context)
+                val sink = DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParameters)
-                val sink = b.build()
-                if (passthrough) return sink
-                // Passthrough off: the sink refuses encoded audio (Dolby / DTS), so the box decodes it to PCM.
-                // (Media3 would otherwise bitstream whenever the TV says it can take it; tested on the onn.)
+                    .build()
                 return object : androidx.media3.exoplayer.audio.ForwardingAudioSink(sink) {
-                    private fun encoded(f: Format) = f.sampleMimeType != null && f.sampleMimeType != MimeTypes.AUDIO_RAW
-                    override fun supportsFormat(format: Format) = !encoded(format) && super.supportsFormat(format)
+                    // Passthrough off: the sink refuses encoded audio (Dolby / DTS), so the box decodes it to PCM.
+                    // (Media3 would otherwise bitstream whenever the TV says it can take it; tested on the onn.)
+                    private fun refused(f: Format) = !passthrough && f.sampleMimeType != null && f.sampleMimeType != MimeTypes.AUDIO_RAW
+                    override fun supportsFormat(format: Format) = !refused(format) && super.supportsFormat(format)
                     override fun getFormatSupport(format: Format) =
-                        if (encoded(format)) AudioSink.SINK_FORMAT_UNSUPPORTED else super.getFormatSupport(format)
+                        if (refused(format)) AudioSink.SINK_FORMAT_UNSUPPORTED else super.getFormatSupport(format)
+                    // Audio timing: the video is timed against this clock, so running it ahead by the offset
+                    // shows each frame that much earlier, i.e. the sound lands later against the picture.
+                    // The audio itself is untouched, so this works for PCM and Dolby / DTS bitstreams alike.
+                    override fun getCurrentPositionUs(sourceEnded: Boolean): Long {
+                        val p = super.getCurrentPositionUs(sourceEnded)
+                        return if (p == AudioSink.CURRENT_POSITION_NOT_SET) p else p + audioOffsetUs
+                    }
                 }
             }
         }
@@ -157,6 +166,8 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
             override fun onAudioTrackInitialized(eventTime: AnalyticsListener.EventTime, audioTrackConfig: AudioSink.AudioTrackConfig) {
                 audioActive = true
                 audioBitstream = audioTrackConfig.encoding in bitstream
+                Log.info("audio output: ${if (audioBitstream) "bitstream" else "PCM"} (encoding ${audioTrackConfig.encoding}, " +
+                    "${audioTrackConfig.sampleRate} Hz, tunneling ${audioTrackConfig.tunneling}), audio timing ${audioOffsetUs / 1000} ms")
             }
             override fun onAudioTrackReleased(eventTime: AnalyticsListener.EventTime, audioTrackConfig: AudioSink.AudioTrackConfig) { audioActive = false }
             // Diagnostics for choppy playback: dropped video frames (logged in batches) and stalls.
@@ -202,7 +213,9 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
                 .setMimeType(subtitleMime(s.url)).build()
         }
         val item = MediaItem.Builder().setUri(l.url).setSubtitleConfigurations(subs).build()
-        exo.setMediaSource(DefaultMediaSourceFactory(http, TolerantExtractorsFactory()).createMediaSource(item), startMs.coerceAtLeast(0))
+        // asset:/// only in sync-test builds (the bundled flash + beep clips); everything else stays on the allowlisted client.
+        val source = if (l.url.startsWith("asset:")) androidx.media3.datasource.DefaultDataSource.Factory(context, http) else http
+        exo.setMediaSource(DefaultMediaSourceFactory(source, TolerantExtractorsFactory()).createMediaSource(item), startMs.coerceAtLeast(0))
         exo.prepare()
         exo.playWhenReady = true
     }
@@ -240,13 +253,21 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
     }
 
     fun setPause(pause: Boolean) { if (!released) exo.playWhenReady = !pause }
-    fun seekTo(ms: Long) { if (!released) exo.seekTo(ms.coerceAtLeast(0)) }
+    /** [fast]: land on the nearest keyframe (instant) instead of the exact frame (decodes up to it first). */
+    fun seekTo(ms: Long, fast: Boolean = false) {
+        if (released) return
+        exo.setSeekParameters(if (fast) androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC else androidx.media3.exoplayer.SeekParameters.EXACT)
+        exo.seekTo(ms.coerceAtLeast(0))
+    }
 
     private var volume = 100
     private var muted = false
     fun setVolume(v: Int) { volume = v.coerceIn(0, 100); applyVolume() }
     fun setMute(m: Boolean) { muted = m; applyVolume() }
     private fun applyVolume() { if (!released) exo.volume = if (muted) 0f else volume / 100f }
+
+    /** Audio timing in ms (+ = audio later than the picture), for a TV / sound system that's out of step. */
+    fun setAudioOffset(ms: Int) { audioOffsetUs = ms.coerceIn(-AUDIO_OFFSET_LIMIT_MS, AUDIO_OFFSET_LIMIT_MS) * 1000L }
 
     fun setSpeed(speed: Double) { if (!released) exo.playbackParameters = PlaybackParameters(speed.coerceIn(0.25, 3.0).toFloat()) }
 
@@ -360,6 +381,8 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
         return "video ${v?.sampleMimeType ?: "-"} ${v?.codecs ?: ""} ${videoWidth}x$videoHeight ${hdrSignal ?: "sdr"} @${"%.3f".format(frameRate)}, " +
             "audio ${a?.sampleMimeType ?: "-"} ${a?.channelCount ?: 0}ch → ${if (audioBitstream) "bitstream" else "PCM"}"
     }
+
+    companion object { const val AUDIO_OFFSET_LIMIT_MS = 500 }
 
     fun release() {
         if (released) return

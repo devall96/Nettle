@@ -2,6 +2,7 @@ package io.github.devall96.nettle.tv
 
 import android.app.Application
 import android.os.Bundle
+import kotlinx.coroutines.launch
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -34,9 +35,22 @@ class NettleApp : Application() {
 }
 
 class MainActivity : ComponentActivity() {
+    private var lastBackAt = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Main.leaveApp = { moveTaskToBack(true) }
+        // Back at the top level, twice: closes Nettle for real (it used to only go to the background, so the
+        // only way to close it was force-stopping it in the TV's settings).
+        Main.leaveApp = {
+            val now = android.os.SystemClock.uptimeMillis()
+            if (now - lastBackAt < 2000) {
+                finishAndRemoveTask()
+                // The server connection (remote control) and background work live in the process, not the
+                // screen: end it too, once a settings save that's still being written has had time to finish.
+                AppServices.scope.launch { kotlinx.coroutines.delay(800); android.os.Process.killProcess(android.os.Process.myPid()) }
+            }
+            else { lastBackAt = now; Main.toast("Press Back again to close Nettle", 2000) }
+        }
         readHdrCapabilities()
         if (Main.root == null) Main.start()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -46,12 +60,12 @@ class MainActivity : ComponentActivity() {
         // The window's own background only covers start-up; once Compose has drawn its opaque
         // background it would just be painted underneath every frame, so it is dropped.
         window.decorView.post { window.decorView.postOnAnimation { window.setBackgroundDrawable(null) } }
-        if (BuildConfig.DEBUG) DevHooks.handle(intent)
+        if (BuildConfig.DEBUG || BuildConfig.SYNC_TEST) DevHooks.handle(intent)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        if (BuildConfig.DEBUG) DevHooks.handle(intent)
+        if (BuildConfig.DEBUG || BuildConfig.SYNC_TEST) DevHooks.handle(intent)
     }
 
     /** Which HDR types the TV accepts: decides Dolby Vision vs its HDR10 layer, and what the badges may claim. */

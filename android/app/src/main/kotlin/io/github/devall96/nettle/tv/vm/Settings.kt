@@ -106,10 +106,16 @@ class SettingsModel : Page() {
     private fun save() { AppServices.scope.launch { AppServices.settings.save() } }
 
     fun applyTheme(key: String) { theme = key; s.theme = key; Main.applySettings(); save() }
+    /** Settings → Appearance → Change theme (the swatches on their own screen). */
+    var isThemesOpen by mutableStateOf(false); private set
+    fun openThemes() { isThemesOpen = true }
+    fun closeThemes() {
+        isThemesOpen = false
+        AppServices.scope.launch { kotlinx.coroutines.delay(60); runCatching { requester("themes").requestFocus() } }
+    }
     fun changeReduceMotion(v: Boolean) { reduceMotion = v; s.reduceMotion = v; Main.applySettings(); save() }
     fun changeInterfaceWidth(v: Int) { interfaceWidth = v; s.interfaceWidth = v; Main.applySettings(); save() }
-    fun changePassthrough(v: Boolean) { audioPassthrough = v; p.audioPassthrough = v; save() }
-    fun changeAutoPlayNext(v: Boolean) { autoPlayNext = v; p.autoPlayNextEpisode = v; save() }
+    fun changePassthrough(v: Boolean) { audioPassthrough = v; p.audioPassthrough = v; save() }    fun changeAutoPlayNext(v: Boolean) { autoPlayNext = v; p.autoPlayNextEpisode = v; save() }
     fun changeStillWatching(v: Boolean) { stillWatching = v; p.stillWatchingPrompt = v; save() }
     fun changeStillWatchingEpisodes(v: Int) { stillWatchingEpisodes = v.coerceIn(1, 20); p.stillWatchingEpisodes = stillWatchingEpisodes; save() }
     fun changeIntro(v: SegmentAction) { introAction = v; p.introAction = v; save() }

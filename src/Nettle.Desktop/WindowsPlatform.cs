@@ -11,7 +11,7 @@ internal sealed class WindowsPlatformInfo : IPlatformInfo
 
     private static string Root()
     {
-#if DEBUG
+#if DEBUG || NETTLE_DEV
         // Developer convenience: a throwaway profile (e.g. for screenshots) that never touches real settings/accounts.
         var dev = Environment.GetEnvironmentVariable("NETTLE_PROFILE_DIR");
         if (!string.IsNullOrWhiteSpace(dev)) return dev;
@@ -21,7 +21,7 @@ internal sealed class WindowsPlatformInfo : IPlatformInfo
 
     private static string LocalBase()
     {
-#if DEBUG
+#if DEBUG || NETTLE_DEV
         // Tests of the Slopfin → Nettle data move against a copy, never the real folders.
         var dev = Environment.GetEnvironmentVariable("NETTLE_DEV_LOCALAPPDATA");
         if (!string.IsNullOrWhiteSpace(dev)) return dev;
@@ -32,7 +32,7 @@ internal sealed class WindowsPlatformInfo : IPlatformInfo
     /// <summary>Brings over the data folder from the old name (see <see cref="LegacyData"/>). Run before anything uses the data folder.</summary>
     public static void MoveLegacyData()
     {
-#if DEBUG
+#if DEBUG || NETTLE_DEV
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETTLE_PROFILE_DIR"))) return;
 #endif
         LegacyData.MoveFolder(Path.Combine(LocalBase(), LegacyData.OldName), Root(), "data");

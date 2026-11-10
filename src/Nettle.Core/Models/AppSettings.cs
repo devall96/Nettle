@@ -51,6 +51,13 @@ public sealed class PlaybackSettings
     /// offset (full quality, nothing re-encoded) instead of NostalgiaTV's ffmpeg broadcast feed.
     /// </summary>
     public bool NtvDirectPlay { get; set; } = true;
+    /// <summary>
+    /// Audio timing in ms (+ = audio later) for each refresh rate the screen runs at ("24", "60"…), set from
+    /// the player's Audio timing row or Settings → Lip sync check. Screens often add picture processing in one
+    /// mode only (a TCL TV had the sound 207 ms early at 24 Hz, ~40 ms at 60 Hz), and it belongs to the
+    /// hardware, so it's kept for every file. Same setting as the Android TV app.
+    /// </summary>
+    public Dictionary<string, int> AudioOffsets { get; set; } = new();
 }
 
 public sealed class AppSettings

@@ -1,5 +1,7 @@
 package io.github.devall96.nettle.tv.screens
 
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import android.view.KeyEvent as AKey
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -38,7 +40,7 @@ fun SettingsScreen(vm: SettingsModel) {
     val p = Nettle.colors
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(50)
-        runCatching { (vm.lastFocusKey?.let { vm.focusRequesters[it] } ?: vm.requester("theme:" + vm.theme)).requestFocus() }
+        runCatching { (vm.lastFocusKey?.let { vm.focusRequesters[it] } ?: vm.requester("themes")).requestFocus() }
     }
     KeepClear(before = 80.dp, after = 80.dp) {
         Column(
@@ -51,17 +53,15 @@ fun SettingsScreen(vm: SettingsModel) {
             Panel(Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     SectionLabel("APPEARANCE")
-                    // 220-wide swatches, as many per line as fit (WrapPanel)
-                    val perRow = maxOf(1, ((minOf(1100, io.github.devall96.nettle.tv.vm.Main.canvasWidth - 80 - 112) - 48 + 16) / (220 + 16)))
-                    vm.themes.chunked(perRow).forEach { line ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) { line.forEach { ThemeSwatch(vm, it) } }
+                    // The 16 themes have their own screen, so they don't push everything else down the page.
+                    val current = vm.themes.firstOrNull { it.key == vm.theme }
+                    ActionRow("Theme", current?.let { "${it.name} · ${it.tagline}" }, { vm.openThemes() }, Modifier.rememberFocus(vm, "themes")) {
+                        T("Change theme ›", weight = FontWeight.SemiBold)
                     }
                     ToggleRow("Reduce motion", vm.reduceMotion, { vm.changeReduceMotion(it) }, Modifier.rememberFocus(vm, "motion"),
                         hint = "Skips page slides, fades, card lifts and the rotating Home banner")
-                    SettingRow("Interface size", "How big everything is on the TV. Standard has the same proportions as the Windows app.") {
-                        Dropdown(vm.interfaceSizes, vm.interfaceSizes.firstOrNull { it.value == vm.interfaceWidth }, { vm.changeInterfaceWidth(it.value) },
-                            minWidth = 200.dp, label = { it.label })
-                    }
+                    DropdownRow("Interface size", "How big everything is on the TV. Standard has the same proportions as the Windows app.",
+                        vm.interfaceSizes, vm.interfaceSizes.firstOrNull { it.value == vm.interfaceWidth }, { vm.changeInterfaceWidth(it.value) }, { it.label })
                 }
             }
 
@@ -74,15 +74,26 @@ fun SettingsScreen(vm: SettingsModel) {
                     }
                     ToggleRow("Audio passthrough (AV receiver)", vm.audioPassthrough, { vm.changePassthrough(it) },
                         hint = "Sends Dolby (incl. Atmos and TrueHD) and DTS (incl. DTS-HD and DTS:X) untouched to your TV, soundbar or AV receiver over HDMI, when they accept it. Off: this box decodes the sound itself; formats it can't decode fall back to another audio track. Applies from the next video.")
-                    SettingRow("Match frame rate", "Switches the TV to the video's frame rate (24p films without judder), and optionally its resolution") {
-                        Dropdown(vm.frameRateChoices, vm.frameRateChoices.first { it.value == vm.frameRate }, { vm.changeFrameRate(it.value) }, minWidth = 200.dp, label = { it.label })
+                    val offsets: List<Pair<String, Int>> = io.github.devall96.nettle.tv.AppServices.settings.current.playback.audioOffsets
+                        .filter { e -> e.value != 0 }.map { e -> e.key to e.value }.sortedBy { pr -> pr.first.toIntOrNull() ?: 0 }
+                    val lipSyncHint = "Blinks a small grey box with a beep so you can line up sound and picture on this TV. Many TVs add delay " +
+                        "in their film (24 Hz) mode only, so each rate keeps its own value." +
+                        (if (offsets.isEmpty()) "" else " Now: " +
+                            offsets.joinToString(", ") { pr -> "${if (pr.second > 0) "+" else "−"}${kotlin.math.abs(pr.second)} ms at ${pr.first} Hz" })
+                    ActionRow("Lip sync check", lipSyncHint, { io.github.devall96.nettle.tv.vm.Main.playLipSyncCheck(films = false) }) {
+                        T("Usual rate ›", weight = FontWeight.SemiBold)
                     }
+                    if (vm.frameRate != io.github.devall96.nettle.core.models.FrameRateMatching.Off)
+                        ActionRow("Lip sync check for films (24 Hz)", "The same check with the TV switched to its film mode, as for movies.",
+                            { io.github.devall96.nettle.tv.vm.Main.playLipSyncCheck(films = true) }) { T("Films ›", weight = FontWeight.SemiBold) }
+                    PhotosensitivityWarning()
+                    DropdownRow("Match frame rate", "Switches the TV to the video's frame rate (24p films without judder), and optionally its resolution",
+                        vm.frameRateChoices, vm.frameRateChoices.first { it.value == vm.frameRate }, { vm.changeFrameRate(it.value) }, { it.label })
                     ToggleRow("Auto-play next episode", vm.autoPlayNext, { vm.changeAutoPlayNext(it) }, hint = "Shows an Up Next card during the credits")
                     ToggleRow("Ask \"Are you still watching?\"", vm.stillWatching, { vm.changeStillWatching(it) },
                         hint = "Pauses before the next episode after several in a row with no input, and pauses Live TV after 4 hours with no input. Turn off to never be asked.")
-                    if (vm.stillWatching) SettingRow("Episodes before asking", "Auto-played episodes in a row before the question appears") {
-                        Stepper(vm.stillWatchingEpisodes, { vm.changeStillWatchingEpisodes(it) }, 1)
-                    }
+                    if (vm.stillWatching) StepperRow("Episodes before asking", "Auto-played episodes in a row before the question appears",
+                        vm.stillWatchingEpisodes, { vm.changeStillWatchingEpisodes(it) }, 1)
                     SegmentRow(vm, "Intros", "From the Intro Skipper plugin / Jellyfin media segments", vm.introAction) { vm.changeIntro(it) }
                     SegmentRow(vm, "Recaps", null, vm.recapAction) { vm.changeRecap(it) }
                     SegmentRow(vm, "Credits", null, vm.creditsAction) { vm.changeCredits(it) }
@@ -94,14 +105,11 @@ fun SettingsScreen(vm: SettingsModel) {
                     SettingRow("Preferred subtitle language", "ISO code (blank = your Jellyfin profile's choice, else the file default)") {
                         TvTextField(vm.subtitleLanguage, { vm.subtitleLanguage = it }, Modifier.width(200.dp), onSubmit = { vm.commitSubtitleLanguage() })
                     }
-                    SettingRow("Subtitles turn on", "When a subtitle track is picked automatically. You can always choose one while watching.") {
-                        Dropdown(vm.subtitleModes, vm.subtitleModes.firstOrNull { it.value == vm.subtitleMode } ?: vm.subtitleModes[0], { vm.changeSubtitleMode(it.value) },
-                            minWidth = 200.dp, label = { it.label })
-                    }
-                    SettingRow("Network buffer (seconds)", "How far ahead Nettle downloads. Raise it if playback stutters over Wi-Fi") {
-                        Stepper(vm.networkBuffer, { vm.changeNetworkBuffer(it) }, 5)
-                    }
-                    SettingRow("Seek step (seconds)", null) { Stepper(vm.seekStep, { vm.changeSeekStep(it) }, 5) }
+                    DropdownRow("Subtitles turn on", "When a subtitle track is picked automatically. You can always choose one while watching.",
+                        vm.subtitleModes, vm.subtitleModes.firstOrNull { it.value == vm.subtitleMode } ?: vm.subtitleModes[0], { vm.changeSubtitleMode(it.value) }, { it.label })
+                    StepperRow("Network buffer (seconds)", "How far ahead Nettle downloads. Raise it if playback stutters over Wi-Fi",
+                        vm.networkBuffer, { vm.changeNetworkBuffer(it) }, 5)
+                    StepperRow("Seek step (seconds)", "How far one tap of Left / Right moves while scrubbing", vm.seekStep, { vm.changeSeekStep(it) }, 5)
                 }
             }
 
@@ -211,6 +219,34 @@ fun SettingsScreen(vm: SettingsModel) {
             }
         }
     }
+    if (vm.isThemesOpen) ThemePicker(vm)
+}
+
+/** Settings → Appearance → Change theme: every theme as a swatch; Back or Done returns to Settings. */
+@Composable
+private fun ThemePicker(vm: SettingsModel) {
+    val p = Nettle.colors
+    androidx.activity.compose.BackHandler { vm.closeThemes() }
+    LaunchedEffect(Unit) {
+        repeat(20) { kotlinx.coroutines.delay(40); if (runCatching { vm.requester("theme:" + vm.theme).requestFocus() }.isSuccess) return@LaunchedEffect }
+    }
+    val scroll = androidx.compose.foundation.rememberScrollState()
+    Box(Modifier.fillMaxSize().background(p.background.copy(alpha = 0.96f)), contentAlignment = Alignment.TopCenter) {
+        Column(
+            Modifier.fillMaxHeight().verticalScroll(scroll).padding(start = 56.dp, top = 40.dp, end = 56.dp, bottom = 60.dp).widthIn(max = 1100.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                T("Theme", Modifier.weight(1f), style = Nettle.type.h1)
+                TextButton("Done", { vm.closeThemes() }, kind = ButtonKind.Primary)
+            }
+            // 220-wide swatches, as many per line as fit (WrapPanel)
+            val perRow = maxOf(1, ((minOf(1100, io.github.devall96.nettle.tv.vm.Main.canvasWidth - 80 - 112) - 48 + 16) / (220 + 16)))
+            vm.themes.chunked(perRow).forEach { line ->
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) { line.forEach { ThemeSwatch(vm, it) } }
+            }
+        }
+    }
 }
 
 /** Grid.row: title + hint on the left, the control on the right. */
@@ -225,29 +261,79 @@ private fun SettingRow(title: String, hint: String?, control: @Composable () -> 
     }
 }
 
+/**
+ * A whole row that takes focus, like [ToggleRow]: title + hint on the left, a control drawn on the right.
+ * Small controls at the right edge used to be skipped by the remote (Down jumped from one full-width toggle to
+ * the next), so here the row is the focus target: OK runs [onClick], Left / Right run [onLeftRight] if given.
+ */
 @Composable
-private fun SegmentRow(vm: SettingsModel, title: String, hint: String?, value: io.github.devall96.nettle.core.models.SegmentAction,
-                       onChange: (io.github.devall96.nettle.core.models.SegmentAction) -> Unit) =
-    SettingRow(title, hint) {
-        Dropdown(vm.segmentChoices, vm.segmentChoices.first { it.value == value }, { onChange(it.value) }, minWidth = 200.dp, label = { it.label })
-    }
-
-/** NumericUpDown on a TV: Left / Right (or the − / + buttons) change the value. */
-@Composable
-private fun Stepper(value: Int, onChange: (Int) -> Unit, step: Int) {
+private fun ActionRow(title: String, hint: String?, onClick: () -> Unit, modifier: Modifier = Modifier,
+                      requester: FocusRequester? = null, onLeftRight: ((Boolean) -> Unit)? = null,
+                      control: @Composable () -> Unit) {
     val p = Nettle.colors
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     val shape = RoundedCornerShape(12.dp)
     Row(
-        Modifier.width(200.dp).clip(shape).background(if (focused) p.surfaceHigh else p.surface).border(if (focused) 2.dp else 1.dp, if (focused) p.accent else p.border, shape)
-            .onPreviewKeyEvent { e ->
+        modifier.fillMaxWidth().clip(shape).border(2.dp, if (focused) p.accent else Color.Transparent, shape)
+            .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
+            .then(if (onLeftRight != null) Modifier.onPreviewKeyEvent { e ->
                 val c = e.nativeKeyEvent.keyCode
                 if (c != AKey.KEYCODE_DPAD_LEFT && c != AKey.KEYCODE_DPAD_RIGHT) return@onPreviewKeyEvent false
-                if (e.type == KeyEventType.KeyDown) onChange(value + if (c == AKey.KEYCODE_DPAD_RIGHT) step else -step)
+                if (e.type == KeyEventType.KeyDown) onLeftRight(c == AKey.KEYCODE_DPAD_RIGHT)
                 true
-            }
-            .focusable(interactionSource = source).padding(horizontal = 6.dp, vertical = 6.dp),
+            } else Modifier)
+            .clickable(source, indication = null) { onClick() }.padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).padding(end = 16.dp)) {
+            T(title, weight = FontWeight.SemiBold)
+            if (hint != null) T(hint, style = Nettle.type.caption, muted = true)
+        }
+        control()
+    }
+}
+
+/** Shown with the Lip sync check: it blinks once a second (a small grey box, but still blinking). */
+@Composable
+private fun PhotosensitivityWarning() {
+    val p = Nettle.colors
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp).clip(RoundedCornerShape(10.dp))
+        .background(Color(0x33E0A100)).border(1.dp, Color(0x99E0A100), RoundedCornerShape(10.dp)).padding(14.dp, 10.dp)) {
+        T("⚠ Epilepsy warning: the lip sync check blinks a grey box once a second for as long as it's open. If you or anyone " +
+            "watching (pets included) has epilepsy or is sensitive to flashing or blinking light, don't run it.",
+            color = p.text)
+    }
+}
+
+/** A dropdown setting: the whole row is focusable; OK opens the list. */
+@Composable
+private fun <T> DropdownRow(title: String, hint: String?, options: List<T>, selected: T?, onSelect: (T) -> Unit,
+                            label: (T) -> String, modifier: Modifier = Modifier) {
+    val open = remember { mutableStateOf(false) }
+    val row = remember { FocusRequester() }
+    ActionRow(title, hint, { open.value = true }, modifier, requester = row) {
+        Dropdown(options, selected, onSelect, minWidth = 200.dp, label = label, expanded = open, returnFocus = row)
+    }
+}
+
+/** A number setting: the whole row is focusable; Left / Right change it. */
+@Composable
+private fun StepperRow(title: String, hint: String?, value: Int, onChange: (Int) -> Unit, step: Int) =
+    ActionRow(title, hint, {}, onLeftRight = { up -> onChange(value + if (up) step else -step) }) { Stepper(value) }
+
+@Composable
+private fun SegmentRow(vm: SettingsModel, title: String, hint: String?, value: io.github.devall96.nettle.core.models.SegmentAction,
+                       onChange: (io.github.devall96.nettle.core.models.SegmentAction) -> Unit) =
+    DropdownRow(title, hint, vm.segmentChoices, vm.segmentChoices.first { it.value == value }, { onChange(it.value) }, { it.label })
+
+/** NumericUpDown on a TV, drawn inside a [StepperRow] (the row takes the focus and the Left / Right keys). */
+@Composable
+private fun Stepper(value: Int) {
+    val p = Nettle.colors
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        Modifier.width(200.dp).clip(shape).background(p.surface).border(1.dp, p.border, shape).padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.ChevronLeft, size = 18.dp, tint = p.textMuted)

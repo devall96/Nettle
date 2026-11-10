@@ -10,7 +10,7 @@ internal sealed class LinuxPlatformInfo : IPlatformInfo
 
     private static string DataRoot()
     {
-#if DEBUG
+#if DEBUG || NETTLE_DEV
         var dev = Environment.GetEnvironmentVariable("NETTLE_PROFILE_DIR");
         if (!string.IsNullOrWhiteSpace(dev)) return dev;
 #endif
@@ -20,7 +20,7 @@ internal sealed class LinuxPlatformInfo : IPlatformInfo
 
     private static string CacheRoot()
     {
-#if DEBUG
+#if DEBUG || NETTLE_DEV
         var dev = Environment.GetEnvironmentVariable("NETTLE_PROFILE_DIR");
         if (!string.IsNullOrWhiteSpace(dev)) return Path.Combine(dev, "Cache");
 #endif
@@ -34,7 +34,7 @@ internal sealed class LinuxPlatformInfo : IPlatformInfo
     /// <summary>Brings over the data and cache folders from the old name (see <see cref="LegacyData"/>). Run before anything uses them.</summary>
     public static void MoveLegacyData()
     {
-#if DEBUG
+#if DEBUG || NETTLE_DEV
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETTLE_PROFILE_DIR"))) return;
 #endif
         var data = DataRoot();

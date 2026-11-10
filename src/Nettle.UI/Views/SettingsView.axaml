@@ -16,6 +16,7 @@
     </Style>
   </UserControl.Styles>
 
+  <Panel>
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="56,40,56,60" Spacing="22" MaxWidth="1100" HorizontalAlignment="Left" Classes="page">
       <TextBlock Classes="h1" Text="Settings" />
@@ -24,38 +25,14 @@
       <Border Classes="panel">
         <StackPanel Spacing="14">
           <TextBlock Classes="section" Text="APPEARANCE" />
-          <ItemsControl ItemsSource="{Binding Themes}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:ThemeOptionViewModel">
-                <Button Classes="card" Command="{Binding ApplyCommand}" Margin="0,0,16,16" Width="220">
-                  <Border Classes="frame theme" Classes.selected="{Binding IsSelected}" CornerRadius="14" ClipToBounds="True" Background="{Binding Background}">
-                    <StackPanel Margin="14" Spacing="10">
-                      <Grid ColumnDefinitions="*,Auto" Height="64">
-                        <Border Background="{Binding Surface}" CornerRadius="8" Margin="0,0,8,0">
-                          <StackPanel Margin="10" Spacing="6">
-                            <Border Height="8" Width="70" CornerRadius="4" Background="{Binding Text}" HorizontalAlignment="Left" />
-                            <Border Height="6" Width="50" CornerRadius="3" Background="{Binding Muted}" HorizontalAlignment="Left" />
-                            <Border Height="14" Width="44" CornerRadius="7" Background="{Binding Accent}" HorizontalAlignment="Left" />
-                          </StackPanel>
-                        </Border>
-                        <StackPanel Grid.Column="1" Spacing="6">
-                          <Border Width="26" Height="26" CornerRadius="999" Background="{Binding Accent}" />
-                          <Border Width="26" Height="26" CornerRadius="999" Background="{Binding Accent2}" />
-                        </StackPanel>
-                      </Grid>
-                      <StackPanel>
-                        <TextBlock Text="{Binding Name}" FontWeight="Bold" Foreground="{Binding Text}" />
-                        <TextBlock Text="{Binding Tagline}" FontSize="12" Foreground="{Binding Muted}" />
-                      </StackPanel>
-                    </StackPanel>
-                  </Border>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+          <!-- The themes have their own screen, so they don't push everything else down the page. -->
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Text="Theme" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding CurrentThemeText}" Classes="muted caption" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Change theme" Command="{Binding OpenThemesCommand}" VerticalAlignment="Center" />
+          </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <StackPanel>
               <TextBlock Text="Reduce motion" FontWeight="SemiBold" />
@@ -92,6 +69,17 @@
             </StackPanel>
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding AudioPassthrough}" OnContent="" OffContent="" VerticalAlignment="Center" />
           </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Text="Lip sync check" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding LipSyncHint}" Classes="muted caption" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Start" Command="{Binding LipSyncCheckCommand}" VerticalAlignment="Center" />
+          </Grid>
+          <Border Background="#33E0A100" BorderBrush="#99E0A100" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,8">
+            <TextBlock TextWrapping="Wrap" MaxWidth="900" HorizontalAlignment="Left"
+                       Text="⚠ Epilepsy warning: the lip sync check blinks a grey box once a second for as long as it's open. If you or anyone watching (pets included) has epilepsy or is sensitive to flashing or blinking light, don't run it." />
+          </Border>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <StackPanel><TextBlock Text="Auto-play next episode" FontWeight="SemiBold" /><TextBlock Text="Shows an Up Next card during the credits" Classes="muted caption" /></StackPanel>
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoPlayNext}" OnContent="" OffContent="" />
@@ -295,4 +283,50 @@
       </Border>
     </StackPanel>
   </ScrollViewer>
+
+  <!-- Settings → Appearance → Change theme -->
+  <Border IsVisible="{Binding IsThemesOpen}" Background="{DynamicResource BgBrush}">
+    <Border.KeyBindings><KeyBinding Gesture="Escape" Command="{Binding CloseThemesCommand}" /></Border.KeyBindings>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="56,40,56,60" Spacing="16" MaxWidth="1100" HorizontalAlignment="Left">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="h1" Text="Theme" />
+          <Button Grid.Column="1" Classes="primary" Content="Done" Command="{Binding CloseThemesCommand}" VerticalAlignment="Center" />
+        </Grid>
+        <ItemsControl ItemsSource="{Binding Themes}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ThemeOptionViewModel">
+              <Button Classes="card" Command="{Binding ApplyCommand}" Margin="0,0,16,16" Width="220">
+                <Border Classes="frame theme" Classes.selected="{Binding IsSelected}" CornerRadius="14" ClipToBounds="True" Background="{Binding Background}">
+                  <StackPanel Margin="14" Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto" Height="64">
+                      <Border Background="{Binding Surface}" CornerRadius="8" Margin="0,0,8,0">
+                        <StackPanel Margin="10" Spacing="6">
+                          <Border Height="8" Width="70" CornerRadius="4" Background="{Binding Text}" HorizontalAlignment="Left" />
+                          <Border Height="6" Width="50" CornerRadius="3" Background="{Binding Muted}" HorizontalAlignment="Left" />
+                          <Border Height="14" Width="44" CornerRadius="7" Background="{Binding Accent}" HorizontalAlignment="Left" />
+                        </StackPanel>
+                      </Border>
+                      <StackPanel Grid.Column="1" Spacing="6">
+                        <Border Width="26" Height="26" CornerRadius="999" Background="{Binding Accent}" />
+                        <Border Width="26" Height="26" CornerRadius="999" Background="{Binding Accent2}" />
+                      </StackPanel>
+                    </Grid>
+                    <StackPanel>
+                      <TextBlock Text="{Binding Name}" FontWeight="Bold" Foreground="{Binding Text}" />
+                      <TextBlock Text="{Binding Tagline}" FontSize="12" Foreground="{Binding Muted}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+  </Border>
+  </Panel>
 </UserControl>

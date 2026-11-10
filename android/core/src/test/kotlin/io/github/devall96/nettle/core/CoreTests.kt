@@ -12,6 +12,22 @@ import org.junit.Test
 
 class CoreTests {
     @Test
+    fun scrubSpeed_rampsWithTimeHeld_andCrossesAFilmInSeconds() {
+        val film = 2 * 3600_000L
+        assertEquals(30.0, io.github.devall96.nettle.core.services.ScrubSpeed.rate(0, film), 0.001)
+        assertEquals(60.0, io.github.devall96.nettle.core.services.ScrubSpeed.rate(1000, film), 0.001)
+        assertEquals(900.0, io.github.devall96.nettle.core.services.ScrubSpeed.rate(60_000, film), 0.001) // 2 h / 8 s
+        // A short clip never drops below the starting speed.
+        assertEquals(30.0, io.github.devall96.nettle.core.services.ScrubSpeed.rate(10_000, 60_000), 0.001)
+        // Holding 3 s through 20 Hz key repeats moves a few minutes, not an hour (the old steps jumped ~1 h+).
+        var held = 0L; var moved = 0L
+        while (held < 3000) { held += 50; moved += io.github.devall96.nettle.core.services.ScrubSpeed.advanceMs(held, 50, film) }
+        assertTrue("moved $moved ms", moved in 180_000..400_000)
+        // A long gap between repeats (a stall) can't jump far.
+        assertTrue(io.github.devall96.nettle.core.services.ScrubSpeed.advanceMs(1000, 5000, film) <= 30_000)
+    }
+
+    @Test
     fun candidates_ipGetsDefaultPortFirst_nameGetsBareFirst() {
         assertEquals(listOf("http://192.168.1.20:8096", "http://192.168.1.20"), JellyfinClient.candidatesFor("http", "192.168.1.20"))
         assertEquals(listOf("https://jf.example.com", "https://jf.example.com:8920"), JellyfinClient.candidatesFor("https", "jf.example.com"))

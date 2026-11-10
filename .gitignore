@@ -22,6 +22,7 @@
 !/build-release.ps1
 !/get-libmpv.ps1
 !/android/
+!/tools/
 
 # Build output inside the allowed folders
 bin/
@@ -39,3 +40,7 @@ android/.kotlin/
 android/.idea/
 *.apk
 *.aab
+
+# tools/avsync: the measuring script is tracked; its full-screen white test clips (large, and flashing) are not.
+tools/avsync/clips/
+__pycache__/

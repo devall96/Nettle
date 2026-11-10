@@ -65,6 +65,9 @@ fun PlayerScreen(vm: PlayerModel) {
     val playPause = remember { FocusRequester() }
     val tracksFirst = remember { FocusRequester() }
     val continueBtn = remember { FocusRequester() }
+    var anyFocus by remember { mutableStateOf(false) }
+    // The 1-dp key catcher keeps focus when the controls appear (making it unfocusable doesn't take focus away).
+    var catcherFocused by remember { mutableStateOf(false) }
 
     // Screen stays on only while something is actually playing.
     DisposableEffect(vm.isPlaying) { view.keepScreenOn = vm.isPlaying; onDispose { view.keepScreenOn = false } }
@@ -79,24 +82,49 @@ fun PlayerScreen(vm: PlayerModel) {
     }
     // Focus: the hidden-OSD catcher, or the OSD's main control, or an open panel.
     LaunchedEffect(vm.isOsdVisible, vm.isTracksOpen, vm.isSubtitleSearchOpen, vm.isStillWatchingVisible) {
-        kotlinx.coroutines.delay(30)
-        runCatching {
-            when {
-                vm.isStillWatchingVisible -> continueBtn.requestFocus()
-                vm.isTracksOpen || vm.isSubtitleSearchOpen -> tracksFirst.requestFocus()
-                vm.isOsdVisible -> if (vm.isVod) seekBar.requestFocus() else playPause.requestFocus()
-                else -> root.requestFocus()
+        // The target may still be animating in (not attached yet, so requestFocus throws): retry briefly.
+        // A single early attempt used to fail silently and leave nothing focused, so Left / Right did nothing.
+        // requestFocus can also be ignored without an error while the controls animate in, so check where focus
+        // really went: off the hidden catcher (or onto it, when the controls are hidden).
+        val wantCatcher = !vm.isStillWatchingVisible && !vm.isTracksOpen && !vm.isSubtitleSearchOpen && !vm.isOsdVisible
+        repeat(20) {
+            kotlinx.coroutines.delay(if (it == 0) 30L else 50L)
+            runCatching {
+                when {
+                    vm.isStillWatchingVisible -> continueBtn.requestFocus()
+                    vm.isTracksOpen || vm.isSubtitleSearchOpen -> tracksFirst.requestFocus()
+                    vm.isOsdVisible -> if (vm.isVod) seekBar.requestFocus() else playPause.requestFocus()
+                    else -> root.requestFocus()
+                }
             }
+            kotlinx.coroutines.delay(16)
+            if (if (wantCatcher) catcherFocused else anyFocus && !catcherFocused) return@LaunchedEffect
         }
     }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
-            .onPreviewKeyEvent { e -> handleKey(vm, e) },
+            .onFocusChanged { anyFocus = it.hasFocus }
+            .onPreviewKeyEvent { e ->
+                // Controls showing but focus still on the hidden catcher, or nowhere (it can get lost while they animate in): Left / Right
+                // scrub, as on the seek bar, and focus moves to the seek bar, instead of the keys doing nothing.
+                val code = e.nativeKeyEvent.keyCode
+                if (io.github.devall96.nettle.tv.BuildConfig.SYNC_TEST && (code == AKey.KEYCODE_DPAD_LEFT || code == AKey.KEYCODE_DPAD_RIGHT))
+                    io.github.devall96.nettle.core.services.Log.info("key $code ${e.type} rep=${e.nativeKeyEvent.repeatCount} anyFocus=$anyFocus osd=${vm.isOsdVisible} pending=${vm.pendingSeekMs}")
+                if ((!anyFocus || catcherFocused) && vm.isOsdVisible && vm.isVod && !vm.isLipSyncCheck &&
+                    (code == AKey.KEYCODE_DPAD_LEFT || code == AKey.KEYCODE_DPAD_RIGHT)) {
+                    vm.userActivity()
+                    if (e.type == KeyEventType.KeyDown) vm.holdSeek(code == AKey.KEYCODE_DPAD_RIGHT, e.nativeKeyEvent.repeatCount)
+                    else if (e.type == KeyEventType.KeyUp) vm.scrubKeyUp()
+                    runCatching { seekBar.requestFocus() }
+                    true
+                } else handleKey(vm, e)
+            },
     ) {
         // Holds focus while the OSD is hidden (keys reach handleKey above).
         val catcherOn = !vm.isOsdVisible && !vm.isTracksOpen && !vm.isSubtitleSearchOpen && !vm.isStillWatchingVisible && vm.error == null
-        Box(Modifier.size(1.dp).focusRequester(root).focusProperties { canFocus = catcherOn }.focusable())
+        Box(Modifier.size(1.dp).focusRequester(root).focusProperties { canFocus = catcherOn }
+            .onFocusChanged { catcherFocused = it.isFocused }.focusable())
         // ---- Video ----
         val w = vm.engine.videoWidth
         val h = vm.engine.videoHeight
@@ -156,6 +184,20 @@ fun PlayerScreen(vm: PlayerModel) {
             Box(Modifier.align(Alignment.TopCenter).padding(top = 120.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xCC000000)).padding(20.dp, 10.dp)) {
                 T(it, size = 18.sp, weight = FontWeight.SemiBold, color = White)
             }
+        }
+        // ---- Settings → Lip sync check ----
+        if (vm.isLipSyncCheck) Column(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 56.dp).widthIn(max = 720.dp)
+                .clip(RoundedCornerShape(16.dp)).background(Color(0xE6141414)).padding(28.dp, 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            T("Lip sync check · ${vm.refreshKey} Hz", size = 20.sp, weight = FontWeight.Bold, color = White)
+            T("A grey box blinks in the middle of the screen once a second, with a beep. Line them up so they happen at the same moment.",
+                color = White, align = TextAlign.Center)
+            T("Beep first? Press ▶ to play the sound later.  Box first? Press ◀ to play it earlier.",
+                Modifier.alpha(0.75f), color = White, align = TextAlign.Center)
+            T("◀   ${vm.audioOffsetText}   ▶", size = 30.sp, weight = FontWeight.ExtraBold, color = White)
+            T("Saved for ${vm.refreshKey} Hz as you go. Back or OK when done.", Modifier.alpha(0.6f), size = 13.sp, color = White)
         }
         // ---- Between programs ----
         vm.liveInterstitial?.let { T(it, Modifier.align(Alignment.Center), size = 26.sp, weight = FontWeight.Bold, color = White, align = TextAlign.Center) }
@@ -231,10 +273,32 @@ private fun handleKey(vm: PlayerModel, e: KeyEvent): Boolean {
     val down = e.type == KeyEventType.KeyDown
     val up = e.type == KeyEventType.KeyUp
     vm.userActivity()
+    // Lip sync check: Left / Right move the sound, anything that means "done" closes it; nothing else applies.
+    if (vm.isLipSyncCheck) {
+        when (code) {
+            AKey.KEYCODE_DPAD_LEFT -> if (down) vm.audioEarlier()
+            AKey.KEYCODE_DPAD_RIGHT -> if (down) vm.audioLater()
+            AKey.KEYCODE_BACK, AKey.KEYCODE_MEDIA_STOP, AKey.KEYCODE_DPAD_CENTER, AKey.KEYCODE_ENTER -> if (up) vm.close()
+        }
+        return true
+    }
     if (vm.isStillWatchingVisible) {
         if (code == AKey.KEYCODE_BACK || code == AKey.KEYCODE_MEDIA_STOP) { if (up) vm.stopWatching(); return true }
         if (code == AKey.KEYCODE_MEDIA_PLAY_PAUSE || code == AKey.KEYCODE_MEDIA_PLAY) { if (up) vm.continueWatching(); return true }
         return false // the prompt's buttons have focus until it's answered
+    }
+    // Scrubbing: OK / Play jump to the preview and carry on, Back cancels (key-up, so the key's other half
+    // doesn't also press whatever is focused).
+    if (vm.isScrubbing) when (code) {
+        AKey.KEYCODE_BACK, AKey.KEYCODE_MEDIA_STOP -> { if (up) vm.cancelScrub(); return true }
+        AKey.KEYCODE_DPAD_CENTER, AKey.KEYCODE_ENTER, AKey.KEYCODE_NUMPAD_ENTER, AKey.KEYCODE_SPACE,
+        AKey.KEYCODE_MEDIA_PLAY_PAUSE, AKey.KEYCODE_MEDIA_PLAY -> { if (up) vm.commitScrub(); return true }
+    }
+    // A seek in progress owns Left / Right until it's committed, wherever focus went in between (the OSD
+    // appearing mid-press moves focus; the key-up used to land elsewhere and leave the seek stuck).
+    if (vm.pendingSeekMs != null && (code == AKey.KEYCODE_DPAD_LEFT || code == AKey.KEYCODE_DPAD_RIGHT)) {
+        if (down) vm.holdSeek(code == AKey.KEYCODE_DPAD_RIGHT, e.nativeKeyEvent.repeatCount) else if (up) vm.scrubKeyUp()
+        return true
     }
     val panelOpen = vm.isTracksOpen || vm.isSubtitleSearchOpen
     when (code) {
@@ -291,7 +355,7 @@ private fun handleKey(vm: PlayerModel, e: KeyEvent): Boolean {
         when (code) {
             AKey.KEYCODE_DPAD_LEFT, AKey.KEYCODE_DPAD_RIGHT -> {
                 if (vm.isLive) { if (up) vm.showOsd(); return true }
-                if (down) vm.holdSeek(code == AKey.KEYCODE_DPAD_RIGHT, e.nativeKeyEvent.repeatCount) else if (up) vm.commitHoldSeek()
+                if (down) vm.holdSeek(code == AKey.KEYCODE_DPAD_RIGHT, e.nativeKeyEvent.repeatCount) else if (up) vm.scrubKeyUp()
                 return true
             }
             AKey.KEYCODE_DPAD_UP, AKey.KEYCODE_DPAD_DOWN -> {
@@ -336,8 +400,8 @@ private fun VodControls(vm: PlayerModel, seekBar: FocusRequester, playPause: Foc
         }
         Box(Modifier.fillMaxWidth()) {
             Row(Modifier.align(Alignment.CenterStart), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                OsdButton(Icons.Volume, { vm.toggleMute() })
-                VolumeBar(vm)
+                // No volume control: the remote sets the TV's (or receiver's) own volume, and a second one in the
+                // app only made things quieter by surprise.
                 vm.endsAtText?.let { T(it, Modifier.padding(start = 16.dp).alpha(0.7f), color = White) }
             }
             Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -367,7 +431,7 @@ private fun SeekBar(vm: PlayerModel, requester: FocusRequester, modifier: Modifi
                 val code = e.nativeKeyEvent.keyCode
                 if (code != AKey.KEYCODE_DPAD_LEFT && code != AKey.KEYCODE_DPAD_RIGHT) return@onPreviewKeyEvent false
                 if (e.type == KeyEventType.KeyDown) vm.holdSeek(code == AKey.KEYCODE_DPAD_RIGHT, e.nativeKeyEvent.repeatCount)
-                else if (e.type == KeyEventType.KeyUp) vm.commitHoldSeek()
+                else if (e.type == KeyEventType.KeyUp) vm.scrubKeyUp()
                 true
             },
         contentAlignment = Alignment.CenterStart,
@@ -405,36 +469,6 @@ private fun SeekBar(vm: PlayerModel, requester: FocusRequester, modifier: Modifi
                 }
                 T(vm.trickTime, Modifier.padding(start = 6.dp, end = 6.dp, bottom = 2.dp), weight = FontWeight.Bold, color = White, maxLines = 1)
             }
-        }
-    }
-}
-
-@Composable
-private fun VolumeBar(vm: PlayerModel) {
-    val p = Nettle.colors
-    val source = remember { MutableInteractionSource() }
-    val focused by source.collectIsFocusedAsState()
-    val accent = p.accent
-    Box(
-        Modifier.width(130.dp).height(32.dp).focusable(interactionSource = source).onPreviewKeyEvent { e ->
-            val code = e.nativeKeyEvent.keyCode
-            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent code == AKey.KEYCODE_DPAD_LEFT || code == AKey.KEYCODE_DPAD_RIGHT
-            when (code) {
-                AKey.KEYCODE_DPAD_LEFT -> { vm.changeVolume(vm.volume - 5); true }
-                AKey.KEYCODE_DPAD_RIGHT -> { vm.changeVolume(vm.volume + 5); true }
-                else -> false
-            }
-        },
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val cy = size.height / 2
-            val th = 4.dp.toPx()
-            val f = (if (vm.isMuted) 0 else vm.volume) / 100f
-            drawRoundRect(Color(0x66FFFFFF), Offset(0f, cy - th / 2), Size(size.width, th), CornerRadius(th / 2))
-            drawRoundRect(accent, Offset(0f, cy - th / 2), Size(size.width * f, th), CornerRadius(th / 2))
-            val r = (if (focused) 11.dp else 9.dp).toPx()
-            drawCircle(Color.White, r, Offset(size.width * f, cy))
-            drawCircle(accent, r * 0.55f, Offset(size.width * f, cy))
         }
     }
 }
@@ -541,6 +575,7 @@ private fun TracksPanel(vm: PlayerModel, first: FocusRequester, modifier: Modifi
         item { PanelLabel("AUDIO", top = true) }
         items(vm.audioTracks, key = { "a" + it.id }) { t -> TrackButton(t.name, t.selected, { vm.selectTrack(t) }, if (t === vm.audioTracks.first()) first else null) }
         if (vm.audioTracks.isEmpty()) item { T("No audio tracks", Modifier.padding(start = 4.dp).alpha(0.6f), color = White) }
+        if (vm.audioTracks.isNotEmpty()) item { TuneRow("Audio timing · ${vm.refreshKey} Hz", vm.audioOffsetText, { vm.audioEarlier() }, { vm.audioLater() }) }
         item { PanelLabel("SUBTITLES") }
         items(vm.subtitleTracks, key = { "s" + it.id }) { t ->
             TrackButton(t.name, t.selected, { vm.selectTrack(t) }, if (vm.audioTracks.isEmpty() && t === vm.subtitleTracks.first()) first else null)

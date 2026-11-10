@@ -48,9 +48,15 @@ internal static class Program
         var selfTest = Array.IndexOf(args, "--selftest");
         if (selfTest >= 0) return SelfTest.Run(args.Skip(selfTest + 1));
 
+        var throwawayProfile = false;
+#if DEBUG || NETTLE_DEV
+        throwawayProfile = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETTLE_PROFILE_DIR"));
+#endif
         ISecureStore secure = OperatingSystem.IsWindows()
             ? new DpapiSecureStore(Path.Combine(platform.DataDirectory, "secure"))
-            : new LinuxSecureStore(Path.Combine(platform.DataDirectory, "secure"));
+            : new LinuxSecureStore(Path.Combine(platform.DataDirectory, "secure"),
+                // A throwaway test profile (NETTLE_PROFILE_DIR) keeps its secrets in its own folder, never the desktop keyring.
+                useKeyring: !throwawayProfile);
         AppServices.Initialize(platform, secure);
         App.CreateDesktopWindow = vm => new MainWindow(vm);
         // Build-time: `Nettle --render-splash out.png` draws the installer splash art and exits.

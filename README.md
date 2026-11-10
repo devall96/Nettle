@@ -101,11 +101,12 @@ Google TV built in…).** If you have a Jellyfin server and a few minutes, you'd
 - **Skip intro, recap, credits, previews and ads,** using the [Intro Skipper](https://github.com/intro-skipper/intro-skipper) plugin or Jellyfin media segments. Each one can show a button, skip automatically, or do nothing.
 - **Up Next** card with a countdown during the credits, then automatic next episode.
 - **"Are you still watching?"** After a few episodes in a row with no input (3 by default), or 4 hours of Live TV, Nettle pauses and asks. You can change the count or turn it off in **Settings → Playback**.
-- **Scrubbing previews.** Hover over or drag the seek bar to see thumbnails, using the trickplay images your Jellyfin server already generates.
+- **Scrubbing with previews,** the way TV streaming apps do it. Press **←** / **→** (or Left / Right on a remote) and the video pauses while a thumbnail preview moves along the seek bar: a tap moves 10 seconds, holding glides smoothly and speeds up the longer you hold. **Enter** (OK) jumps there and carries on playing; **Esc** (Back) cancels and carries on from where you were. With a mouse, hover over or drag the seek bar. Thumbnails come from the trickplay images your Jellyfin server already generates.
 - **Audio passthrough** (optional): Dolby Digital, Dolby Digital Plus / Atmos, TrueHD, DTS and DTS-HD / DTS:X go to your AV receiver untouched, so it decodes them, height channels included.
 - Resume points, watched status and your audio / subtitle choices stay in sync with your server. Closing Nettle mid-episode still saves where you were.
 - Audio and subtitle track menu, including external subtitles. Adjustable network buffer for slow Wi-Fi, sized to each file's bitrate so even 4K remuxes really get that much read-ahead.
-- **Fine-tuning while you watch:** playback speed, subtitle and audio timing, and subtitle size. Speed and subtitle size are remembered.
+- **Fine-tuning while you watch:** playback speed, subtitle and audio timing, and subtitle size. Speed and subtitle size are remembered, and so is **audio timing, for your screen and separately for each refresh rate** (many TVs delay their picture in film mode only).
+- **Lip sync check** (Settings → Playback): a small grey box blinks once a second with a beep, and you nudge the sound in 10 ms steps until they line up. It's saved for the refresh rate your screen is running at. ⚠ It blinks for as long as it's open: if you or anyone watching (pets included) has epilepsy or is sensitive to flashing or blinking light, don't run it.
 - **Chapters:** marks on the seek bar, chapter names in the scrubbing preview, and Page Up / Page Down to jump between them.
 - **Find subtitles online** from the player, through your server's subtitle plugins (such as Open Subtitles). Nettle itself only talks to your server.
 - **Subtitles turn on the way you like:** default track, always, only forced (foreign dialogue), smart (when the audio is in another language), or off. By default this, and your audio and subtitle languages, follow each person's own Jellyfin profile.
@@ -122,17 +123,21 @@ Everything above and below works on the TV too, with these differences:
 - **Audio passthrough** sends Dolby Digital, Dolby Digital Plus / Atmos, TrueHD and DTS to your
   receiver when your box and receiver support it. With passthrough off, Dolby audio is decoded on
   the box.
-- **Remote buttons:** Left / Right seek (hold to go faster), Up / Down surf channels on Live TV when
-  the controls are hidden, number keys type a channel number (or jump 10 % at a time in a video),
-  and Channel up / down, Last channel, Guide, Audio track, Captions and Info buttons work on remotes
-  that have them.
+- **Remote buttons:** Left / Right scrub (see above: OK jumps, Back cancels), Up / Down surf channels
+  on Live TV when the controls are hidden, number keys type a channel number (or jump 10 % at a time
+  in a video), and Channel up / down, Last channel, Guide, Audio track, Captions and Info buttons work
+  on remotes that have them. Press Back twice on the home screen to close Nettle.
+- **No volume slider:** your remote sets the TV's (or receiver's) own volume, and Nettle always plays
+  at full level.
+- **Settings work with the remote:** every row, dropdowns and number settings included, takes focus
+  as a whole; OK opens a list, Left / Right change a number.
 - **Live TV tuning screen** with the channel's logo while a channel switches, so letterboxed films
   never flash stretched.
 - The same 1440-wide layout as the PC version, scaled to your TV, so it looks the same.
 - **Saved sign-ins are encrypted** with a key that never leaves the TV's secure hardware
   (Android Keystore), and the app never takes part in cloud backups.
-- Not on the TV yet: music (music libraries are hidden), the built-in updater, and a software
-  decoder for DTS / TrueHD when passthrough is off.
+- Not on the TV yet: music (music libraries are hidden), subtitle timing, and a software decoder
+  for DTS / TrueHD when passthrough is off.
 
 ### Browsing
 - **Home:** a spotlight carousel with logo art, plus Continue Watching, Next Up, and Recently Added for each library (except libraries you hid from it in Jellyfin). It appears instantly at startup, from your last visit, while fresh data loads.
@@ -162,7 +167,7 @@ Everything above and below works on the TV too, with these differences:
 - **Passwords are never stored.** Only Jellyfin's session token is kept: on Windows it's encrypted with DPAPI for your Windows account, and on Linux it goes into your desktop keyring (GNOME Keyring, KWallet, KeePassXC…).
 
 ### Look and feel
-- **Sixteen original themes:** Midnight, Obsidian (true black for OLED), Aurora, Ember, Sakura, Deep Sea, Evergreen, Neon Nights, Crimson, Slate, Mocha, Phosphor, High Contrast, and three light ones: Daylight, Lavender and Sandstone. Switching is instant.
+- **Sixteen original themes** (Settings → Appearance → Change theme): Midnight, Obsidian (true black for OLED), Aurora, Ember, Sakura, Deep Sea, Evergreen, Neon Nights, Crimson, Slate, Mocha, Phosphor, High Contrast, and three light ones: Daylight, Lavender and Sandstone. Switching is instant.
 - Smooth, lightweight animations, a navigation rail that expands over the page, and fade-in artwork. **Reduce motion** in Settings turns the animations off.
 - **Ready for keyboard and TV remotes.** Arrow keys move focus the way a TV remote's d-pad does.
 - Remembers its window size and position, and only one copy runs at a time (opening it again brings the open window forward).
@@ -257,10 +262,10 @@ your Jellyfin server for NostalgiaTV (port 19850) and Seerr (port 5055), using t
 
 | Key | Browsing | Player | Live TV |
 |---|---|---|---|
-| Arrow keys | Move focus | ←/→ seek, ↑/↓ volume | ↑/↓ change channel |
-| Enter | Open / select | Show controls | Show controls |
+| Arrow keys | Move focus | ←/→ scrub (tap 10 s, hold to glide), ↑/↓ volume | ↑/↓ change channel |
+| Enter | Open / select | Show controls; while scrubbing, jump there | Show controls |
 | Space / K | | Play / pause | Pause (resumes at the live point) |
-| Esc / Back | Go back (mouse back button too) | Close player | Close player |
+| Esc / Back | Go back (mouse back button too) | Close player; while scrubbing, cancel | Close player |
 | F / F11 | Full screen | Full screen | Full screen |
 | S | | Skip intro/credits | |
 | N / Media next | | Next episode (or next in the queue) | |
@@ -271,8 +276,8 @@ your Jellyfin server for NostalgiaTV (port 19850) and Seerr (port 5055), using t
 | [ / ] | | Slower / faster | |
 | Z / X | | Subtitles earlier / later | |
 
-On **Android TV**, the remote does the same: the D-pad moves focus and seeks, OK opens or shows the
-controls, and Back goes back. See [On Android TV](#on-android-tv) for the Live TV and number-key
+On **Android TV**, the remote does the same: the D-pad moves focus and scrubs, OK opens, shows the
+controls or jumps to the scrub point, and Back goes back (or cancels scrubbing). See [On Android TV](#on-android-tv) for the Live TV and number-key
 buttons.
 
 ### Live TV (NostalgiaTV)
@@ -314,17 +319,20 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.4.3 beta)
+## Known limitations (0.5.0 beta)
 - **All three platforms are beta.** Expect some bugs, and please report them.
 - **Android TV:**
   - Tested on one device so far (onn 4K, Google TV 14). Other boxes and TVs should work but are untested.
   - Installed by hand (sideloaded) the first time. From 0.4.3, **Settings → Updates** checks Nettle's GitHub Releases and installs the newest APK (the TV asks you to confirm each install).
+  - No subtitle timing control yet (the desktop apps have one).
   - No music: music libraries are hidden.
   - With audio passthrough off, DTS and TrueHD tracks only play if your box can decode them itself.
   - Some MKV files store subtitle tracks compressed (common for Blu-ray PGS subtitles). Those files play, but those subtitle tracks aren't offered yet.
   - Changing to a 4K remux on Live TV can take several seconds, because the player has to jump into the middle of a very large file over the network.
 - **Linux:**
-  - It's untested so far on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
+  - Tested by hand on Ubuntu 26.04 (GNOME on Wayland, AMD graphics). It's untested so far on NVIDIA and Intel graphics, KDE and other desktops, and multiple monitors.
+  - Nettle can't read the screen's refresh rate on Linux, so audio timing is one value for every rate there. Exclusive full screen doesn't switch refresh rates on Linux.
+  - Keeping the screen on during playback asks your desktop over D-Bus; where that fails (seen on Ubuntu 26.04), Nettle uses `gnome-session-inhibit` or `systemd-inhibit` instead.
   - HDR is tone-mapped to SDR. Nettle's window runs through X11 (XWayland on Wayland desktops), which has no HDR path yet. The badge says so.
   - Video is drawn through OpenGL inside Nettle's own window. If your graphics driver can't do that, Nettle falls back to mpv's own window, or you can force that with `NETTLE_VIDEO=window`.
   - The AppImage carries mpv 0.37 (from Ubuntu 24.04); Windows builds use mpv 0.42.
