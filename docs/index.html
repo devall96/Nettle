@@ -265,6 +265,11 @@
     .points li { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; color: var(--muted); font-size: 14.5px; }
     .points li b { display: block; color: var(--text); font-size: 15.5px; margin-bottom: 2px; }
 
+    .section-title { font-size: 28px; letter-spacing: -0.5px; margin: 56px 0 6px; }
+    .section-sub { color: var(--muted); margin: 0 0 8px; font-size: 15px; max-width: 70ch; }
+    h3.section { font-size: 18px; letter-spacing: -0.2px; margin: 32px 0 0; color: var(--text); }
+    h3.section + .points { margin-top: 12px; }
+    .cards { margin-top: 48px; }
     footer { margin: 48px 0 40px; color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; gap: 8px 22px; }
     footer a { color: var(--muted); }
 
@@ -336,11 +341,75 @@
     </header>
 
     <main>
-      <aside class="ai-warning" role="note" aria-label="Made with AI">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-        <p><b>Entirely AI-coded.</b> All of Nettle's code was written by Claude, Anthropic's AI, directed and reviewed by one person, and so far tested by that one person on one Windows PC, one Ubuntu PC and one Google TV box. If you don't want to run code made that way, don't install it. As with anything from the internet, you run it at your own risk.</p>
-      </aside>
+      <figure class="shot">
+        <img src="images/home.png" alt="Nettle's Home screen: a spotlight banner with Continue Watching underneath" width="1440" height="900" loading="lazy">
+      </figure>
 
+      <ul class="points">
+        <li><b>Original quality, always</b>Direct play of the original file. 4K, HDR10, Dolby Vision, Atmos and DTS go out as they are.</li>
+        <li><b>Live TV like cable</b>A full guide, channel surfing and a tuning screen, with NostalgiaTV.</li>
+        <li><b>Private by design</b>No analytics or crash reporting. Nettle only connects to the servers you set up.</li>
+        <li><b>Same app everywhere</b>Windows, Linux and Android TV share one version and the same features.</li>
+      </ul>
+
+      <h2 class="section-title">What Nettle does</h2>
+      <p class="section-sub">A closer look at what you get, on all three platforms.</p>
+
+      <h3 class="section">Playback</h3>
+      <ul class="points">
+        <li><b>Direct play, always</b>Nettle asks for the original file and never for a transcode or remux. Your server's CPU stays idle and the picture is untouched.</li>
+        <li><b>Built for HDR</b>HDR10, HDR10+, HLG and Dolby Vision, including Dolby Vision profile 5. Playback syncs to your display's refresh rate, so 24 fps films don't judder.</li>
+        <li><b>Format badges you can trust</b>Badges like 4K · DOLBY VISION · DOLBY ATMOS pop up when playback starts, and each one is verified against what is really being decoded and sent to your screen.</li>
+        <li><b>Scrubbing with previews</b>Left and Right pause the video while a thumbnail preview slides along the seek bar, like TV streaming apps. OK jumps there, Back cancels. Thumbnails come from your server.</li>
+        <li><b>Skip what you don't want</b>Intro, recap, credits, previews and ads, through the Intro Skipper plugin or Jellyfin media segments. Each one can show a button, skip by itself, or do nothing.</li>
+        <li><b>Up Next and "Are you still watching?"</b>An Up Next card with a countdown during the credits, then the next episode. After a few episodes with no input, Nettle pauses and asks. You can change that or turn it off.</li>
+        <li><b>Audio passthrough</b>Dolby Digital, Dolby Digital Plus / Atmos, TrueHD, DTS and DTS-HD / DTS:X can go to your receiver untouched. It is off by default.</li>
+        <li><b>Fine-tuning while you watch</b>Playback speed, subtitle and audio timing, and subtitle size. Audio timing is remembered per screen and per refresh rate. A lip sync check helps you set it (it blinks once a second, so skip it if flashing light is a problem).</li>
+        <li><b>Subtitles your way</b>Default, always, only forced, smart or off, following each person's Jellyfin profile. External subtitles work, and you can search for subtitles online through your server's plugins.</li>
+        <li><b>Chapters, Play all and Shuffle</b>Chapter marks on the seek bar, Play all and Shuffle for libraries and collections, and Shuffle for a whole series. Resume points and watched status stay in sync with your server.</li>
+      </ul>
+
+      <h3 class="section">Browsing</h3>
+      <ul class="points">
+        <li><b>Home</b>A spotlight carousel plus Continue Watching, Next Up and Recently Added. It appears instantly at startup from your last visit.</li>
+        <li><b>Libraries</b>A fast grid with sort and filters (unwatched, in progress, favorites, genre, decade, 4K / HD / SD) and an A–Z strip for long libraries.</li>
+        <li><b>Details</b>Backdrop, ratings, file info, cast and crew, seasons and episodes, trailers and extras, More Like This and a version picker.</li>
+        <li><b>Search</b>Search your library by kind. With Seerr set up, titles you don't have yet show up below, ready to request.</li>
+      </ul>
+
+      <h3 class="section">Live TV, requests and accounts</h3>
+      <ul class="points">
+        <li><b>Live TV with NostalgiaTV</b>A cable-style guide with a live "now" line. By default Nettle plays each program's original file from your Jellyfin server, joins mid-program and rolls into the next show.</li>
+        <li><b>Requests with Seerr</b>Browse Trending, Popular and Coming Soon, search, and request movies in one click. For series, pick the seasons you want. You only see your own requests.</li>
+        <li><b>Sign-in</b>Finds servers on your network, signs in with profile tiles, a password or Quick Connect, and supports multiple profiles with a "Who's watching?" picker.</li>
+        <li><b>Sets itself up</b>NostalgiaTV and Seerr running on the same machine as Jellyfin are found and connected after you sign in.</li>
+      </ul>
+
+      <h3 class="section">Android TV</h3>
+      <ul class="points">
+        <li><b>Native, not a port</b>Rebuilt in Kotlin and Jetpack Compose for the remote, using the TV's own hardware decoders, with the same look, themes and features as the PC version.</li>
+        <li><b>Matches your TV</b>Refresh rate (and optionally resolution) switches to match each video, and an interface size setting suits how far you sit from the screen.</li>
+        <li><b>Made for the remote</b>Surf Live TV with Up / Down, type a channel number, jump to the last channel. Settings, dropdowns included, work with the D-pad.</li>
+        <li><b>Fast on cheap boxes</b>About 0.8 seconds from a cold start to the Home screen on a 2 GB onn 4K box.</li>
+      </ul>
+
+      <h3 class="section">Look and feel</h3>
+      <ul class="points">
+        <li><b>Sixteen themes</b>Including Midnight, Obsidian (true black for OLED), Aurora, Ember, Sakura, Deep Sea, Neon Nights, High Contrast and three light ones. Switching is instant, and you can try them with the theme button at the top of this page.</li>
+        <li><b>Keyboard and remote ready</b>Arrow keys move focus the way a TV remote does. Reduce motion turns animations off. Windows and Linux offer windowed, borderless and exclusive full screen.</li>
+        <li><b>Private by design</b>No telemetry, analytics, crash reporting or ads. Passwords are never stored, only an encrypted session token. Nettle only talks to the servers you set up.</li>
+      </ul>
+
+      <h2 class="section-title">Good to know</h2>
+      <ul class="points">
+        <li><b>What you need</b>A Jellyfin server (10.9 or newer). Windows 10 or 11 (64-bit), a 64-bit Linux distro from 2024 onwards (Ubuntu 24.04+, Debian 13+, Fedora 40+, Arch), or Android 9+ on Google TV / Android TV. For HDR on Windows, turn on Use HDR in Display settings.</li>
+        <li><b>Beta, and testers wanted</b>Nettle has been tried on one Windows PC, one Ubuntu PC and one onn 4K Google TV box. If you have NVIDIA or Intel graphics, other Linux desktops, HDR or multi-monitor setups, or another TV box, <a href="https://github.com/devall96/Nettle/issues/new?template=bug_report.md">tell us how it goes</a>. "It worked fine" reports help too.</li>
+        <li><b>Updates</b>Updates are off unless you use them. Settings → Updates checks Nettle's GitHub releases, and on Android TV the TV asks you to confirm each install.</li>
+        <li><b>Used to be Slopfin</b>If you installed Slopfin 0.1 or 0.2, Settings → Updates brings you to Nettle and your settings and sign-ins come along. <a href="https://github.com/devall96/Nettle#about-the-name">More about the name</a>.</li>
+      </ul>
+      <p class="note">The full guide, including the keyboard shortcuts and known limitations, is in the <a href="https://github.com/devall96/Nettle#readme">README on GitHub</a>.</p>
+
+      <h2 class="section-title" id="download">Download Nettle</h2>
       <section class="cards" aria-label="Downloads">
         <!-- Windows -->
         <article class="card" id="card-windows">
@@ -405,16 +474,10 @@
 
       <p class="note">These are the only files you need. The release page on GitHub also lists files ending in <b>.nupkg</b>, <b>.json</b> and <b>RELEASES</b>: Nettle's built-in updater reads those, so you can ignore them.</p>
 
-      <figure class="shot">
-        <img src="images/home.png" alt="Nettle's Home screen: a spotlight banner with Continue Watching underneath" width="1440" height="900" loading="lazy">
-      </figure>
-
-      <ul class="points">
-        <li><b>Original quality, always</b>Direct play of the original file. 4K, HDR10, Dolby Vision, Atmos and DTS go out as they are.</li>
-        <li><b>Live TV like cable</b>A full guide, channel surfing and a tuning screen, with NostalgiaTV.</li>
-        <li><b>Private by design</b>No analytics or crash reporting. Nettle only connects to the servers you set up.</li>
-        <li><b>Same app everywhere</b>Windows, Linux and Android TV share one version and the same features.</li>
-      </ul>
+      <aside class="ai-warning" role="note" aria-label="Made with AI">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+        <p><b>Entirely AI-coded.</b> All of Nettle's code was written by Claude, Anthropic's AI, directed and reviewed by one person, and so far tested by that one person on one Windows PC, one Ubuntu PC and one Google TV box. If you don't want to run code made that way, don't install it. As with anything from the internet, you run it at your own risk.</p>
+      </aside>
     </main>
 
     <footer>
