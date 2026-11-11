@@ -434,8 +434,13 @@ class PlayerModel private constructor() {
             ExternalSub(AppServices.jellyfin.externalSubtitleUrl(itemId, source.id!!, it), it.displayTitle ?: it.title ?: it.language ?: "External", it.language, it.index)
         }
 
+    /** The next-episode lookup failed (server busy, Wi-Fi blip): tried again later instead of losing Up Next for the whole episode. */
+    private var nextLookupRetryAt = 0L
+    private var nextLookupFor: BaseItemDto? = null
+
     private suspend fun findNextEpisode(ep: BaseItemDto) {
         val seriesId = ep.seriesId ?: return
+        nextLookupFor = null
         try {
             // Only the neighbours of this episode, not the whole series with its media info.
             val near = AppServices.jellyfin.getAdjacentEpisodes(seriesId, ep.id).items
@@ -447,7 +452,11 @@ class PlayerModel private constructor() {
                 upNextImage = n.tag("Primary")?.let { Img.of(n.id, "Primary", it, 420) }
                 hasNext = true
             }
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.warn("couldn't look up the next episode (${e.message}); trying again later")
+            nextLookupFor = ep
+            nextLookupRetryAt = System.currentTimeMillis() + 30_000
+        }
     }
 
     private val canReport get() = item != null && !sourcePending && !isLive
@@ -614,6 +623,12 @@ class PlayerModel private constructor() {
     private fun onTick() {
         if (disposed) return
         isPlaying = engine.isPlaying
+        nextLookupFor?.let { ep ->
+            if (System.currentTimeMillis() >= nextLookupRetryAt && item?.id == ep.id && nextEpisode == null) {
+                nextLookupRetryAt = Long.MAX_VALUE
+                scope.launch { findNextEpisode(ep) }
+            }
+        }
         if (error == null && liveInterstitial == null) isBuffering = engine.isBuffering
         val now = System.currentTimeMillis()
         if (isOsdVisible && isPlaying && !isTracksOpen && !isSubtitleSearchOpen && pendingSeekMs == null && now - lastInput > 3500) isOsdVisible = false
