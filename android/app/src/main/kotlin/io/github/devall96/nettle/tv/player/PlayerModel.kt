@@ -1154,6 +1154,10 @@ class PlayerModel private constructor() {
             val label = (hdr ?: when (signal) { "dovi" -> "Dolby Vision"; "hlg" -> "HLG"; else -> "HDR10" }).uppercase()
             when {
                 signal == "dovi" && caps.dolbyVision -> badges += FormatBadge("DOLBY VISION", "Dolby Vision sent to your TV", true)
+                // The box decodes Dolby Vision itself and converts it for a TV that only takes HDR10 / HDR10+
+                // (the onn did, and the bedroom TV showed HDR10+), so this is HDR, not the SDR the fallback warned about.
+                signal == "dovi" && (caps.hdr10Plus || caps.hdr10) -> badges += FormatBadge(if (caps.hdr10Plus) "HDR10+" else "HDR10",
+                    "Dolby Vision, converted by this TV box: your TV doesn't take Dolby Vision", true)
                 signal == "pq" && hdr?.startsWith("Dolby") == true && caps.hdr10 ->
                     badges += FormatBadge("HDR10", "Your TV doesn't take Dolby Vision, so its HDR10 layer is sent instead", true)
                 signal == "pq" && caps.hdr10 -> badges += FormatBadge(if (label == "HDR10+" && caps.hdr10Plus) "HDR10+" else "HDR10",
