@@ -152,6 +152,8 @@ fun PlayerScreen(vm: PlayerModel) {
             update = { sv ->
                 sv.setCues(vm.engine.cues)
                 sv.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * vm.subtitleScale.toFloat())
+                // With the controls up, lift the lines above the seek bar and buttons instead of drawing over them.
+                sv.setBottomPaddingFraction(if (vm.isOsdVisible) 0.24f else SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION)
             },
             modifier = Modifier.fillMaxSize().focusProperties { canFocus = false },
         )

@@ -377,7 +377,8 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
         val lang = f.language?.takeIf { it.isNotEmpty() && it != "und" }?.let { code ->
             runCatching { java.util.Locale.forLanguageTag(code).getDisplayLanguage(java.util.Locale.ENGLISH) }.getOrNull()?.takeIf { it.isNotEmpty() } ?: code
         }
-        val codec = codecName(f.sampleMimeType)
+        // Subtitles Media3 converts while extracting are labelled with its internal "x-media3-cues" type; the real format is in codecs.
+        val codec = codecName(if (f.sampleMimeType == MimeTypes.APPLICATION_MEDIA3_CUES) f.codecs else f.sampleMimeType)
         val channels = if (f.channelCount > 0) when (f.channelCount) { 1 -> "Mono"; 2 -> "Stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> "${f.channelCount} ch" } else null
         val parts = listOfNotNull(f.label?.takeIf { it.isNotEmpty() }, lang, codec.uppercase().takeIf { it.isNotEmpty() }, channels,
             if (forced) "Forced" else null, if (external) "External" else null).distinct()
@@ -402,6 +403,8 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
         "application/pgs" -> "pgs"
         "application/vobsub" -> "vobsub"
         "application/dvbsubs" -> "dvb"
+        "application/x-quicktime-tx3g", "application/x-mp4-vtt" -> "timed text"
+        MimeTypes.APPLICATION_MEDIA3_CUES -> ""
         else -> mime?.substringAfterLast('/') ?: ""
     }
 
