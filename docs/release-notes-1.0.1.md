@@ -30,6 +30,6 @@
 - No changes. 1.0.1 is the same app as 1.0.0.
 
 > [!NOTE]
-> **Tested on an Android 9 emulator:** 1.0.0 closes there right after sign-in with exactly this error, and 1.0.1 signs in, shows Home and reopens into it. It hasn't been run on a real Android 9 to 12 TV yet, so if you have one, a report either way is very welcome.
+> **Tested on Android 9 emulators (a plain Android 9 image and the Android TV one):** 1.0.0's code closes there right after sign-in with exactly this error, and 1.0.1 signs in, shows Home, reopens into it and plays an episode. It hasn't been run on a real Android 9 to 12 TV yet, so if you have one, a report either way is very welcome.
 
 Found a bug? [Open an issue](https://github.com/devall96/Nettle/issues/new?template=bug_report.md).
