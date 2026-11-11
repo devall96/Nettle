@@ -24,11 +24,11 @@ It also brings in a TV-style live guide for **NostalgiaTV**, **Seerr** requests,
 and credits, multiple profiles, and sixteen hand-made themes. It has **no telemetry of any kind**.
 
 > [!IMPORTANT]
-> ### 🆕 New in 0.5.0
-> A **lip sync check** that saves audio timing for each refresh rate, **scrubbing the way TV
-> streaming apps do it** (the video pauses and a preview moves along the seek bar), a tidier
-> Settings page, and Linux fixes from hands-on testing.
-> [What's in 0.5.0](https://github.com/devall96/Nettle/releases/tag/v0.5.0)
+> ### 🆕 New in 0.6.0
+> **Watch together** (Jellyfin SyncPlay) across Windows, Linux and Android TV, **HDR that turns on
+> and off with the video** on Windows, a calmer player (the pointer and controls stay out of the
+> way), per-profile Seerr sign-ins, and many fixes from a full review of all three apps.
+> [What's in 0.6.0](https://github.com/devall96/Nettle/releases/tag/v0.6.0)
 
 > [!IMPORTANT]
 > ### 📺 Nettle for Android TV
@@ -41,8 +41,8 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > - **Live TV that feels like cable:** surf with Up / Down, type a channel number, jump back to the
 >   last channel, and a tuning screen covers each switch.
 > - **Fast on cheap boxes:** about 0.8 s from a cold start to your Home screen on a 2 GB onn 4K box.
-> - Home, libraries, details, search, NostalgiaTV, Seerr, intro skipping, Quick Connect and
->   multiple profiles, all driven by the D-pad.
+> - Home, libraries, details, search, NostalgiaTV, Seerr, intro skipping, Quick Connect,
+>   multiple profiles and **watch together**, all driven by the D-pad.
 >
 > - **Updates itself** from Settings → Updates, like the PC version.
 >
@@ -103,6 +103,7 @@ Google TV built in…).** If you have a Jellyfin server and a few minutes, you'd
 - **Direct play, always.** Nettle requests the original file and never asks the server for a transcode or remux. Your server's CPU stays idle and the picture is untouched.
 - **mpv engine** (libmpv) with its modern renderer (`gpu-next` / libplacebo) and hardware decoding: D3D11VA on Windows, VA-API on Linux. It plays practically every container, codec and subtitle format.
 - **HDR10, HDR10+, HLG and Dolby Vision,** including **Dolby Vision profile 5**, whose picture data is applied by the player. On Windows, HDR goes straight to your HDR display; on SDR screens it's tone-mapped carefully.
+- **HDR follows the video on Windows** (Settings → Appearance → *Match HDR to the video*): like a TV, Windows' HDR turns on for HDR videos and off for SDR ones, then goes back to how it was when you leave the player.
 - **Smooth motion.** Playback syncs to your display's refresh rate, so 24 fps films don't judder on 60 Hz screens.
 - **TV-style format badges.** When playback starts, badges like **4K · DOLBY VISION · DOLBY ATMOS** pop up, the way a TV shows them. Each badge is *verified*:
   - Resolution comes from the frames actually being decoded.
@@ -114,6 +115,9 @@ Google TV built in…).** If you have a Jellyfin server and a few minutes, you'd
 - **Scrubbing with previews,** the way TV streaming apps do it. Press **←** / **→** (or Left / Right on a remote) and the video pauses while a thumbnail preview moves along the seek bar: a tap moves 10 seconds, holding glides smoothly and speeds up the longer you hold. **Enter** (OK) jumps there and carries on playing; **Esc** (Back) cancels and carries on from where you were. With a mouse, hover over or drag the seek bar. Thumbnails come from the trickplay images your Jellyfin server already generates.
 - **Audio passthrough** (optional): Dolby Digital, Dolby Digital Plus / Atmos, TrueHD, DTS and DTS-HD / DTS:X go to your AV receiver untouched, so it decodes them, height channels included.
 - Resume points, watched status and your audio / subtitle choices stay in sync with your server. Closing Nettle mid-episode still saves where you were.
+- **Remembers your languages per series:** pick other audio or subtitles in one show, and its other episodes start that way.
+- **Rides out network drops:** after a short Wi-Fi or server hiccup the video reconnects at the same spot by itself.
+- **The mouse pointer and the controls stay out of the way** while a video plays, and come back when you move the mouse.
 - Audio and subtitle track menu, including external subtitles. Adjustable network buffer for slow Wi-Fi, sized to each file's bitrate so even 4K remuxes really get that much read-ahead.
 - **Fine-tuning while you watch:** playback speed, subtitle and audio timing, and subtitle size. Speed and subtitle size are remembered, and so is **audio timing, for your screen and separately for each refresh rate** (many TVs delay their picture in film mode only).
 - **Lip sync check** (Settings → Playback): a small grey box blinks once a second with a beep, and you nudge the sound in 10 ms steps until they line up. It's saved for the refresh rate your screen is running at. ⚠ It blinks for as long as it's open: if you or anyone watching (pets included) has epilepsy or is sensitive to flashing or blinking light, don't run it.
@@ -172,7 +176,7 @@ Everything above and below works on the TV too, with these differences:
 ### Requests: Seerr
 - Browse Trending, Popular and Coming Soon, search, and request movies with one click. For series, **pick the seasons** you want; seasons you already have or requested are shown as such.
 - See your own requests and their status (only yours, even if your Seerr account is an admin).
-- Sign in with an API key, or with your Jellyfin username and password. Only the resulting session is kept, encrypted.
+- Sign in with an API key, or with your Jellyfin username and password. Only the resulting session is kept, encrypted, and **each profile has its own**, so nobody requests as someone else.
 
 ### Accounts and sign-in
 - Finds Jellyfin servers on your network automatically. You can also pick http or https and type just the IP; the port is added for you.
@@ -334,8 +338,10 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.5.0 beta)
+## Known limitations (0.6.0 beta)
 - **All three platforms are beta.** Expect some bugs, and please report them.
+- **Watch together** has been tested between Nettle apps (Windows, Linux and Android TV in one group). Groups with other Jellyfin apps should work, but haven't been tried yet.
+- **Match HDR to the video** (Windows) is new. If your screen misbehaves, turn it off in Settings → Appearance and please open an issue.
 - **Android TV:**
   - Tested on one device so far (onn 4K, Google TV 14). Other boxes and TVs should work but are untested.
   - Installed by hand (sideloaded) the first time. From 0.4.3, **Settings → Updates** checks Nettle's GitHub Releases and installs the newest APK (the TV asks you to confirm each install).
