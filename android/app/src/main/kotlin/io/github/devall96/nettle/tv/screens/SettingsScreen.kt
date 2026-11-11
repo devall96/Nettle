@@ -189,8 +189,9 @@ fun SettingsScreen(vm: SettingsModel) {
                 }
             }
 
-            // Updates (same source, toggle and wording as the Windows / Linux apps)
-            Panel(Modifier.fillMaxWidth()) {
+            // Updates (same source, toggle and wording as the Windows / Linux apps). Not in the Google Play build:
+            // Play updates the app itself.
+            if (io.github.devall96.nettle.tv.BuildConfig.UPDATER) Panel(Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionLabel("UPDATES")
                     T(vm.installKind, weight = FontWeight.SemiBold)

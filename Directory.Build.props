@@ -19,6 +19,17 @@
   <ItemGroup>
     <AssemblyMetadata Include="NettleReleaseLabel" Value="$(NettleReleaseLabel)" />
   </ItemGroup>
+  <!-- Privacy: compiled files (and their .pdb debug info) record where they were built. Map this
+       checkout's folder to "/_/" so no builder's user name or folder layout ends up in what's handed
+       out (stack traces in crash.log still show file names and line numbers). Deterministic too. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <Deterministic>true</Deterministic>
+    <!-- Maps the source root to /_/ everywhere, the Source Link data in the .pdb files included. -->
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <!-- Debug info inside each .dll: no separate .pdb path (Avalonia rewrites Nettle.UI.dll after compiling,
+         which put the original .pdb's full path back). -->
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
   <!-- -p:NettleDevHooks=true: keep the NETTLE_DEV_* developer hooks in a Release build (on-device
        performance testing only; never for builds that are handed out). -->
   <PropertyGroup Condition="'$(NettleDevHooks)' == 'true'">

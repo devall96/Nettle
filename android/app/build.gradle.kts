@@ -59,6 +59,14 @@ android {
                 logger.warn("WARNING: no release key (~/.nettle/nettle-release.properties): this release build is debug-signed and marked -unofficial.")
             }
         }
+        // Google Play (gradlew :app:bundlePlay): the release build without the built-in updater, which Play
+        // doesn't allow (apps there are updated by Play only). src/play/AndroidManifest.xml removes the
+        // "install other apps" permission and the updater's file provider.
+        create("play") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "UPDATER", "false")
+        }
     }
 
     compileOptions {
@@ -75,7 +83,11 @@ android {
     // tools/avsync/clips and accept `--es synctest aac|ac3`. Normal builds carry neither (only
     // assets/lipsync-check.mkv, the same flash + beep clip, for Settings → Lip sync check).
     val syncTest = (findProperty("nettle.syncTest") as String?) == "true"
-    defaultConfig { buildConfigField("boolean", "SYNC_TEST", syncTest.toString()) }
+    defaultConfig {
+        buildConfigField("boolean", "SYNC_TEST", syncTest.toString())
+        // The built-in updater (Settings → Updates): on for GitHub / Downloader builds, off for Google Play.
+        buildConfigField("boolean", "UPDATER", "true")
+    }
     if (syncTest) sourceSets["main"].assets.srcDir(rootProject.file("../tools/avsync/clips"))
     // Played straight from the APK: keep the clips stored, so Media3 can seek in them.
     androidResources { noCompress += "mkv" }

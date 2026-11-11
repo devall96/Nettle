@@ -50,9 +50,11 @@ public partial class MainView : UserControl
             });
             _focusTimer.Start();
         }
+#if DEBUG || NETTLE_DEV
         // Developer aid: NETTLE_DEV_FOCUSLOG=1 logs which control has focus after every key.
         if (Environment.GetEnvironmentVariable("NETTLE_DEV_FOCUSLOG") == "1")
             _top.AddHandler(KeyUpEvent, (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(LogFocus, Avalonia.Threading.DispatcherPriority.Background), RoutingStrategies.Bubble, handledEventsToo: true);
+#endif
         _top.AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
     }
 

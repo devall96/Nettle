@@ -282,7 +282,7 @@ public sealed class JellyfinClient
         {
             using var udp = new UdpClient(AddressFamily.InterNetwork) { EnableBroadcast = true };
             var msg = Encoding.UTF8.GetBytes("who is JellyfinServer?");
-            // 255.255.255.255 only goes out of one network adapter (with a VPN such as Tailscale or Mullvad that is
+            // 255.255.255.255 only goes out of one network adapter (with a VPN running, that is
             // often the VPN), so also ask each local network directly at its own broadcast address.
             foreach (var target in BroadcastAddresses())
             {
@@ -647,7 +647,7 @@ public sealed class JellyfinClient
     public Task SyncPlaySetNewQueueAsync(IEnumerable<string> itemIds, int index, long startTicks)
     {
         var ids = new System.Text.Json.Nodes.JsonArray();
-        foreach (var id in itemIds) ids.Add(id);
+        foreach (var id in itemIds) ids.Add((System.Text.Json.Nodes.JsonNode?)System.Text.Json.Nodes.JsonValue.Create(id)); // the non-generic Add: trimming / AOT safe
         return PostSyncPlay("SetNewQueue", new() { ["PlayingQueue"] = ids, ["PlayingItemPosition"] = index, ["StartPositionTicks"] = startTicks });
     }
 

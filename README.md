@@ -392,6 +392,10 @@ key instead, so uninstall the official app before installing yours. The build fa
 dependency outside its allowlist appears (see `android/app/build.gradle.kts`). The plan and design
 notes are in [docs/native-android-tv.md](docs/native-android-tv.md).
 
+For Google Play, build `./gradlew :app:bundlePlay` instead (the `.aab` lands in
+`android/app/build/outputs/bundle/play/`). It's the same app without the built-in updater: Play
+doesn't allow apps to update themselves, nor the "install other apps" permission the updater needs.
+
 To build a Windows release (installer, portable zip and update packages in `releases\`):
 
 ```bash

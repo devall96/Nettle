@@ -115,7 +115,7 @@ object Main {
     /** Opt-in only (Settings → Updates): one quiet check per launch, like the Windows / Linux apps. */
     private fun maybeAutoCheckUpdates() {
         val s = AppServices.settings.current
-        if (updateChecked || !s.autoCheckUpdates || s.updateSource.isBlank()) return
+        if (!io.github.devall96.nettle.tv.BuildConfig.UPDATER || updateChecked || !s.autoCheckUpdates || s.updateSource.isBlank()) return
         updateChecked = true
         AppServices.scope.launch {
             try {
