@@ -134,6 +134,10 @@ class PlayerModel private constructor() {
     /** The error is a lost connection: "Try again" reopens the video where it stopped. */
     var canRetry by mutableStateOf(false); private set
 
+    /** One line of state for the QA audit (debug hooks only). */
+    fun qaState(): String = "playing=$isPlaying pos=${positionMs / 1000} len=${lengthMs / 1000} osd=$isOsdVisible upNext=$isUpNextVisible skip=$isSkipVisible " +
+        "tracks=$isTracksOpen pendingSeek=${pendingSeekMs != null} error=${error != null} stillWatching=$isStillWatchingVisible live=$isLive"
+
     fun retryAfterError() {
         val again = lastLoad ?: return
         error = null; canRetry = false; reconnects = 0; isBuffering = true
@@ -701,6 +705,8 @@ class PlayerModel private constructor() {
     }
 
     fun dismissUpNext() { upNextDismissed = true; isUpNextVisible = false }
+    /** Back on a "Skip intro" button: hide it for this segment (the video carries on). */
+    fun dismissSkip() { currentSkip?.let { dismissedSegment = it }; isSkipVisible = false }
 
     // ===================== "Are you still watching?" =====================
 

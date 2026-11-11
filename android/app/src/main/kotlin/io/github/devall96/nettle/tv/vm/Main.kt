@@ -159,6 +159,9 @@ object Main {
 
     // ---------- Playback ----------
 
+    /** Debug hooks only: play from a given position. */
+    fun playItemAt(item: BaseItemDto, startTicks: Long) { closePlayer(); player = PlayerModel.forItem(item, startTicks, null) }
+
     fun playItem(item: BaseItemDto, resume: Boolean, mediaSourceId: String? = null) {
         val start = if (resume) item.userData?.playbackPositionTicks?.takeIf { it > 0 } else null
         if (AppServices.syncPlay.inGroup) { startForGroup(listOf(item), 0, start ?: 0); return }
