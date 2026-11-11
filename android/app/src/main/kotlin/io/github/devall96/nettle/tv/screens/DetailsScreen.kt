@@ -85,6 +85,22 @@ fun DetailsScreen(vm: DetailsModel) {
                 vm.error?.let { e -> item(key = "err") { ErrorText(e) } }
             }
         }
+        // The item itself didn't load (server down or busy): say so, with a way to retry,
+        // instead of a blank page with nothing to focus.
+        val loadError = vm.error
+        if (vm.item == null && loadError != null && !vm.isBusy) {
+            val retry = remember { androidx.compose.ui.focus.FocusRequester() }
+            LaunchedEffect(loadError) { kotlinx.coroutines.delay(50); runCatching { retry.requestFocus() } }
+            androidx.compose.foundation.layout.Column(Modifier.align(Alignment.Center).padding(horizontal = 56.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                T("Couldn't load this", style = Nettle.type.h2)
+                ErrorText(loadError)
+                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton("Try again", { vm.retry() }, kind = ButtonKind.Primary, focusRequester = retry)
+                    TextButton("Back", { Main.shell?.goBack() })
+                }
+            }
+        }
         if (vm.isBusy) Spinner(Modifier.align(Alignment.Center))
     }
 }

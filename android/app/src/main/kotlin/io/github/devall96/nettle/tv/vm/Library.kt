@@ -145,7 +145,7 @@ class LibraryModel(private val view: BaseItemDto, private val folderMode: Boolea
         rows.clear()
         total = Int.MAX_VALUE
         fetched = 0
-        run { loadPage(generation) }
+        guarded { loadPage(generation) }
     }
 
     /** [upTo]: load at least this many items in one request (A–Z jump far down the list). */
@@ -187,7 +187,7 @@ class LibraryModel(private val view: BaseItemDto, private val folderMode: Boolea
         if (loadingMore || isBusy || cards.size >= total) return
         loadingMore = true
         val gen = generation
-        scope.launch { try { run(showBusy = false) { loadPage(gen) } } finally { loadingMore = false } }
+        scope.launch { try { guarded(showBusy = false) { loadPage(gen) } } finally { loadingMore = false } }
     }
 
     /** Scrolls to the first title starting with [letter] (sorted by name). */
