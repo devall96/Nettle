@@ -103,7 +103,7 @@ object DevHooks {
         val theme = intent.getStringExtra("theme")
         val library = intent.getStringExtra("library")
         // --es probe 1: one log line with the player's state, for the QA audit to check results.
-        if (intent.getStringExtra("probe") != null) { io.github.devall96.nettle.core.services.Log.info("probe: " + (Main.player?.qaState() ?: "no player") + " page=" + (Main.shell?.current?.javaClass?.simpleName ?: "none")); return }
+        intent.getStringExtra("probe")?.let { tag -> io.github.devall96.nettle.core.services.Log.info("probe[$tag]: " + (Main.player?.qaState() ?: "no player") + " page=" + (Main.shell?.current?.javaClass?.simpleName ?: "none")); return }
         if (page == null && play == null && details == null && theme == null && library == null) return
         val playDelay = (intent.getStringExtra("playdelay")?.toLongOrNull() ?: 0L) * 1000
         AppServices.scope.launch {
