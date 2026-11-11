@@ -30,6 +30,8 @@ public static class AppServices
     public static ISecureStore Secure { get; private set; } = null!;
     public static IWindowHost? Window { get; set; }
     public static IUpdater? Updater { get; set; }
+    /// <summary>True for the Microsoft Store copy: Windows updates it, so Nettle's own updater is off.</summary>
+    public static bool IsStoreInstall { get; set; }
     /// <summary>Applications-menu integration (Linux AppImage); null where the installer already handles it.</summary>
     public static IDesktopIntegration? Desktop { get; set; }
     /// <summary>Keeps the screen on while video plays (null where nothing is needed).</summary>

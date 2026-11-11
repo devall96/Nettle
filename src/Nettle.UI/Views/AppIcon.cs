@@ -131,6 +131,49 @@ public static class AppIcon
         bmp.Save(path);
     }
 
+    /// <summary>
+    /// The Microsoft Store package's logos in the default theme, written into the package's <c>Assets</c>
+    /// folder with the file names Windows looks up by size (scale-N for tiles, targetsize-N for the
+    /// taskbar and Start list). Rendered with <c>Nettle --render-store &lt;folder&gt;</c> by build-store.ps1.
+    /// </summary>
+    public static void RenderStoreFiles(string folder)
+    {
+        Directory.CreateDirectory(folder);
+        void Save(string name, int w, int h, double tile) => SaveCentered(Path.Combine(folder, name), w, h, tile);
+        foreach (var scale in new[] { 100, 200, 400 })
+        {
+            double f = scale / 100.0;
+            Save($"StoreLogo.scale-{scale}.png", (int)(50 * f), (int)(50 * f), 50 * f);
+            Save($"Square44x44Logo.scale-{scale}.png", (int)(44 * f), (int)(44 * f), 44 * f);
+            // Start tiles: the icon sits in the middle with room around it, as Windows' own apps do.
+            Save($"Square150x150Logo.scale-{scale}.png", (int)(150 * f), (int)(150 * f), 96 * f);
+            Save($"Wide310x150Logo.scale-{scale}.png", (int)(310 * f), (int)(150 * f), 96 * f);
+        }
+        // Taskbar, Start list, Alt+Tab: exact pixel sizes, with and without Windows' backplate.
+        foreach (var px in new[] { 16, 24, 32, 48, 256 })
+        {
+            Save($"Square44x44Logo.targetsize-{px}.png", px, px, px);
+            Save($"Square44x44Logo.targetsize-{px}_altform-unplated.png", px, px, px);
+            Save($"Square44x44Logo.targetsize-{px}_altform-lightunplated.png", px, px, px);
+        }
+    }
+
+    /// <summary>The icon tile at <paramref name="tile"/> px, centred on a transparent picture of the given size.</summary>
+    private static void SaveCentered(string path, int w, int h, double tile)
+    {
+        var root = new Grid { Width = w, Height = h };
+        var t = CreateTile(tile);
+        t.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        t.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+        root.Children.Add(t);
+        root.Measure(new Size(w, h));
+        root.Arrange(new Rect(0, 0, w, h));
+        root.UpdateLayout();
+        using var bmp = new RenderTargetBitmap(new PixelSize(w, h), new Vector(96, 96));
+        bmp.Render(root);
+        bmp.Save(path);
+    }
+
     /// <summary>Writes nettle.png (256 px) and nettle.ico (16–256 px) in the default theme into <paramref name="folder"/>.</summary>
     public static void RenderFiles(string folder)
     {

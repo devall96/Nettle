@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Package manifest for the Microsoft Store copy of Nettle (built by build-store.ps1).
+  Identity Name / Publisher / PublisherDisplayName are the values Partner Center assigned to the
+  reserved name "Nettle" (Product management, Product identity); the Store rejects a package where
+  they differ in any character. Version is filled in by the build script.
+-->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap rescap">
+  <Identity Name="26880Trikada.Nettle"
+            Publisher="CN=ECD0131C-0126-4AD3-A4DA-82844517151D"
+            Version="{VERSION}"
+            ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>Nettle</DisplayName>
+    <PublisherDisplayName>Trikada</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Applications>
+    <Application Id="Nettle" Executable="Nettle.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Nettle"
+                          Description="A fast, private client for your own Jellyfin server. Plays the original file, never a transcode."
+                          BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <!-- An ordinary desktop app (.NET + libmpv): it runs with the user's normal rights, not in the UWP sandbox. -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

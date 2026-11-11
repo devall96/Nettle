@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <Version>0.6.0</Version>
+    <Version>1.0.0</Version>
     <Product>Nettle</Product>
     <Authors>Nettle contributors</Authors>
     <Copyright>Copyright (c) Nettle contributors</Copyright>

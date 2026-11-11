@@ -248,7 +248,10 @@ public sealed partial class SettingsViewModel : PageViewModel
     public string UpdateSource { get => S.UpdateSource; set { S.UpdateSource = value?.Trim() ?? ""; Save(); OnPropertyChanged(); } }
     public bool AutoCheckUpdates { get => S.AutoCheckUpdates; set { S.AutoCheckUpdates = value; Save(); OnPropertyChanged(); } }
     public bool IsInstalledApp => AppServices.Updater?.IsInstalled == true;
-    public string InstallKind => IsInstalledApp ? $"Installed version {AppServices.Version}" : $"Version {AppServices.Version} (portable copy: updates need the installed app)";
+    /// <summary>Microsoft Store copy: Windows updates it, so the update source and buttons are hidden.</summary>
+    public bool IsStoreInstall => AppServices.IsStoreInstall;
+    public string InstallKind => IsStoreInstall ? $"Version {AppServices.Version} from the Microsoft Store"
+        : IsInstalledApp ? $"Installed version {AppServices.Version}" : $"Version {AppServices.Version} (portable copy: updates need the installed app)";
     [ObservableProperty] private string? _updateStatus;
     [ObservableProperty] private bool _isUpdateAvailable;
     [ObservableProperty] private bool _isUpdating;

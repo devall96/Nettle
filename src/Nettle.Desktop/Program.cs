@@ -68,7 +68,11 @@ internal static class Program
         if (iconArg >= 0 && iconArg + 1 < args.Length) App.RenderIconFolder = Path.GetFullPath(args[iconArg + 1]);
         var androidArg = Array.IndexOf(args, "--render-android");
         if (androidArg >= 0 && androidArg + 1 < args.Length) App.RenderAndroidResFolder = Path.GetFullPath(args[androidArg + 1]);
-        AppServices.Updater = new VelopackUpdater();
+        var storeArg = Array.IndexOf(args, "--render-store");
+        if (storeArg >= 0 && storeArg + 1 < args.Length) App.RenderStoreFolder = Path.GetFullPath(args[storeArg + 1]);
+        // The Microsoft Store copy is updated by Windows; every other copy uses Nettle's own opt-in updater.
+        AppServices.IsStoreInstall = StorePackage.IsPackaged;
+        if (!AppServices.IsStoreInstall) AppServices.Updater = new VelopackUpdater();
         AppServices.KeepAwake = OperatingSystem.IsWindows() ? new WindowsKeepAwake() : new LinuxKeepAwake();
 
         if (OperatingSystem.IsLinux())

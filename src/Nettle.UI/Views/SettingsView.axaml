@@ -261,20 +261,25 @@
         <StackPanel Spacing="10">
           <TextBlock Classes="section" Text="UPDATES" />
           <TextBlock Text="{Binding InstallKind}" FontWeight="SemiBold" />
-          <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="Nettle never checks for updates on its own unless you turn that on. It only ever contacts the source below: Nettle's GitHub Releases (filled in for you), another GitHub repository, or a folder." />
-          <TextBox Text="{Binding UpdateSource}" Watermark="https://github.com/devall96/Nettle  (or a folder path)" />
-          <Grid Classes="row" ColumnDefinitions="*,Auto">
-            <StackPanel>
-              <TextBlock Text="Check automatically when Nettle starts" FontWeight="SemiBold" />
-              <TextBlock Classes="muted caption" Text="Off by default. You'll be asked before anything is installed." />
+          <!-- Microsoft Store copy: Windows does the updating, Nettle itself contacts nothing. -->
+          <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding IsStoreInstall}"
+                     Text="Windows updates this copy through the Microsoft Store. Nettle itself never checks for updates here." />
+          <StackPanel Spacing="10" IsVisible="{Binding !IsStoreInstall}">
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Nettle never checks for updates on its own unless you turn that on. It only ever contacts the source below: Nettle's GitHub Releases (filled in for you), another GitHub repository, or a folder." />
+            <TextBox Text="{Binding UpdateSource}" Watermark="https://github.com/devall96/Nettle  (or a folder path)" />
+            <Grid Classes="row" ColumnDefinitions="*,Auto">
+              <StackPanel>
+                <TextBlock Text="Check automatically when Nettle starts" FontWeight="SemiBold" />
+                <TextBlock Classes="muted caption" Text="Off by default. You'll be asked before anything is installed." />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoCheckUpdates}" OnContent="" OffContent="" VerticalAlignment="Center" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <Button Content="Check now" Command="{Binding CheckUpdatesCommand}" IsEnabled="{Binding !IsUpdating}" />
+              <Button Classes="primary" Content="Install &amp; restart" Command="{Binding InstallUpdateCommand}" IsVisible="{Binding IsUpdateAvailable}" IsEnabled="{Binding !IsUpdating}" />
+              <TextBlock Text="{Binding UpdateStatus}" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" />
             </StackPanel>
-            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoCheckUpdates}" OnContent="" OffContent="" VerticalAlignment="Center" />
-          </Grid>
-          <StackPanel Orientation="Horizontal" Spacing="12">
-            <Button Content="Check now" Command="{Binding CheckUpdatesCommand}" IsEnabled="{Binding !IsUpdating}" />
-            <Button Classes="primary" Content="Install &amp; restart" Command="{Binding InstallUpdateCommand}" IsVisible="{Binding IsUpdateAvailable}" IsEnabled="{Binding !IsUpdating}" />
-            <TextBlock Text="{Binding UpdateStatus}" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" />
           </StackPanel>
         </StackPanel>
       </Border>

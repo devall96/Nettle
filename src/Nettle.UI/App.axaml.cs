@@ -26,7 +26,10 @@ public partial class App : Application
     /// <summary>Build-time mode: render Android TV's launcher icons and home banner into this res folder, then exit.</summary>
     public static string? RenderAndroidResFolder { get; set; }
 
-    public static bool IsRenderMode => RenderSplashPath != null || RenderBannerPath != null || RenderIconFolder != null || RenderAndroidResFolder != null;
+    /// <summary>Build-time mode: render the Microsoft Store package's logos into this folder, then exit.</summary>
+    public static string? RenderStoreFolder { get; set; }
+
+    public static bool IsRenderMode => RenderSplashPath != null || RenderBannerPath != null || RenderIconFolder != null || RenderAndroidResFolder != null || RenderStoreFolder != null;
 
     public override void OnFrameworkInitializationCompleted()
     {
@@ -39,6 +42,7 @@ public partial class App : Application
                 if (RenderBannerPath != null) InstallerSplash.RenderBanner(RenderBannerPath);
                 if (RenderIconFolder != null) AppIcon.RenderFiles(RenderIconFolder);
                 if (RenderAndroidResFolder != null) AppIcon.RenderAndroidFiles(RenderAndroidResFolder);
+                if (RenderStoreFolder != null) AppIcon.RenderStoreFiles(RenderStoreFolder);
             }
             catch (Exception ex) { Console.Error.WriteLine(ex); code = 1; }
             Environment.Exit(code);

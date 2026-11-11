@@ -20,6 +20,7 @@
 !/Directory.Build.targets
 !/dotnet-tools.json
 !/build-release.ps1
+!/build-store.ps1
 !/get-libmpv.ps1
 !/android/
 !/tools/
