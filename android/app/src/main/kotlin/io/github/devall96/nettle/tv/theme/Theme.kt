@@ -53,7 +53,11 @@ data class ThemePalette(
     )
 
     /** Left fade of heroes and backdrops (text side). */
-    val heroFadeLeft: Brush = Brush.horizontalGradient(
+    val heroFadeLeft: Brush = if (isLight) Brush.horizontalGradient(
+        // Light themes: grey text on a bright, barely faded photo measured 2.2–2.9:1 (QA audit); fade further and longer.
+        0f to background.copy(alpha = 0xF8 / 255f), 0.45f to background.copy(alpha = 0xD8 / 255f), 0.8f to background.copy(alpha = 0x80 / 255f),
+        1f to background.copy(alpha = 0x30 / 255f),
+    ) else Brush.horizontalGradient(
         0f to background.copy(alpha = 0xF0 / 255f), 0.4f to background.copy(alpha = 0x90 / 255f), 0.75f to background.copy(alpha = 0f),
     )
 

@@ -1,5 +1,8 @@
 package io.github.devall96.nettle.tv.screens
 
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -72,9 +75,11 @@ fun LibraryScreen(vm: LibraryModel) {
                 }
             }
         }
+        // The grid remembers its card: coming back from the filters or the A–Z bar lands where you were.
+        val grid = remember { androidx.compose.ui.focus.FocusRequester() }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             KeepClear(before = 40.dp, after = 60.dp) {
-                LazyColumn(Modifier.fillMaxSize(), state = vm.listState, contentPadding = PaddingValues(start = 56.dp, top = 8.dp, end = 40.dp, bottom = 40.dp)) {
+                LazyColumn(Modifier.fillMaxSize().focusRequester(grid).focusRestorer(), state = vm.listState, contentPadding = PaddingValues(start = 56.dp, top = 8.dp, end = 40.dp, bottom = 40.dp)) {
                     itemsIndexed(vm.rows, key = { _, r -> r.first().item.id }) { _, row ->
                         Row(Modifier.padding(bottom = 22.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                             row.forEach { MediaCardView(it, page = vm) }
@@ -83,7 +88,8 @@ fun LibraryScreen(vm: LibraryModel) {
                 }
             }
             // A–Z jump (when sorted by name)
-            if (vm.showLetters && vm.rows.isNotEmpty()) Column(Modifier.align(Alignment.CenterEnd).padding(end = 10.dp)) {
+            // Left from a letter goes back into the grid (it used to jump past every card into the side menu).
+            if (vm.showLetters && vm.rows.isNotEmpty()) Column(Modifier.align(Alignment.CenterEnd).padding(end = 10.dp).focusProperties { left = grid }) {
                 LibraryModel.letters.forEach { l -> Letter(l) { vm.jumpTo(l) } }
             }
             if (vm.isBusy) Spinner(Modifier.align(Alignment.Center))

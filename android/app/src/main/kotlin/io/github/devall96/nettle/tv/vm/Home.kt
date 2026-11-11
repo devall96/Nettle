@@ -109,7 +109,7 @@ class HomeModel : Page() {
 
     private suspend fun reload(quiet: Boolean = false) {
         val libs = libraries ?: return
-        run(showBusy = !quiet && rows.isEmpty()) {
+        guarded(showBusy = !quiet && rows.isEmpty()) {
             val jf = AppServices.jellyfin
             coroutineScope {
                 val resumeD = async { jf.getResume(16) }

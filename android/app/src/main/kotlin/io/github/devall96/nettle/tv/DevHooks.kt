@@ -101,7 +101,10 @@ object DevHooks {
         val play = intent.getStringExtra("play")
         val details = intent.getStringExtra("details")
         val theme = intent.getStringExtra("theme")
-        if (page == null && play == null && details == null && theme == null) return
+        val library = intent.getStringExtra("library")
+        // --es probe 1: one log line with the player's state, for the QA audit to check results.
+        intent.getStringExtra("probe")?.let { tag -> io.github.devall96.nettle.core.services.Log.info("probe[$tag]: " + (Main.player?.qaState() ?: "no player") + " page=" + (Main.shell?.current?.javaClass?.simpleName ?: "none")); return }
+        if (page == null && play == null && details == null && theme == null && library == null) return
         val playDelay = (intent.getStringExtra("playdelay")?.toLongOrNull() ?: 0L) * 1000
         AppServices.scope.launch {
             // Wait until signed in and the shell is up.
@@ -116,9 +119,18 @@ object DevHooks {
                 "settings" -> shell.navigateRoot(SettingsModel())
                 "together" -> shell.navigateRoot(WatchTogetherModel())
             }
+            // --es library <viewId>: open that library page directly (the QA audit).
+            library?.let { id -> runCatching { AppServices.jellyfin.getItem(id) }.getOrNull()?.let { shell.navigateRoot(LibraryModel(it)) } }
             details?.let { shell.navigate(DetailsModel(it)) }
             if (playDelay > 0) delay(playDelay)
-            play?.let { id -> runCatching { AppServices.jellyfin.getItem(id) }.getOrNull()?.let { Main.playItem(it, resume = intent.getBooleanExtra("resume", false)) } }
+            // --es startsec N: start N seconds in (or N seconds before the end when negative), to reach Up Next / credits quickly.
+            val startSec = intent.getStringExtra("startsec")?.toLongOrNull()
+            play?.let { id -> runCatching { AppServices.jellyfin.getItem(id) }.getOrNull()?.let {
+                if (startSec != null) {
+                    val len = (it.runTimeTicks ?: 0L) / 10_000_000L
+                    Main.playItemAt(it, (if (startSec < 0) maxOf(0, len + startSec) else startSec) * 10_000_000L)
+                } else Main.playItem(it, resume = intent.getBooleanExtra("resume", false))
+            } }
         }
     }
 }

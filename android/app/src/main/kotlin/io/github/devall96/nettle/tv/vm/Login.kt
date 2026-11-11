@@ -41,7 +41,7 @@ class AccountPickerModel : ViewModelBase() {
         tile.isSigningIn = true
         scope.launch {
             var ok = false
-            run { ok = AppServices.session.resume(tile.account) }
+            guarded { ok = AppServices.session.resume(tile.account) }
             tile.isSigningIn = false
             if (ok) Main.showShell()
             else if (error == null) Main.showLogin(tile.account.serverUrl, prefillUser = tile.account.userName, message = "Your session expired. Please sign in again.")

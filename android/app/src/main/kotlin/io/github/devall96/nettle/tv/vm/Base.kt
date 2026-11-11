@@ -16,11 +16,16 @@ abstract class ViewModelBase {
     var isBusy by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
 
-    /** Cancelled when the screen goes away for good. */
-    val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    /** Cancelled when the screen goes away for good. A server error that slips past [guarded] is shown, not fatal. */
+    val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + ServerErrorNet.handler)
 
-    /** Runs work with busy state + friendly error capture; never throws. */
-    protected suspend fun run(showBusy: Boolean = true, work: suspend () -> Unit) {
+    /**
+     * Runs work with busy state + friendly error capture; never throws.
+     * Not called `run`: inside a `scope.launch { }` block, `run { }` silently meant Kotlin's own
+     * `run` (the coroutine scope is the closer receiver), so errors escaped and closed the app
+     * (1.0.2: Search, the profile picker and Seerr search when the server was down or busy).
+     */
+    protected suspend fun guarded(showBusy: Boolean = true, work: suspend () -> Unit) {
         if (showBusy) isBusy = true
         error = null
         try { work() }
@@ -30,7 +35,7 @@ abstract class ViewModelBase {
         finally { if (showBusy) isBusy = false }
     }
 
-    protected fun launch(showBusy: Boolean = true, work: suspend () -> Unit): Job = scope.launch { run(showBusy, work) }
+    protected fun launch(showBusy: Boolean = true, work: suspend () -> Unit): Job = scope.launch { guarded(showBusy, work) }
 
     open fun dispose() { scope.cancel() }
 }
@@ -60,6 +65,22 @@ abstract class Page : ViewModelBase() {
     protected open suspend fun refresh() {}
     protected open fun onActivated() {}
     open fun onDeactivated() {}
+}
+
+/**
+ * The last line of defence for background work: a server or network error (busy server, server
+ * down, Wi-Fi dropped) that no code caught becomes a short message instead of closing the app.
+ * Anything else is a bug in Nettle and still goes to the "closed unexpectedly" screen.
+ */
+object ServerErrorNet {
+    val handler = CoroutineExceptionHandler { _, e ->
+        if (e is ApiException || e is java.io.IOException) {
+            io.github.devall96.nettle.core.services.Log.warn("uncaught server error (shown, not fatal): ${e.message}")
+            runCatching { Main.toast(e.message ?: "Can't reach the server.", 4000) }
+        } else {
+            Thread.currentThread().let { t -> t.uncaughtExceptionHandler?.uncaughtException(t, e) ?: throw e }
+        }
+    }
 }
 
 /** A Jellyfin image URL helper shared by cards and pages. */

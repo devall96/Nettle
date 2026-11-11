@@ -128,7 +128,7 @@ class RequestsModel : Page() {
         notConfigured = !AppServices.seerr.isConfigured
         if (notConfigured) return
         if (searchText.isNotBlank()) search(searchText, 0)
-        run {
+        guarded {
             coroutineScope {
                 val s = AppServices.seerr
                 val trending = async { s.trending() }
@@ -188,7 +188,7 @@ class RequestsModel : Page() {
             isSearching = text.isNotBlank()
             searchResults.clear()
             if (!isSearching || notConfigured) return@launch
-            run {
+            guarded {
                 val page = AppServices.seerr.search(text.trim(), 1)
                 searchResults.addAll(page.results.filter { it.mediaType == "movie" || it.mediaType == "tv" }.map { SeerrCard(it, this@RequestsModel) })
             }

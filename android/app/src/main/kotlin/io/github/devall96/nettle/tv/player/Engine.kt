@@ -83,6 +83,10 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
     var audioBitstream = false; private set
     /** An audio track exists but none can be played on this device (passthrough off and no decoder). */
     var audioUnsupported = false; private set
+    /** A video track exists but this device has no decoder for it (e.g. AV1, 10-bit HEVC, MPEG-2 on some boxes). */
+    var videoUnsupported = false; private set
+    /** What that video is, for the message ("AV1", "10-bit HEVC"…). */
+    var unsupportedVideoName: String? = null; private set
     var ended = false; private set
     var readyOnce = false; private set
     var buffering = false; private set
@@ -201,7 +205,7 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
     fun load(l: PlayerLoad) {
         load = l
         extraSubs.clear()
-        ended = false; readyOnce = false; audioActive = false; audioBitstream = false; audioUnsupported = false
+        ended = false; readyOnce = false; audioActive = false; audioBitstream = false; audioUnsupported = false; videoUnsupported = false; unsupportedVideoName = null
         hdrSignal = null; videoMime = null; frameRate = 0f
         // The last size is kept until the new stream reports its own, so the picture never snaps to
         // full screen (stretching the old frame) in between; Live TV covers the switch anyway.
@@ -313,7 +317,17 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
         var subId = 0
         var audioGroups = 0
         var audioSupported = 0
+        var videoTracks = 0
+        var videoSupported = 0
+        var videoFormat: Format? = null
         for (group in t.groups) {
+            if (group.type == C.TRACK_TYPE_VIDEO) for (i in 0 until group.length) {
+                val f = group.getTrackFormat(i)
+                if (f.roleFlags and C.ROLE_FLAG_TRICK_PLAY != 0) continue
+                if (MimeTypes.isImage(f.sampleMimeType)) continue // cover art in a music file is not the picture
+                videoTracks++
+                if (group.isTrackSupported(i)) videoSupported++ else if (videoFormat == null) videoFormat = f
+            }
             val type = when (group.type) { C.TRACK_TYPE_AUDIO -> "audio"; C.TRACK_TYPE_TEXT -> "sub"; else -> null } ?: continue
             for (i in 0 until group.length) {
                 if (type == "audio") audioGroups++
@@ -336,15 +350,35 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
         trackRefs = refs
         tracks = list
         audioUnsupported = audioGroups > 0 && audioSupported == 0
+        videoUnsupported = videoTracks > 0 && videoSupported == 0
+        unsupportedVideoName = videoFormat?.let { describeVideoCodec(it) }
         val wanted = selectSubOnTracks
         if (wanted != null) list.firstOrNull { it.externalUrl == wanted }?.let { selectSubOnTracks = null; selectTrack("sub", it.id) }
+    }
+
+    private fun describeVideoCodec(f: Format): String {
+        val ten = f.colorInfo?.lumaBitdepth?.let { it >= 10 } == true || f.codecs?.let { it.startsWith("hvc1.2") || it.startsWith("hev1.2") } == true
+        val name = when (f.sampleMimeType) {
+            MimeTypes.VIDEO_AV1 -> "AV1"
+            MimeTypes.VIDEO_H265 -> "HEVC"
+            MimeTypes.VIDEO_H264 -> "H.264"
+            MimeTypes.VIDEO_VP9 -> "VP9"
+            MimeTypes.VIDEO_VP8 -> "VP8"
+            MimeTypes.VIDEO_MPEG2 -> "MPEG-2"
+            MimeTypes.VIDEO_MP4V -> "MPEG-4 Part 2 (DivX/Xvid)"
+            MimeTypes.VIDEO_VC1 -> "VC-1"
+            MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
+            else -> f.sampleMimeType?.substringAfter('/')?.uppercase() ?: "this video format"
+        }
+        return if (ten && name != "AV1") "10-bit $name" else name
     }
 
     private fun describeTrack(f: Format, external: Boolean, forced: Boolean): String {
         val lang = f.language?.takeIf { it.isNotEmpty() && it != "und" }?.let { code ->
             runCatching { java.util.Locale.forLanguageTag(code).getDisplayLanguage(java.util.Locale.ENGLISH) }.getOrNull()?.takeIf { it.isNotEmpty() } ?: code
         }
-        val codec = codecName(f.sampleMimeType)
+        // Subtitles Media3 converts while extracting are labelled with its internal "x-media3-cues" type; the real format is in codecs.
+        val codec = codecName(if (f.sampleMimeType == MimeTypes.APPLICATION_MEDIA3_CUES) f.codecs else f.sampleMimeType)
         val channels = if (f.channelCount > 0) when (f.channelCount) { 1 -> "Mono"; 2 -> "Stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> "${f.channelCount} ch" } else null
         val parts = listOfNotNull(f.label?.takeIf { it.isNotEmpty() }, lang, codec.uppercase().takeIf { it.isNotEmpty() }, channels,
             if (forced) "Forced" else null, if (external) "External" else null).distinct()
@@ -369,6 +403,8 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
         "application/pgs" -> "pgs"
         "application/vobsub" -> "vobsub"
         "application/dvbsubs" -> "dvb"
+        "application/x-quicktime-tx3g", "application/x-mp4-vtt" -> "timed text"
+        MimeTypes.APPLICATION_MEDIA3_CUES -> ""
         else -> mime?.substringAfterLast('/') ?: ""
     }
 

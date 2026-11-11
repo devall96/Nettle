@@ -1,5 +1,6 @@
 package io.github.devall96.nettle.tv.ui
 
+import androidx.compose.ui.focus.focusRestorer
 import android.view.KeyEvent as AndroidKey
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -66,13 +67,23 @@ import io.github.devall96.nettle.tv.vm.Page
 /** An image from one of the user's servers, fading in when loaded (Image.fade). */
 @Composable
 fun NetImage(url: String?, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop, alignment: Alignment = Alignment.Center,
-             onLoaded: (() -> Unit)? = null) {
+             onLoaded: (() -> Unit)? = null, colorFilter: androidx.compose.ui.graphics.ColorFilter? = null) {
     if (url == null) return
     val ctx = LocalContext.current
     val motion = Nettle.motion
     val req = remember(url, motion) { ImageRequest.Builder(ctx).data(url).crossfade(if (motion) 150 else 0).build() }
-    AsyncImage(req, null, AppServices.images, modifier, contentScale = contentScale, alignment = alignment,
+    AsyncImage(req, null, AppServices.images, modifier, contentScale = contentScale, alignment = alignment, colorFilter = colorFilter,
         onSuccess = if (onLoaded == null) null else { _ -> onLoaded() })
+}
+
+/**
+ * Title logos are nearly always white, made for dark artwork: on a light theme's pale fade they vanish.
+ * There, draw the logo's shape in the theme's text colour instead.
+ */
+@Composable
+fun logoTint(): androidx.compose.ui.graphics.ColorFilter? {
+    val p = Nettle.colors
+    return if (p.isLight) androidx.compose.ui.graphics.ColorFilter.tint(p.text, androidx.compose.ui.graphics.BlendMode.SrcIn) else null
 }
 
 /** ThinProgress (4 tall, radius 2, #40FFFFFF track, accent fill) painted directly, for flattened cards. */
@@ -217,7 +228,7 @@ fun CardRowView(row: CardRow, state: LazyListState = remember { io.github.devall
     Column(Modifier.padding(bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         T(row.title, Modifier.padding(start = startPadding), style = Nettle.type.h3)
         KeepClear(before = startPadding + 24.dp, after = 80.dp) {
-            LazyRow(state = state, contentPadding = PaddingValues(start = startPadding, top = 10.dp, end = 56.dp, bottom = 26.dp),
+            LazyRow(Modifier.focusRestorer(), state = state, contentPadding = PaddingValues(start = startPadding, top = 10.dp, end = 56.dp, bottom = 26.dp),
                 horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 items(row.items, key = { it.item.id }) { MediaCardView(it, page = page) }
             }
@@ -255,13 +266,17 @@ fun TvTextField(
     val active = focused || fieldFocused
     val style = Nettle.type.body.copy(fontSize = fontSize.sp, color = p.text)
 
+    var refocus by remember { mutableStateOf(false) }
     LaunchedEffect(editing) {
         if (editing) { field.requestFocus(); keyboard?.show() }
+        // The box only takes focus again once it is clickable again, i.e. after this recomposition;
+        // asking straight away failed and focus fell through to the side menu.
+        else if (refocus) { refocus = false; focusRequester.requestFocus() }
     }
     fun stop(submit: Boolean) {
+        refocus = true
         editing = false
         keyboard?.hide()
-        focusRequester.requestFocus()
         if (submit) onSubmit()
     }
 

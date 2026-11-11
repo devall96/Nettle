@@ -52,7 +52,7 @@ object AppServices {
     @Volatile var hdrTypes = HdrCaps()
 
     /** App-wide scope for work that outlives a screen (reports, saves). */
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + io.github.devall96.nettle.tv.vm.ServerErrorNet.handler)
 
     val version: String get() = BuildConfig.VERSION_NAME
 

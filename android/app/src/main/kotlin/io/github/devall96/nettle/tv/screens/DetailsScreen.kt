@@ -1,5 +1,6 @@
 package io.github.devall96.nettle.tv.screens
 
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -61,7 +62,7 @@ fun DetailsScreen(vm: DetailsModel) {
                 if (vm.isSeries) {
                     item(key = "seasons") {
                         KeepClear(before = 24.dp, after = 24.dp) {
-                            LazyRow(Modifier.padding(top = 18.dp), state = vm.seasonState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LazyRow(Modifier.focusRestorer().padding(top = 18.dp), state = vm.seasonState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(vm.seasons, key = { it.season.id }) { s ->
                                     TextButton(s.name, { vm.selectSeason(s) }, Modifier.rememberFocus(vm, "season:" + s.season.id), kind = ButtonKind.Chip, selected = vm.selectedSeason === s)
                                 }
@@ -74,7 +75,7 @@ fun DetailsScreen(vm: DetailsModel) {
                     Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         T("Cast & Crew", style = Nettle.type.h3)
                         KeepClear(before = 24.dp, after = 80.dp) {
-                            LazyRow(state = vm.castState, contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                            LazyRow(Modifier.focusRestorer(), state = vm.castState, contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                                 items(vm.cast, key = { (it.p.id ?: "") + it.role + it.name }) { PersonView(vm, it) }
                             }
                         }
@@ -83,6 +84,22 @@ fun DetailsScreen(vm: DetailsModel) {
                 if (vm.extras.isNotEmpty()) item(key = "extras") { CardRowSection("Extras", vm.extras, vm, vm.extrasState) }
                 if (vm.similar.isNotEmpty()) item(key = "similar") { CardRowSection("More Like This", vm.similar, vm, vm.similarState) }
                 vm.error?.let { e -> item(key = "err") { ErrorText(e) } }
+            }
+        }
+        // The item itself didn't load (server down or busy): say so, with a way to retry,
+        // instead of a blank page with nothing to focus.
+        val loadError = vm.error
+        if (vm.item == null && loadError != null && !vm.isBusy) {
+            val retry = remember { androidx.compose.ui.focus.FocusRequester() }
+            LaunchedEffect(loadError) { kotlinx.coroutines.delay(50); runCatching { retry.requestFocus() } }
+            androidx.compose.foundation.layout.Column(Modifier.align(Alignment.Center).padding(horizontal = 56.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                T("Couldn't load this", style = Nettle.type.h2)
+                ErrorText(loadError)
+                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton("Try again", { vm.retry() }, kind = ButtonKind.Primary, focusRequester = retry)
+                    TextButton("Back", { Main.shell?.goBack() })
+                }
             }
         }
         if (vm.isBusy) Spinner(Modifier.align(Alignment.Center))
@@ -99,7 +116,7 @@ private fun Header(vm: DetailsModel) {
                 .clip(RoundedCornerShape(16.dp)).background(p.surface),
         ) { NetImage(vm.posterUrl, Modifier.fillMaxSize()) }
         Column(Modifier.align(Alignment.Bottom).widthIn(max = 900.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (vm.hasLogo) NetImage(vm.logoUrl, Modifier.heightIn(max = 140.dp).widthIn(max = 520.dp), contentScale = ContentScale.Fit, alignment = Alignment.CenterStart)
+            if (vm.hasLogo) NetImage(vm.logoUrl, Modifier.heightIn(max = 140.dp).widthIn(max = 520.dp), contentScale = ContentScale.Fit, alignment = Alignment.CenterStart, colorFilter = logoTint())
             else T(vm.titleText, style = Nettle.type.display)
             vm.subtitleText?.takeIf { it.isNotEmpty() }?.let { T(it, style = Nettle.type.h3) }
             T(vm.meta, weight = FontWeight.SemiBold, muted = true)
@@ -194,7 +211,7 @@ private fun CardRowSection(title: String, cards: List<MediaCard>, vm: DetailsMod
     Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         T(title, style = Nettle.type.h3)
         KeepClear(before = 24.dp, after = 80.dp) {
-            LazyRow(state = state, contentPadding = PaddingValues(top = 10.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            LazyRow(Modifier.focusRestorer(), state = state, contentPadding = PaddingValues(top = 10.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 items(cards, key = { it.item.id }) { MediaCardView(it, page = vm) }
             }
         }

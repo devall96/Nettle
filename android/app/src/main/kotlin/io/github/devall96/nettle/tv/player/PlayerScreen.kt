@@ -31,6 +31,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -65,6 +66,8 @@ fun PlayerScreen(vm: PlayerModel) {
     val playPause = remember { FocusRequester() }
     val tracksFirst = remember { FocusRequester() }
     val continueBtn = remember { FocusRequester() }
+    val upNextPlay = remember { FocusRequester() }
+    val skipButton = remember { FocusRequester() }
     var anyFocus by remember { mutableStateOf(false) }
     // The 1-dp key catcher keeps focus when the controls appear (making it unfocusable doesn't take focus away).
     var catcherFocused by remember { mutableStateOf(false) }
@@ -81,12 +84,14 @@ fun PlayerScreen(vm: PlayerModel) {
         onDispose { vm.engine.onFrameRate = null; activity?.let { FrameRate.restore(it) } }
     }
     // Focus: the hidden-OSD catcher, or the OSD's main control, or an open panel.
-    LaunchedEffect(vm.isOsdVisible, vm.isTracksOpen, vm.isSubtitleSearchOpen, vm.isStillWatchingVisible) {
+    // An Up Next card or a Skip button shown while the controls are hidden owns focus (and the arrows / OK).
+    val promptUp = !vm.isOsdVisible && (vm.isUpNextVisible || vm.isSkipVisible)
+    LaunchedEffect(vm.isOsdVisible, vm.isTracksOpen, vm.isSubtitleSearchOpen, vm.isStillWatchingVisible, vm.isUpNextVisible, vm.isSkipVisible) {
         // The target may still be animating in (not attached yet, so requestFocus throws): retry briefly.
         // A single early attempt used to fail silently and leave nothing focused, so Left / Right did nothing.
         // requestFocus can also be ignored without an error while the controls animate in, so check where focus
         // really went: off the hidden catcher (or onto it, when the controls are hidden).
-        val wantCatcher = !vm.isStillWatchingVisible && !vm.isTracksOpen && !vm.isSubtitleSearchOpen && !vm.isOsdVisible
+        val wantCatcher = !vm.isStillWatchingVisible && !vm.isTracksOpen && !vm.isSubtitleSearchOpen && !vm.isOsdVisible && !promptUp
         repeat(20) {
             kotlinx.coroutines.delay(if (it == 0) 30L else 50L)
             runCatching {
@@ -94,6 +99,8 @@ fun PlayerScreen(vm: PlayerModel) {
                     vm.isStillWatchingVisible -> continueBtn.requestFocus()
                     vm.isTracksOpen || vm.isSubtitleSearchOpen -> tracksFirst.requestFocus()
                     vm.isOsdVisible -> if (vm.isVod) seekBar.requestFocus() else playPause.requestFocus()
+                    vm.isUpNextVisible -> upNextPlay.requestFocus()
+                    vm.isSkipVisible -> skipButton.requestFocus()
                     else -> root.requestFocus()
                 }
             }
@@ -122,7 +129,7 @@ fun PlayerScreen(vm: PlayerModel) {
             },
     ) {
         // Holds focus while the OSD is hidden (keys reach handleKey above).
-        val catcherOn = !vm.isOsdVisible && !vm.isTracksOpen && !vm.isSubtitleSearchOpen && !vm.isStillWatchingVisible && vm.error == null
+        val catcherOn = !vm.isOsdVisible && !vm.isTracksOpen && !vm.isSubtitleSearchOpen && !vm.isStillWatchingVisible && vm.error == null && !promptUp
         Box(Modifier.size(1.dp).focusRequester(root).focusProperties { canFocus = catcherOn }
             .onFocusChanged { catcherFocused = it.isFocused }.focusable())
         // ---- Video ----
@@ -152,6 +159,8 @@ fun PlayerScreen(vm: PlayerModel) {
             update = { sv ->
                 sv.setCues(vm.engine.cues)
                 sv.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * vm.subtitleScale.toFloat())
+                // With the controls up, lift the lines above the seek bar and buttons instead of drawing over them.
+                sv.setBottomPaddingFraction(if (vm.isOsdVisible) 0.24f else SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION)
             },
             modifier = Modifier.fillMaxSize().focusProperties { canFocus = false },
         )
@@ -164,7 +173,8 @@ fun PlayerScreen(vm: PlayerModel) {
         if (osdAlpha > 0f) Box(Modifier.fillMaxSize().alpha(osdAlpha)) {
             Box(Modifier.fillMaxWidth().height(190.dp).background(Brush.verticalGradient(listOf(Color(0xCC000000), Color.Transparent))))
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 36.dp, top = 30.dp, end = 36.dp), verticalAlignment = Alignment.CenterVertically) {
-                OsdButton(Icons.Back, { vm.close() })
+                // Touch only: the remote's own Back key does this, so it isn't a stop for the arrows.
+                OsdButton(Icons.Back, { vm.close() }, focusable = false)
                 Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
                     T(vm.title, size = 22.sp, weight = FontWeight.Bold, color = White, maxLines = 1)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -173,7 +183,6 @@ fun PlayerScreen(vm: PlayerModel) {
                         vm.syncPlayLabel?.let { SourcePill(it, false) }
                     }
                 }
-                OsdButton(Icons.Subtitles, { vm.toggleTracks() })
             }
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(260.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000)))))
             if (vm.isVod) VodControls(vm, seekBar, playPause, Modifier.align(Alignment.BottomCenter))
@@ -211,11 +220,11 @@ fun PlayerScreen(vm: PlayerModel) {
         }
         // ---- Skip segment ----
         if (vm.isSkipVisible) NButton({ vm.skip() }, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 150.dp), ButtonKind.Primary,
-            padding = PaddingValues(26.dp, 14.dp)) { fg ->
+            padding = PaddingValues(26.dp, 14.dp), focusRequester = skipButton) { fg ->
             BT(vm.skipLabel ?: "Skip", size = 16.sp); Spacer(Modifier.width(10.dp)); Icon(Icons.SkipNext, size = 18.dp, tint = fg)
         }
         // ---- Up next ----
-        if (vm.isUpNextVisible) UpNext(vm, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 150.dp))
+        if (vm.isUpNextVisible) UpNext(vm, upNextPlay, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 150.dp))
         // ---- Format badges (bottom left, above the controls) ----
         val badgeAlpha by animateFloatAsState(if (vm.isFormatBadgesVisible) 1f else 0f, tween(450, easing = CubicOut), label = "badges")
         if (badgeAlpha > 0f) Column(
@@ -228,11 +237,14 @@ fun PlayerScreen(vm: PlayerModel) {
         vm.error?.let { err ->
             Column(Modifier.align(Alignment.Center).widthIn(max = 560.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xDD111111)).padding(28.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                T("Playback problem", size = 20.sp, weight = FontWeight.Bold, color = White)
+                T(if (vm.canRetry) "Connection lost" else "Playback problem", size = 20.sp, weight = FontWeight.Bold, color = White)
                 T(err, Modifier.alpha(0.85f), color = White)
-                val close = remember { FocusRequester() }
-                LaunchedEffect(err) { runCatching { close.requestFocus() } }
-                TextButton("Close", { vm.close() }, focusRequester = close)
+                val first = remember { FocusRequester() }
+                LaunchedEffect(err) { runCatching { first.requestFocus() } }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (vm.canRetry) TextButton("Try again", { vm.retryAfterError() }, kind = ButtonKind.Primary, focusRequester = first)
+                    TextButton("Close", { vm.close() }, focusRequester = if (vm.canRetry) null else first)
+                }
             }
         }
         // ---- Tracks panel / find subtitles ----
@@ -276,6 +288,18 @@ private fun handleKey(vm: PlayerModel, e: KeyEvent): Boolean {
         if (code == AKey.KEYCODE_MEDIA_PLAY_PAUSE || code == AKey.KEYCODE_MEDIA_PLAY) { if (up) vm.continueWatching(); return true }
         return false // the prompt's buttons have focus until it's answered
     }
+    // An Up Next card or Skip button with the controls hidden: its buttons have focus and get Left / Right / OK
+    // (Right used to seek instead of reaching "Hide"). Up / Down bring up the controls; Back dismisses the card.
+    if (!vm.isOsdVisible && (vm.isUpNextVisible || vm.isSkipVisible) && !vm.isLipSyncCheck && !vm.isStillWatchingVisible && vm.error == null) {
+        when (code) {
+            AKey.KEYCODE_DPAD_LEFT, AKey.KEYCODE_DPAD_RIGHT, AKey.KEYCODE_DPAD_CENTER, AKey.KEYCODE_ENTER, AKey.KEYCODE_NUMPAD_ENTER -> return false
+            AKey.KEYCODE_DPAD_UP, AKey.KEYCODE_DPAD_DOWN -> { if (up) vm.showOsd(); return true }
+            AKey.KEYCODE_BACK -> { if (up) { if (vm.isUpNextVisible) vm.dismissUpNext() else vm.dismissSkip() }; return true }
+        }
+    }
+    // An error box is up: its buttons have focus and get OK / Left / Right (the first OK used to only wake the
+    // controls, and Left / Right seeked the dead video). Back still closes the player.
+    if (vm.error != null && code != AKey.KEYCODE_BACK && code != AKey.KEYCODE_MEDIA_STOP) return false
     // Scrubbing: OK / Play jump to the preview and carry on, Back cancels (key-up, so the key's other half
     // doesn't also press whatever is focused).
     if (vm.isScrubbing) when (code) {
@@ -352,7 +376,8 @@ private fun handleKey(vm: PlayerModel, e: KeyEvent): Boolean {
                 else if (up) vm.showOsd()
                 return true
             }
-            AKey.KEYCODE_DPAD_CENTER, AKey.KEYCODE_ENTER -> { if (up) vm.showOsd(); return true }
+            // OK pauses / resumes straight away (and shows the controls), as on other TV players. Live TV: OK shows the info.
+            AKey.KEYCODE_DPAD_CENTER, AKey.KEYCODE_ENTER -> { if (up) { if (vm.isVod) vm.togglePlay(); vm.showOsd() }; return true }
         }
         return false
     }
@@ -361,13 +386,15 @@ private fun handleKey(vm: PlayerModel, e: KeyEvent): Boolean {
 }
 
 @Composable
-private fun OsdButton(icon: ImageVector, onClick: () -> Unit, big: Boolean = false, focusRequester: FocusRequester? = null, enabled: Boolean = true) {
+private fun OsdButton(icon: ImageVector, onClick: () -> Unit, big: Boolean = false, focusRequester: FocusRequester? = null, enabled: Boolean = true,
+                      focusable: Boolean = true) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     Box(
         Modifier.clip(CircleShape).background(if (focused) Color(0x33FFFFFF) else Color.Transparent)
             .border(2.dp, if (focused) Nettle.colors.accent else Color.Transparent, CircleShape)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .focusProperties { canFocus = focusable }
             .clickable(source, indication = null, enabled = enabled, onClick = onClick).padding(12.dp),
     ) { Icon(icon, size = if (big) 40.dp else 26.dp, tint = White) }
 }
@@ -385,21 +412,24 @@ private fun VodControls(vm: PlayerModel, seekBar: FocusRequester, playPause: Foc
         Row(verticalAlignment = Alignment.CenterVertically) {
             T(vm.positionText, Modifier.padding(end = 14.dp), weight = FontWeight.SemiBold, color = White)
             SeekBar(vm, seekBar, Modifier.weight(1f))
+            // Time left, with when it ends right next to it.
             T(vm.remainingText, Modifier.padding(start = 14.dp), weight = FontWeight.SemiBold, color = White)
+            vm.endsAtText?.let { T(it, Modifier.padding(start = 10.dp).alpha(0.7f), color = White) }
         }
+        // One row, so Left / Right reach every control: chapter and seek buttons around Play, Next episode beside them,
+        // and subtitles / audio at the right end, under the time. No volume control: the remote sets the TV's (or
+        // receiver's) own volume, and a second one in the app only made things quieter by surprise.
         Box(Modifier.fillMaxWidth()) {
-            Row(Modifier.align(Alignment.CenterStart), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                // No volume control: the remote sets the TV's (or receiver's) own volume, and a second one in the
-                // app only made things quieter by surprise.
-                vm.endsAtText?.let { T(it, Modifier.padding(start = 16.dp).alpha(0.7f), color = White) }
-            }
             Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                 val step = AppServices.settings.current.playback.seekStepSeconds
+                if (vm.hasChapters) OsdButton(Icons.SkipPrevious, { vm.previousChapter() })
                 OsdButton(Icons.Rewind, { vm.seekBy(-step) })
                 OsdButton(if (vm.isPlaying) Icons.Pause else Icons.Play, { vm.togglePlay() }, big = true, focusRequester = playPause)
                 OsdButton(Icons.Forward, { vm.seekBy(step) })
+                if (vm.hasChapters) OsdButton(Icons.SkipNext, { vm.nextChapter() })
+                if (vm.hasNext) OsdButton(Icons.NextEpisode, { vm.playNext() })
             }
-            if (vm.hasNext) Row(Modifier.align(Alignment.CenterEnd)) { OsdButton(Icons.SkipNext, { vm.playNext() }) }
+            Box(Modifier.align(Alignment.CenterEnd)) { OsdButton(Icons.Subtitles, { vm.toggleTracks() }) }
         }
     }
 }
@@ -418,6 +448,11 @@ private fun SeekBar(vm: PlayerModel, requester: FocusRequester, modifier: Modifi
             .focusRequester(requester).focusable(interactionSource = source)
             .onPreviewKeyEvent { e ->
                 val code = e.nativeKeyEvent.keyCode
+                // OK on the seek bar (where focus lands when the controls appear) pauses / resumes.
+                if ((code == AKey.KEYCODE_DPAD_CENTER || code == AKey.KEYCODE_ENTER) && vm.pendingSeekMs == null) {
+                    if (e.type == KeyEventType.KeyUp) vm.togglePlay()
+                    return@onPreviewKeyEvent true
+                }
                 if (code != AKey.KEYCODE_DPAD_LEFT && code != AKey.KEYCODE_DPAD_RIGHT) return@onPreviewKeyEvent false
                 if (e.type == KeyEventType.KeyDown) vm.holdSeek(code == AKey.KEYCODE_DPAD_RIGHT, e.nativeKeyEvent.repeatCount)
                 else if (e.type == KeyEventType.KeyUp) vm.scrubKeyUp()
@@ -443,8 +478,14 @@ private fun SeekBar(vm: PlayerModel, requester: FocusRequester, modifier: Modifi
             val d = LocalDensity.current
             val boxW = with(d) { 288.dp.toPx() }
             val x = (width * frac - boxW / 2).coerceIn(0f, (width - boxW).coerceAtLeast(0f))
+            val gap = with(d) { 14.dp.roundToPx() }
             Column(
-                Modifier.offset { IntOffset(x.toInt(), -with(d) { (if (vm.trickImage != null) 220.dp else 70.dp).toPx() }.toInt()) }
+                // Measured without the seek bar's 32 dp height limit (which squashed the thumbnail into a thin strip:
+                // Wuuden's report), then placed so its bottom sits just above the bar.
+                Modifier.layout { m, c ->
+                    val pl = m.measure(c.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+                    layout(pl.width, 0) { pl.place(x.toInt(), -pl.height - gap) }
+                }
                     .width(288.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xF0101010)).border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(10.dp)).padding(4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -487,14 +528,13 @@ private fun LiveControls(vm: PlayerModel, playPause: FocusRequester, modifier: M
             OsdButton(Icons.ChevronLeft, { vm.channelDown() })
             OsdButton(if (vm.isPlaying) Icons.Pause else Icons.Play, { vm.togglePlay() }, big = true, focusRequester = playPause)
             OsdButton(Icons.ChevronRight, { vm.channelUp() })
+            OsdButton(Icons.Subtitles, { vm.toggleTracks() })
         }
     }
 }
 
 @Composable
-private fun UpNext(vm: PlayerModel, modifier: Modifier) {
-    val play = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { play.requestFocus() } }
+private fun UpNext(vm: PlayerModel, play: FocusRequester, modifier: Modifier) {
     Row(modifier.width(420.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xE6101010)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(150.dp, 84.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x33FFFFFF))) { NetImage(vm.upNextImage, Modifier.fillMaxSize()) }
         Column(Modifier.padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -510,10 +550,10 @@ private fun UpNext(vm: PlayerModel, modifier: Modifier) {
 
 @Composable
 private fun Badge(b: FormatBadge) {
-    val p = Nettle.colors
     Column(
         Modifier.alpha(if (b.verified) 1f else 0.8f).widthIn(max = 420.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xD90A0A0F))
-            .border(1.5.dp, if (b.verified) p.accent else Color(0x66FFFFFF), RoundedCornerShape(12.dp)).padding(16.dp, 10.dp),
+            // A plain toast border: the accent colour is the focus ring everywhere else, so it made the badge look selectable.
+            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp)).padding(16.dp, 10.dp),
         horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         T(b.label, size = 20.sp, weight = FontWeight.ExtraBold, color = White, style = Nettle.type.body.copy(letterSpacing = 1.5.sp))

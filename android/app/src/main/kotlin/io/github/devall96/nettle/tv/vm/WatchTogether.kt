@@ -61,7 +61,7 @@ class WatchTogetherModel : Page() {
     override suspend fun load() = refreshList()
     override suspend fun refresh() = refreshList()
 
-    private suspend fun refreshList() = run {
+    private suspend fun refreshList() = guarded {
         val list = sync.list()
         groups.clear()
         groups.addAll(list.filter { it.groupId != sync.group?.groupId }.map { SyncGroup(it) })

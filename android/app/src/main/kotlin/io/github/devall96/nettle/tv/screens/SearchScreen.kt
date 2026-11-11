@@ -1,5 +1,6 @@
 package io.github.devall96.nettle.tv.screens
 
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -58,7 +59,7 @@ fun SearchScreen(vm: SearchModel) {
                         Column(Modifier.padding(start = 56.dp, top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             T("Not in your library: request it", style = Nettle.type.h3)
                             KeepClear(before = 24.dp, after = 80.dp) {
-                                LazyRow(state = vm.seerrState, contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp, end = 56.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                LazyRow(Modifier.focusRestorer(), state = vm.seerrState, contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp, end = 56.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                     items(vm.seerrSuggestions, key = { it.r.mediaType + it.r.id }) { SuggestionCard(vm, it) }
                                 }
                             }

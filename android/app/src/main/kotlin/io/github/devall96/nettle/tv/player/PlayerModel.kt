@@ -88,7 +88,8 @@ class PlayerModel private constructor() {
     private var liveRetryVersion = -1
     private var lastLoad: PlayerLoad? = null
     private var reconnects = 0
-    private val RECONNECT_DELAYS_MS = longArrayOf(2000, 5000, 10000)
+    // About two minutes in all: long enough for a router or the server PC to restart, or Wi-Fi to come back.
+    private val RECONNECT_DELAYS_MS = longArrayOf(2000, 5000, 10000, 15000, 20000, 30000, 30000)
 
     // ---- what the screen shows ----
     var title by mutableStateOf("")
@@ -130,6 +131,19 @@ class PlayerModel private constructor() {
     /** Live TV shows its tuning screen while a channel or program switch has no picture yet. */
     val isTuningScreenVisible: Boolean get() = isLive && error == null && (tuning || !engine.firstFrameShown)
     var error by mutableStateOf<String?>(null)
+    /** The error is a lost connection: "Try again" reopens the video where it stopped. */
+    var canRetry by mutableStateOf(false); private set
+
+    /** One line of state for the QA audit (debug hooks only). */
+    fun qaState(): String = "playing=$isPlaying pos=${positionMs / 1000} len=${lengthMs / 1000} osd=$isOsdVisible upNext=$isUpNextVisible skip=$isSkipVisible " +
+        "tracks=$isTracksOpen pendingSeek=${pendingSeekMs != null} error=${error != null} stillWatching=$isStillWatchingVisible live=$isLive chapters=${chapters.size}"
+
+    fun retryAfterError() {
+        val again = lastLoad ?: return
+        error = null; canRetry = false; reconnects = 0; isBuffering = true
+        Log.info("retrying after a lost connection at ${lastPositionMs / 1000} s")
+        swapMedia(again.copy(startMs = if (lastPositionMs > 500) lastPositionMs else again.startMs))
+    }
     val audioTracks = mutableStateListOf<TrackOption>()
     val subtitleTracks = mutableStateListOf<TrackOption>()
     val formatBadges = mutableStateListOf<FormatBadge>()
@@ -138,6 +152,8 @@ class PlayerModel private constructor() {
     var stillWatchingDetail by mutableStateOf<String?>(null)
     var osdMessage by mutableStateOf<String?>(null)
     var chapterMarks by mutableStateOf<List<Float>>(emptyList())
+    /** The file has chapters: the controls show previous / next chapter buttons. */
+    val hasChapters get() = chapterMarks.isNotEmpty()
     private var chapters: List<Chapter> = emptyList()
     var playbackSpeed by mutableStateOf(settings.playbackSpeed.coerceIn(0.25, 3.0))
     var subtitleScale by mutableStateOf(settings.subtitleScale.coerceIn(0.5, 2.5))
@@ -248,7 +264,13 @@ class PlayerModel private constructor() {
             if (engine.frameRate <= 0f && testClipFps > 0f) engine.onFrameRate?.invoke(testClipFps)
             loadTracks()
             if (!isLipSyncCheck) scope.launch { showFormatBadges(tuneVersion, mediaGeneration) }
-            if (engine.audioUnsupported) flash("This audio can't be decoded on this TV. Turn on audio passthrough in Settings, or pick another track.", 6000)
+            if (engine.videoUnsupported) {
+                // Nettle never asks the server to convert it, so say why the picture is black instead of leaving it blank.
+                val what = engine.unsupportedVideoName ?: "this video format"
+                Log.warn("video track not decodable here: $what")
+                val result = if (engine.audioUnsupported) "or its audio, so nothing can play" else "so there's sound but no picture"
+                flash("This TV can't decode $what $result. Nettle plays files as they are and never converts them.", 9000)
+            } else if (engine.audioUnsupported) flash("This audio can't be decoded on this TV. Turn on audio passthrough in Settings, or pick another track.", 6000)
         }
         scope.launch { while (isActive) { onTick(); delay(250) } }
     }
@@ -414,8 +436,13 @@ class PlayerModel private constructor() {
             ExternalSub(AppServices.jellyfin.externalSubtitleUrl(itemId, source.id!!, it), it.displayTitle ?: it.title ?: it.language ?: "External", it.language, it.index)
         }
 
+    /** The next-episode lookup failed (server busy, Wi-Fi blip): tried again later instead of losing Up Next for the whole episode. */
+    private var nextLookupRetryAt = 0L
+    private var nextLookupFor: BaseItemDto? = null
+
     private suspend fun findNextEpisode(ep: BaseItemDto) {
         val seriesId = ep.seriesId ?: return
+        nextLookupFor = null
         try {
             // Only the neighbours of this episode, not the whole series with its media info.
             val near = AppServices.jellyfin.getAdjacentEpisodes(seriesId, ep.id).items
@@ -427,7 +454,11 @@ class PlayerModel private constructor() {
                 upNextImage = n.tag("Primary")?.let { Img.of(n.id, "Primary", it, 420) }
                 hasNext = true
             }
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.warn("couldn't look up the next episode (${e.message}); trying again later")
+            nextLookupFor = ep
+            nextLookupRetryAt = System.currentTimeMillis() + 30_000
+        }
     }
 
     private val canReport get() = item != null && !sourcePending && !isLive
@@ -594,6 +625,12 @@ class PlayerModel private constructor() {
     private fun onTick() {
         if (disposed) return
         isPlaying = engine.isPlaying
+        nextLookupFor?.let { ep ->
+            if (System.currentTimeMillis() >= nextLookupRetryAt && item?.id == ep.id && nextEpisode == null) {
+                nextLookupRetryAt = Long.MAX_VALUE
+                scope.launch { findNextEpisode(ep) }
+            }
+        }
         if (error == null && liveInterstitial == null) isBuffering = engine.isBuffering
         val now = System.currentTimeMillis()
         if (isOsdVisible && isPlaying && !isTracksOpen && !isSubtitleSearchOpen && pendingSeekMs == null && now - lastInput > 3500) isOsdVisible = false
@@ -685,6 +722,8 @@ class PlayerModel private constructor() {
     }
 
     fun dismissUpNext() { upNextDismissed = true; isUpNextVisible = false }
+    /** Back on a "Skip intro" button: hide it for this segment (the video carries on). */
+    fun dismissSkip() { currentSkip?.let { dismissedSegment = it }; isSkipVisible = false }
 
     // ===================== "Are you still watching?" =====================
 
@@ -799,7 +838,10 @@ class PlayerModel private constructor() {
             return
         }
         isBuffering = false
-        error = if (!isLive) "Playback failed ($reason). The file may be unreachable from this TV, or use a format this TV can't decode."
+        // Every reconnect failed with no answer from the server: that's the network or the server, not the file.
+        canRetry = !isLive && again != null && (status == null || status in listOf(408, 502, 503, 504))
+        error = if (canRetry) "Lost the connection to your Jellyfin server. Check that this TV is online and the server is running, then try again: it picks up where it stopped."
+        else if (!isLive) "Playback failed ($reason). The file may be unreachable from this TV, or use a format this TV can't decode."
         else if (isLiveDirect) "This program couldn't be loaded from your Jellyfin server."
         else "This channel couldn't be played. Check that NostalgiaTV is running."
         Log.warn("playback error shown: $error")
@@ -1112,6 +1154,10 @@ class PlayerModel private constructor() {
             val label = (hdr ?: when (signal) { "dovi" -> "Dolby Vision"; "hlg" -> "HLG"; else -> "HDR10" }).uppercase()
             when {
                 signal == "dovi" && caps.dolbyVision -> badges += FormatBadge("DOLBY VISION", "Dolby Vision sent to your TV", true)
+                // The box decodes Dolby Vision itself and converts it for a TV that only takes HDR10 / HDR10+
+                // (the onn did, and the bedroom TV showed HDR10+), so this is HDR, not the SDR the fallback warned about.
+                signal == "dovi" && (caps.hdr10Plus || caps.hdr10) -> badges += FormatBadge(if (caps.hdr10Plus) "HDR10+" else "HDR10",
+                    "Dolby Vision, converted by this TV box: your TV doesn't take Dolby Vision", true)
                 signal == "pq" && hdr?.startsWith("Dolby") == true && caps.hdr10 ->
                     badges += FormatBadge("HDR10", "Your TV doesn't take Dolby Vision, so its HDR10 layer is sent instead", true)
                 signal == "pq" && caps.hdr10 -> badges += FormatBadge(if (label == "HDR10+" && caps.hdr10Plus) "HDR10+" else "HDR10",
@@ -1235,7 +1281,7 @@ class PlayerModel private constructor() {
     private suspend fun loadTrickplay(itemId: String, sourceId: String) {
         trick = null
         trickSheets.clear(); trickLoading.clear()
-        trickImage = null
+        trickImage = null; trickTileAspect = 0f
         val all = AppServices.jellyfin.getTrickplay(itemId)
         if (item?.id != itemId) return
         val layouts = all?.get(sourceId) ?: all?.values?.firstOrNull()
@@ -1264,11 +1310,16 @@ class PlayerModel private constructor() {
             val bmp = trickSheets.remove(sheet)
             trickSheets[sheet] = bmp // most recently used last
             if (bmp == null) { trickImage = null; return }
-            val x = k % info.tileWidth * info.width
-            val y = k / info.tileWidth * info.height
-            if (x + info.width > bmp.width || y + info.height > bmp.height) { trickImage = null; return }
+            // Tile size measured from the sheet itself, not the server's width / height: those can disagree with the
+            // real tiles (Wuuden's 4K AV1 film showed a thin strip), and the TV may decode a big sheet smaller.
+            val (w, h) = tileSize(bmp, info, sheet)
+            if (w <= 0 || h <= 0) { trickImage = null; return }
+            val x = k % info.tileWidth * w
+            val y = k / info.tileWidth * h
+            if (x + w > bmp.width || y + h > bmp.height) { trickImage = null; return }
+            trickAspect = w.toFloat() / h
             trickImage = bmp
-            trickRect = android.graphics.Rect(x, y, x + info.width, y + info.height)
+            trickRect = android.graphics.Rect(x, y, x + w, y + h)
             return
         }
         if (trickLoading.add(sheet)) scope.launch { loadTrickSheet(t.first, t.second, info, sheet) }
@@ -1286,6 +1337,32 @@ class PlayerModel private constructor() {
         trickSheets[sheet] = bmp
         trickLoading.remove(sheet)
         if (trickWantedMs >= 0) showTrickplay(trickWantedMs)
+    }
+
+    /** Tile shape seen on a full sheet, used to read the last (partly filled) sheet the same way. */
+    private var trickTileAspect = 0f
+
+    /**
+     * One thumbnail's size in [bmp]. A full sheet is exactly tileWidth × tileHeight thumbnails. The last sheet is padded
+     * to the full grid by current Jellyfin but may be only as big as its thumbnails on older servers: whichever reading
+     * gives the same shape as the full sheets (or the video) wins.
+     */
+    private fun tileSize(bmp: Bitmap, info: TrickplayInfo, sheet: Int): Pair<Int, Int> {
+        val perSheet = info.tileWidth * info.tileHeight
+        val inSheet = minOf(perSheet, info.thumbnailCount - sheet * perSheet).coerceAtLeast(1)
+        val full = bmp.width / info.tileWidth to bmp.height / info.tileHeight
+        if (inSheet >= perSheet) {
+            if (full.second > 0) trickTileAspect = full.first.toFloat() / full.second
+            return full
+        }
+        val cols = minOf(info.tileWidth, inSheet)
+        val rows = (inSheet + info.tileWidth - 1) / info.tileWidth
+        val tight = bmp.width / cols to bmp.height / rows
+        val want = trickTileAspect.takeIf { it > 0f }
+            ?: (engine.videoWidth.toFloat() / engine.videoHeight).takeIf { engine.videoHeight > 0 }
+            ?: (info.width.toFloat() / maxOf(1, info.height))
+        fun off(t: Pair<Int, Int>) = if (t.second <= 0) Float.MAX_VALUE else kotlin.math.abs(t.first.toFloat() / t.second - want)
+        return if (off(full) <= off(tight)) full else tight
     }
 
     fun hideTrickplay() { trickWantedMs = -1; trickImage = null; trickTime = "" }

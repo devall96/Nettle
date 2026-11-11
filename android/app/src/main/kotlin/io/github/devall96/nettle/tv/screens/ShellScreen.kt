@@ -1,5 +1,7 @@
 package io.github.devall96.nettle.tv.screens
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -57,7 +59,7 @@ fun ShellScreen(shell: Shell) {
         // Back button (floating). The remote's Back key does this on TV, so it isn't a focus stop.
         if (shell.canGoBack) Box(
             Modifier.padding(start = 100.dp, top = 36.dp).zIndex(5f).padding(10.dp),
-        ) { Icon(Icons.Back, tint = Color.White) }
+        ) { Icon(Icons.Back, tint = if (Nettle.colors.isLight) Nettle.colors.text else Color.White) }
 
         // Navigation rail
         Box(
@@ -126,7 +128,8 @@ private fun NavButton(item: NavItem, selected: Boolean, labelAlpha: () -> Float,
 @Composable
 private fun RailButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean, labelAlpha: () -> Float,
                        requester: FocusRequester? = null, onClick: () -> Unit) {
-    NButton(onClick, Modifier.fillMaxWidth().padding(vertical = 2.dp), ButtonKind.Nav, selected = selected, focusRequester = requester) { fg ->
+    // The label is clipped away while the menu is collapsed, so screen readers would get an unnamed icon: name it here.
+    NButton(onClick, Modifier.fillMaxWidth().padding(vertical = 2.dp).semantics { contentDescription = label }, ButtonKind.Nav, selected = selected, focusRequester = requester) { fg ->
         Icon(icon, tint = fg)
         Spacer(Modifier.width(18.dp))
         BT(label, Modifier.width(150.dp).graphicsLayer { alpha = labelAlpha() }, size = 15.sp)

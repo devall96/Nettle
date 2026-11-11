@@ -80,12 +80,13 @@ fun SettingsScreen(vm: SettingsModel) {
                         "in their film (24 Hz) mode only, so each rate keeps its own value." +
                         (if (offsets.isEmpty()) "" else " Now: " +
                             offsets.joinToString(", ") { pr -> "${if (pr.second > 0) "+" else "−"}${kotlin.math.abs(pr.second)} ms at ${pr.first} Hz" })
-                    ActionRow("Lip sync check", lipSyncHint, { io.github.devall96.nettle.tv.vm.Main.playLipSyncCheck(films = false) }) {
+                    // These two leave Settings for the player: remembered, so closing the check comes back to the same row.
+                    ActionRow("Lip sync check", lipSyncHint, { io.github.devall96.nettle.tv.vm.Main.playLipSyncCheck(films = false) }, Modifier.rememberFocus(vm, "lipsync")) {
                         T("Usual rate ›", weight = FontWeight.SemiBold)
                     }
                     if (vm.frameRate != io.github.devall96.nettle.core.models.FrameRateMatching.Off)
                         ActionRow("Lip sync check for films (24 Hz)", "The same check with the TV switched to its film mode, as for movies.",
-                            { io.github.devall96.nettle.tv.vm.Main.playLipSyncCheck(films = true) }) { T("Films ›", weight = FontWeight.SemiBold) }
+                            { io.github.devall96.nettle.tv.vm.Main.playLipSyncCheck(films = true) }, Modifier.rememberFocus(vm, "lipsync24")) { T("Films ›", weight = FontWeight.SemiBold) }
                     PhotosensitivityWarning()
                     DropdownRow("Match frame rate", "Switches the TV to the video's frame rate (24p films without judder), and optionally its resolution",
                         vm.frameRateChoices, vm.frameRateChoices.first { it.value == vm.frameRate }, { vm.changeFrameRate(it.value) }, { it.label })

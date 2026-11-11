@@ -107,7 +107,7 @@ class LiveTvModel : Page() {
     private suspend fun loadGuide(force: Boolean) {
         notConfigured = !AppServices.ntv.isConfigured
         if (notConfigured) return
-        run {
+        guarded {
             // Everything NostalgiaTV publishes; cached for a few minutes, so coming back is instant.
             val all = AppServices.ntv.loadGuide(14, force)
             // Channels with nothing scheduled are hidden.

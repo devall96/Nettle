@@ -60,7 +60,7 @@ class SearchModel : Page() {
             }
             val term = text.trim()
             launch { searchSeerr(term) }
-            run {
+            guarded {
                 // One query per kind, in parallel: a single mixed query lets a common word fill the
                 // whole limit with episodes and push every movie and show out of the results.
                 val built = ArrayList<CardRow>()

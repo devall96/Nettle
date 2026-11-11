@@ -1,5 +1,6 @@
 package io.github.devall96.nettle.tv.screens
 
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -81,7 +82,7 @@ fun RequestsScreen(vm: RequestsModel) {
                         Column(Modifier.padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             T("My Requests", Modifier.padding(start = 56.dp), style = Nettle.type.h3)
                             KeepClear(before = 80.dp, after = 80.dp) {
-                                LazyRow(state = vm.myState, contentPadding = PaddingValues(start = 56.dp, top = 6.dp, end = 56.dp, bottom = 10.dp),
+                                LazyRow(Modifier.focusRestorer(), state = vm.myState, contentPadding = PaddingValues(start = 56.dp, top = 6.dp, end = 56.dp, bottom = 10.dp),
                                     horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                     items(vm.myRequests, key = { it.key }) { MyRequestView(vm, it) }
                                 }
@@ -92,7 +93,7 @@ fun RequestsScreen(vm: RequestsModel) {
                         Column(Modifier.padding(bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             T(row.title, Modifier.padding(start = 56.dp), style = Nettle.type.h3)
                             KeepClear(before = 80.dp, after = 80.dp) {
-                                LazyRow(state = vm.rowStates.getOrPut(row.title) { io.github.devall96.nettle.tv.vm.tvListState() },
+                                LazyRow(Modifier.focusRestorer(), state = vm.rowStates.getOrPut(row.title) { io.github.devall96.nettle.tv.vm.tvListState() },
                                     contentPadding = PaddingValues(start = 56.dp, top = 10.dp, end = 56.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                                     items(row.items, key = { it.result.mediaType + it.result.id }) { SeerrCardView(vm, it) }
                                 }

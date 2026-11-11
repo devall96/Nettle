@@ -98,9 +98,11 @@ class DetailsModel(private val itemId: String, private val preferSeasonId: Strin
     val similarState = io.github.devall96.nettle.tv.vm.tvListState()
     val seasonState = io.github.devall96.nettle.tv.vm.tvListState()
 
-    override suspend fun load() = run { loadCore(refresh = false) }
+    override suspend fun load() = guarded { loadCore(refresh = false) }
+    /** "Try again" after the item itself failed to load. */
+    fun retry() { scope.launch { load() } }
     // Coming back (e.g. from the player): update watched state and progress, keep the picked season.
-    override suspend fun refresh() = run(showBusy = false) { loadCore(refresh = true) }
+    override suspend fun refresh() = guarded(showBusy = false) { loadCore(refresh = true) }
 
     private suspend fun loadCore(refresh: Boolean) = coroutineScope {
         val jf = AppServices.jellyfin
