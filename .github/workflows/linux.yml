@@ -41,7 +41,10 @@ jobs:
         run: echo "version=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)" >> "$GITHUB_OUTPUT"
 
       - name: Install libmpv (to bundle) and FFmpeg (to make test clips)
+        timeout-minutes: 15
         run: |
+          # Runners' default Azure mirror stopped resolving on 2026-11-11 and apt retried for an hour: use Ubuntu's own.
+          echo 'http://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libmpv2 ffmpeg
 
@@ -95,7 +98,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
       - name: Tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb imagemagick desktop-file-utils
+        timeout-minutes: 15
+        run: echo 'http://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null && sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb imagemagick desktop-file-utils
       - name: Extract AppImage
         run: |
           chmod +x releases-linux/*.AppImage
