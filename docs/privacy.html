@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nettle privacy policy</title>
+  <meta name="description" content="Nettle collects nothing. It only connects to the servers you enter.">
+  <link rel="icon" href="images/nettle-icon.png">
+  <!-- No web fonts, scripts or anything else loaded from another site: this page contacts nobody but its own host. -->
+  <style>
+    :root {
+      /* Deep Sea, Nettle's default theme (same colours as the download page). */
+      --bg: #07101c; --bg-alt: #0c1828; --surface: #102036; --border: #1f3a5c;
+      --text: #eaf6ff; --muted: #8ca6c2; --accent: #38bdf8; --accent-2: #22d3ee;
+      color-scheme: dark;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #eaf5ff; --bg-alt: #f3f9ff; --surface: #ffffff; --border: #c7e1fb;
+        --text: #0d2a4a; --muted: #4f6b8a; --accent: #1f86ec; --accent-2: #4fa8ff;
+        color-scheme: light;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.6;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+    header { padding: 44px 0 8px; }
+    .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+    .logo { width: 44px; height: 44px; flex: none; display: block; }
+    .brand span { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; }
+    h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.1; letter-spacing: -1px; margin: 28px 0 6px; }
+    .date { color: var(--muted); font-size: 14px; margin: 0; }
+    .summary {
+      margin: 26px 0 0; padding: 18px 20px; font-size: 17px;
+      background: var(--surface); border: 1px solid var(--accent); border-radius: 16px;
+    }
+    h2 { font-size: 21px; letter-spacing: -0.3px; margin: 38px 0 8px; }
+    p, li { color: var(--muted); }
+    p { margin: 10px 0; }
+    ul { margin: 10px 0; padding-left: 22px; }
+    li { margin: 6px 0; }
+    li::marker { color: var(--accent); }
+    b { color: var(--text); font-weight: 600; }
+    a { color: var(--accent); }
+    a:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: 4px; }
+    footer { margin: 44px 0 40px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+    footer a { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="brand" href="./">
+        <img class="logo" src="images/nettle-icon.png" alt="" width="44" height="44">
+        <span>Nettle</span>
+      </a>
+      <h1>Privacy policy</h1>
+      <p class="date">Last updated 11 November 2026. Applies to Nettle for Windows (including the Microsoft Store copy), Linux and Android TV.</p>
+    </header>
+
+    <main>
+      <p class="summary"><b>Nettle collects nothing.</b> It has no telemetry, analytics, crash reporting, ads, tracking or accounts of its own. The people who make Nettle never receive any information about you or what you watch.</p>
+
+      <h2>What Nettle connects to</h2>
+      <p>Nettle only contacts the servers you set up yourself:</p>
+      <ul>
+        <li><b>Your Jellyfin server</b>, at the address you enter. This includes a live connection, so other Jellyfin apps can control Nettle and changes show up straight away.</li>
+        <li><b>Your NostalgiaTV and Seerr servers</b>, if you use them. Right after you sign in, Nettle looks for them on your Jellyfin server's own machine (ports 19850 and 5055) to set them up for you. It never looks on any other machine.</li>
+        <li><b>Your local network</b>, when the sign-in screen searches for Jellyfin servers near you.</li>
+        <li><b>TMDB</b>, only if you turn on "Load posters directly from TMDB". It is off by default, and posters then come through your own Seerr server.</li>
+        <li><b>An update source</b>, only in copies that update themselves (the Windows installer, the Linux AppImage and the Android TV app), and only when you check for updates or turn on automatic checks. By default this is Nettle's page on GitHub.</li>
+      </ul>
+
+      <h2>What your own servers receive</h2>
+      <p>To work as a Jellyfin client, Nettle sends your server what any Jellyfin app sends: the user name and password you type, what you play and how far you got, and a device name. The device name is always "Nettle (Windows)", "Nettle (Linux)" or "Nettle (Android TV)", never the name of your PC or TV. This goes to your server only, and what that server keeps is up to whoever runs it.</p>
+
+      <h2>What is stored on your device</h2>
+      <ul>
+        <li><b>Settings and saved sign-ins.</b> Sign-in tokens are encrypted with your operating system's own protection (Windows data protection, the Linux keyring, the Android keystore), so only your user account on that device can read them.</li>
+        <li><b>An image cache</b> of posters and artwork from your servers.</li>
+        <li><b>Diagnostic logs</b>, with sign-in tokens masked. They stay on your device and are never sent anywhere; you choose whether to attach one to a bug report.</li>
+      </ul>
+      <p>Deleting Nettle's data folder removes all of it. Uninstalling the Android TV app, or a Microsoft Store copy that was installed fresh, removes it too.</p>
+
+      <h2>The Microsoft Store copy</h2>
+      <p>If you install Nettle from the Microsoft Store, Windows and the Store install and update it. Nettle's own updater is switched off in that copy.</p>
+      <p>Microsoft, not Nettle, may record information about Store apps, such as installs, and crash and usage reports if your Windows diagnostic settings allow them. Microsoft shows the publisher of an app totals from this (for example, how many installs or crashes there were), never who you are. This is covered by <a href="https://privacy.microsoft.com/privacystatement">Microsoft's privacy statement</a> and controlled in Windows Settings under Privacy &amp; security.</p>
+
+      <h2>Children</h2>
+      <p>Nettle collects no information from anyone, children included. What can be watched depends entirely on the server you connect it to.</p>
+
+      <h2>Changes and contact</h2>
+      <p>If this policy changes, the new version appears on this page with a new date. Nettle is open source, so you can check every claim here in <a href="https://github.com/devall96/Nettle">its source code</a>. Questions go to <a href="https://github.com/devall96/Nettle/issues">Nettle's issue tracker on GitHub</a>.</p>
+    </main>
+
+    <footer>
+      <a href="./">Download Nettle</a>
+      <a href="https://github.com/devall96/Nettle">Source code</a>
+      <a href="https://github.com/devall96/Nettle/issues">Report a bug</a>
+      <span>Nettle is not affiliated with Jellyfin.</span>
+    </footer>
+  </div>
+</body>
+</html>
