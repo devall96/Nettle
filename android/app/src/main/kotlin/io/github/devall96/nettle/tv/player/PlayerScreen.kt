@@ -31,6 +31,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -411,23 +412,24 @@ private fun VodControls(vm: PlayerModel, seekBar: FocusRequester, playPause: Foc
         Row(verticalAlignment = Alignment.CenterVertically) {
             T(vm.positionText, Modifier.padding(end = 14.dp), weight = FontWeight.SemiBold, color = White)
             SeekBar(vm, seekBar, Modifier.weight(1f))
+            // Time left, with when it ends right next to it.
             T(vm.remainingText, Modifier.padding(start = 14.dp), weight = FontWeight.SemiBold, color = White)
+            vm.endsAtText?.let { T(it, Modifier.padding(start = 10.dp).alpha(0.7f), color = White) }
         }
+        // One row, so Left / Right reach every control: chapter and seek buttons around Play, Next episode beside them,
+        // and subtitles / audio at the right end, under the time. No volume control: the remote sets the TV's (or
+        // receiver's) own volume, and a second one in the app only made things quieter by surprise.
         Box(Modifier.fillMaxWidth()) {
-            Row(Modifier.align(Alignment.CenterStart), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                // No volume control: the remote sets the TV's (or receiver's) own volume, and a second one in the
-                // app only made things quieter by surprise.
-                vm.endsAtText?.let { T(it, Modifier.padding(start = 16.dp).alpha(0.7f), color = White) }
-            }
             Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                 val step = AppServices.settings.current.playback.seekStepSeconds
+                if (vm.hasChapters) OsdButton(Icons.SkipPrevious, { vm.previousChapter() })
                 OsdButton(Icons.Rewind, { vm.seekBy(-step) })
                 OsdButton(if (vm.isPlaying) Icons.Pause else Icons.Play, { vm.togglePlay() }, big = true, focusRequester = playPause)
                 OsdButton(Icons.Forward, { vm.seekBy(step) })
-                // Next and subtitles / audio sit in the same row, so Left / Right reach every control.
-                if (vm.hasNext) OsdButton(Icons.SkipNext, { vm.playNext() })
-                OsdButton(Icons.Subtitles, { vm.toggleTracks() })
+                if (vm.hasChapters) OsdButton(Icons.SkipNext, { vm.nextChapter() })
+                if (vm.hasNext) OsdButton(Icons.NextEpisode, { vm.playNext() })
             }
+            Box(Modifier.align(Alignment.CenterEnd)) { OsdButton(Icons.Subtitles, { vm.toggleTracks() }) }
         }
     }
 }
@@ -476,8 +478,14 @@ private fun SeekBar(vm: PlayerModel, requester: FocusRequester, modifier: Modifi
             val d = LocalDensity.current
             val boxW = with(d) { 288.dp.toPx() }
             val x = (width * frac - boxW / 2).coerceIn(0f, (width - boxW).coerceAtLeast(0f))
+            val gap = with(d) { 14.dp.roundToPx() }
             Column(
-                Modifier.offset { IntOffset(x.toInt(), -with(d) { (if (vm.trickImage != null) 220.dp else 70.dp).toPx() }.toInt()) }
+                // Measured without the seek bar's 32 dp height limit (which squashed the thumbnail into a thin strip:
+                // Wuuden's report), then placed so its bottom sits just above the bar.
+                Modifier.layout { m, c ->
+                    val pl = m.measure(c.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+                    layout(pl.width, 0) { pl.place(x.toInt(), -pl.height - gap) }
+                }
                     .width(288.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xF0101010)).border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(10.dp)).padding(4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -542,10 +550,10 @@ private fun UpNext(vm: PlayerModel, play: FocusRequester, modifier: Modifier) {
 
 @Composable
 private fun Badge(b: FormatBadge) {
-    val p = Nettle.colors
     Column(
         Modifier.alpha(if (b.verified) 1f else 0.8f).widthIn(max = 420.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xD90A0A0F))
-            .border(1.5.dp, if (b.verified) p.accent else Color(0x66FFFFFF), RoundedCornerShape(12.dp)).padding(16.dp, 10.dp),
+            // A plain toast border: the accent colour is the focus ring everywhere else, so it made the badge look selectable.
+            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp)).padding(16.dp, 10.dp),
         horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         T(b.label, size = 20.sp, weight = FontWeight.ExtraBold, color = White, style = Nettle.type.body.copy(letterSpacing = 1.5.sp))

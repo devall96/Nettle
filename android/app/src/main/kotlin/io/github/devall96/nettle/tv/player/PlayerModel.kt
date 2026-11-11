@@ -136,7 +136,7 @@ class PlayerModel private constructor() {
 
     /** One line of state for the QA audit (debug hooks only). */
     fun qaState(): String = "playing=$isPlaying pos=${positionMs / 1000} len=${lengthMs / 1000} osd=$isOsdVisible upNext=$isUpNextVisible skip=$isSkipVisible " +
-        "tracks=$isTracksOpen pendingSeek=${pendingSeekMs != null} error=${error != null} stillWatching=$isStillWatchingVisible live=$isLive"
+        "tracks=$isTracksOpen pendingSeek=${pendingSeekMs != null} error=${error != null} stillWatching=$isStillWatchingVisible live=$isLive chapters=${chapters.size}"
 
     fun retryAfterError() {
         val again = lastLoad ?: return
@@ -152,6 +152,8 @@ class PlayerModel private constructor() {
     var stillWatchingDetail by mutableStateOf<String?>(null)
     var osdMessage by mutableStateOf<String?>(null)
     var chapterMarks by mutableStateOf<List<Float>>(emptyList())
+    /** The file has chapters: the controls show previous / next chapter buttons. */
+    val hasChapters get() = chapterMarks.isNotEmpty()
     private var chapters: List<Chapter> = emptyList()
     var playbackSpeed by mutableStateOf(settings.playbackSpeed.coerceIn(0.25, 3.0))
     var subtitleScale by mutableStateOf(settings.subtitleScale.coerceIn(0.5, 2.5))
@@ -1275,7 +1277,7 @@ class PlayerModel private constructor() {
     private suspend fun loadTrickplay(itemId: String, sourceId: String) {
         trick = null
         trickSheets.clear(); trickLoading.clear()
-        trickImage = null
+        trickImage = null; trickTileAspect = 0f
         val all = AppServices.jellyfin.getTrickplay(itemId)
         if (item?.id != itemId) return
         val layouts = all?.get(sourceId) ?: all?.values?.firstOrNull()
@@ -1304,11 +1306,16 @@ class PlayerModel private constructor() {
             val bmp = trickSheets.remove(sheet)
             trickSheets[sheet] = bmp // most recently used last
             if (bmp == null) { trickImage = null; return }
-            val x = k % info.tileWidth * info.width
-            val y = k / info.tileWidth * info.height
-            if (x + info.width > bmp.width || y + info.height > bmp.height) { trickImage = null; return }
+            // Tile size measured from the sheet itself, not the server's width / height: those can disagree with the
+            // real tiles (Wuuden's 4K AV1 film showed a thin strip), and the TV may decode a big sheet smaller.
+            val (w, h) = tileSize(bmp, info, sheet)
+            if (w <= 0 || h <= 0) { trickImage = null; return }
+            val x = k % info.tileWidth * w
+            val y = k / info.tileWidth * h
+            if (x + w > bmp.width || y + h > bmp.height) { trickImage = null; return }
+            trickAspect = w.toFloat() / h
             trickImage = bmp
-            trickRect = android.graphics.Rect(x, y, x + info.width, y + info.height)
+            trickRect = android.graphics.Rect(x, y, x + w, y + h)
             return
         }
         if (trickLoading.add(sheet)) scope.launch { loadTrickSheet(t.first, t.second, info, sheet) }
@@ -1326,6 +1333,32 @@ class PlayerModel private constructor() {
         trickSheets[sheet] = bmp
         trickLoading.remove(sheet)
         if (trickWantedMs >= 0) showTrickplay(trickWantedMs)
+    }
+
+    /** Tile shape seen on a full sheet, used to read the last (partly filled) sheet the same way. */
+    private var trickTileAspect = 0f
+
+    /**
+     * One thumbnail's size in [bmp]. A full sheet is exactly tileWidth × tileHeight thumbnails. The last sheet is padded
+     * to the full grid by current Jellyfin but may be only as big as its thumbnails on older servers: whichever reading
+     * gives the same shape as the full sheets (or the video) wins.
+     */
+    private fun tileSize(bmp: Bitmap, info: TrickplayInfo, sheet: Int): Pair<Int, Int> {
+        val perSheet = info.tileWidth * info.tileHeight
+        val inSheet = minOf(perSheet, info.thumbnailCount - sheet * perSheet).coerceAtLeast(1)
+        val full = bmp.width / info.tileWidth to bmp.height / info.tileHeight
+        if (inSheet >= perSheet) {
+            if (full.second > 0) trickTileAspect = full.first.toFloat() / full.second
+            return full
+        }
+        val cols = minOf(info.tileWidth, inSheet)
+        val rows = (inSheet + info.tileWidth - 1) / info.tileWidth
+        val tight = bmp.width / cols to bmp.height / rows
+        val want = trickTileAspect.takeIf { it > 0f }
+            ?: (engine.videoWidth.toFloat() / engine.videoHeight).takeIf { engine.videoHeight > 0 }
+            ?: (info.width.toFloat() / maxOf(1, info.height))
+        fun off(t: Pair<Int, Int>) = if (t.second <= 0) Float.MAX_VALUE else kotlin.math.abs(t.first.toFloat() / t.second - want)
+        return if (off(full) <= off(tight)) full else tight
     }
 
     fun hideTrickplay() { trickWantedMs = -1; trickImage = null; trickTime = "" }

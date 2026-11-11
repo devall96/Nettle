@@ -36,6 +36,8 @@ object Icons {
     val SkipNext get() = icon("SkipNext", "M16,18H18V6H16M6,18L14.5,12L6,6V18Z")
     val Shuffle get() = icon("Shuffle", "M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z")
     val SkipPrevious get() = icon("SkipPrevious", "M6,18V6H8V18H6M9.5,12L18,6V18L9.5,12Z")
+    /** Next episode (a list with a play arrow), so it isn't mistaken for the chapter skip buttons. */
+    val NextEpisode get() = icon("NextEpisode", "M19,9H2V11H19V9M19,5H2V7H19V5M2,15H15V13H2V15M17,13V19L22,16L17,13Z")
     val Rewind get() = icon("Rewind", "M11.5,12L20,18V6M11,18V6L2.5,12L11,18Z")
     val Forward get() = icon("Forward", "M13,6V18L21.5,12M4,18L12.5,12L4,6V18Z")
     val Subtitles get() = icon("Subtitles", "M20,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6A2,2 0 0,0 20,4M4,12H8V14H4V12M14,18H4V16H14V18M20,18H16V16H20V18M20,14H10V12H20V14Z")
