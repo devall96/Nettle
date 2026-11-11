@@ -57,6 +57,8 @@ class Query {
 
     companion object {
         /** Like .NET's Uri.EscapeDataString (RFC 3986: spaces as %20, not '+'). */
-        fun escape(s: String): String = URLEncoder.encode(s, Charsets.UTF_8).replace("+", "%20").replace("%7E", "~").replace("*", "%2A")
+        // The (String, String) form on purpose: encode(String, Charset) only exists from Android 13 (API 33),
+        // and calling it crashed every request with a query on Android 9 to 12.
+        fun escape(s: String): String = URLEncoder.encode(s, "UTF-8").replace("+", "%20").replace("%7E", "~").replace("*", "%2A")
     }
 }

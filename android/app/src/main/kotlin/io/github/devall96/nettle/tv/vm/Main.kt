@@ -41,7 +41,29 @@ object Main {
         applySettings()
         // Any request answered with 401 while signed in means the session is gone.
         AppServices.jellyfin.onSessionRejected = { scope.launch { sessionExpired(null) } }
+        // Closed unexpectedly last time: say why first, instead of going straight back to the screen that failed.
+        val crash = io.github.devall96.nettle.tv.platform.CrashLog.pending()
+        if (crash != null) {
+            Log.warn("the last run closed unexpectedly; showing why")
+            replaceRoot(CrashModel(crash))
+            isStarting = false
+            return
+        }
+        startNormally(autoResume = true)
+    }
+
+    /** The usual start. [autoResume] false (from the "closed unexpectedly" screen): stop at the profiles / sign-in screen. */
+    fun startNormally(autoResume: Boolean) {
+        isStarting = true
         scope.launch {
+            if (!autoResume) {
+                // Reading the saved sign-ins may be the very thing that failed: don't let it stop this way out.
+                runCatching { AppServices.loadIntegrations() }
+                runCatching { AppServices.accounts.load() }
+                showAccountPicker()
+                isStarting = false
+                return@launch
+            }
             // Saved sign-ins and the integrations' keys are decrypted in parallel, off the main thread.
             val integrations = async { AppServices.loadIntegrations() }
             AppServices.accounts.load()

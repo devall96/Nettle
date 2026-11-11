@@ -90,6 +90,8 @@ object DevHooks {
             return
         }
         if (!BuildConfig.DEBUG) return
+        // --es crash 1: closes the app with an unhandled error after a moment (tests the "closed unexpectedly" screen).
+        intent.getStringExtra("crash")?.let { AppServices.scope.launch { delay(1500); throw IllegalStateException("Test crash from the dev hook") } }
         // --es server https://demo.jellyfin.org/stable [--es user demo]: a test sign-in (empty password, not saved).
         intent.getStringExtra("server")?.let { server -> AppServices.scope.launch { devSignIn(server, intent.getStringExtra("user") ?: "demo") } }
         // --es syncplay create:NAME or join:NAME [--es syncscript pause@10,play@16,seek:300@22]

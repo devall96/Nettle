@@ -13,3 +13,9 @@
 -keepclasseswithmembers class io.github.devall96.nettle.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# Keep real class, method and file names (the code is open source anyway), so the "Nettle closed
+# unexpectedly" screen and logcat show where an error happened instead of "a.b.c". Unused code is
+# still removed and the rest still optimised.
+-dontobfuscate
+-keepattributes SourceFile,LineNumberTable

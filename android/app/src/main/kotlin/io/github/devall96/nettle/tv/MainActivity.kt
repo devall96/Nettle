@@ -30,6 +30,8 @@ import io.github.devall96.nettle.tv.vm.*
 class NettleApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // First, so an error while starting up is remembered too.
+        io.github.devall96.nettle.tv.platform.CrashLog.install(this, BuildConfig.VERSION_NAME)
         AppServices.init(this)
     }
 }
@@ -147,6 +149,7 @@ private fun RootScreen(root: ViewModelBase?) {
         is ServerSelectModel -> ServerSelectScreen(root)
         is LoginModel -> LoginScreen(root)
         is Shell -> ShellScreen(root)
+        is CrashModel -> CrashScreen(root)
         else -> {}
     }
 }
