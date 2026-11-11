@@ -266,13 +266,17 @@ fun TvTextField(
     val active = focused || fieldFocused
     val style = Nettle.type.body.copy(fontSize = fontSize.sp, color = p.text)
 
+    var refocus by remember { mutableStateOf(false) }
     LaunchedEffect(editing) {
         if (editing) { field.requestFocus(); keyboard?.show() }
+        // The box only takes focus again once it is clickable again, i.e. after this recomposition;
+        // asking straight away failed and focus fell through to the side menu.
+        else if (refocus) { refocus = false; focusRequester.requestFocus() }
     }
     fun stop(submit: Boolean) {
+        refocus = true
         editing = false
         keyboard?.hide()
-        focusRequester.requestFocus()
         if (submit) onSubmit()
     }
 
