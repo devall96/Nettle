@@ -78,7 +78,8 @@ public sealed partial class SettingsViewModel : PageViewModel
 
     protected override async Task LoadAsync()
     {
-        SeerrApiKey = await AppServices.Secure.GetAsync("seerr.apikey") ?? "";
+        await AppServices.SeerrReady;
+        SeerrApiKey = await AppServices.Secure.GetAsync(Core.Api.SeerrClient.ApiKeySecret(AppServices.Session.Current?.Id)) ?? "";
         NtvApiKey = await AppServices.Secure.GetAsync("ntv.apikey") ?? "";
         if (AppServices.Seerr.IsConfigured) SeerrStatus = "Connected";
         if (AppServices.Ntv.IsConfigured) NtvStatus = "Configured";
@@ -199,6 +200,10 @@ public sealed partial class SettingsViewModel : PageViewModel
         }
     }
 
+    /// <summary>Windows: HDR on for HDR videos and off for SDR ones, like a TV.</summary>
+    public bool ShowHdrMatching => !Profile.IsTv && AppServices.Window?.SupportsHdrSwitching == true;
+    public bool MatchHdrToVideo { get => S.MatchHdrToVideo; set { S.MatchHdrToVideo = value; Save(); OnPropertyChanged(); } }
+
     public string SecureStoreText => AppServices.Profile.SecureStoreText;
     public PlatformProfile Profile => AppServices.Profile;
     public string DirectPlayText => $"Nettle always direct-plays the original file with {Profile.EngineName}. It never asks your server to transcode or remux, so quality is untouched and server CPU stays idle.";
@@ -296,8 +301,7 @@ public sealed partial class SettingsViewModel : PageViewModel
             Save();
             if (url == null)
             {
-                await AppServices.Secure.RemoveAsync("seerr.apikey");
-                await AppServices.Secure.RemoveAsync("seerr.cookie");
+                await AppServices.SaveSeerrSecretsAsync(null, null);
                 AppServices.Seerr.Configure(null, null, null);
                 SeerrStatus = "Removed";
                 return;
@@ -307,14 +311,12 @@ public sealed partial class SettingsViewModel : PageViewModel
             {
                 await AppServices.Seerr.SignInWithJellyfinAsync(url, SeerrUser.Trim(), SeerrPassword);
                 SeerrPassword = "";
-                var cookie = AppServices.Seerr.SessionCookie;
-                if (cookie != null) await AppServices.Secure.SetAsync("seerr.cookie", cookie);
-                await AppServices.Secure.RemoveAsync("seerr.apikey");
+                await AppServices.SaveSeerrSecretsAsync(null, AppServices.Seerr.SessionCookie);
                 SeerrApiKey = "";
             }
             else
             {
-                await AppServices.Secure.SetAsync("seerr.apikey", SeerrApiKey.Trim());
+                await AppServices.SaveSeerrSecretsAsync(SeerrApiKey.Trim(), null);
                 AppServices.Seerr.Configure(url, SeerrApiKey, null);
             }
             var me = await AppServices.Seerr.GetMeAsync();

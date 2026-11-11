@@ -58,6 +58,21 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
             return if (isIp) listOf(withPort, bare) else listOf(bare, withPort)
         }
 
+        /** The general broadcast address plus each active IPv4 network's own (e.g. 192.168.1.255). */
+        private fun broadcastAddresses(): List<InetAddress> {
+            val list = mutableListOf<InetAddress>(InetAddress.getByAddress(byteArrayOf(-1, -1, -1, -1)))
+            runCatching {
+                for (nic in java.net.NetworkInterface.getNetworkInterfaces()) {
+                    if (!nic.isUp || nic.isLoopback || nic.isPointToPoint) continue
+                    for (ia in nic.interfaceAddresses) {
+                        val b = ia.broadcast ?: continue
+                        if (b !in list) list += b
+                    }
+                }
+            }
+            return list
+        }
+
         /** LAN auto-discovery (UDP 7359), same mechanism the official clients use. */
         suspend fun discover(windowMs: Long): List<DiscoveredServer> = withContext(Dispatchers.IO) {
             val found = LinkedHashMap<String, DiscoveredServer>()
@@ -65,7 +80,9 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
                 DatagramSocket().use { udp ->
                     udp.broadcast = true
                     val msg = "who is JellyfinServer?".toByteArray()
-                    udp.send(DatagramPacket(msg, msg.size, InetAddress.getByName("255.255.255.255"), 7359))
+                    // 255.255.255.255 only goes out of one network (with a VPN such as Tailscale that is often the
+                    // VPN), so also ask each local network directly at its own broadcast address.
+                    for (target in broadcastAddresses()) runCatching { udp.send(DatagramPacket(msg, msg.size, target, 7359)) }
                     val end = System.currentTimeMillis() + windowMs
                     val buf = ByteArray(4096)
                     while (true) {
@@ -105,12 +122,33 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
 
     fun clearSession() { token = null; userId = null }
 
-    private fun authHeader(): String {
+    /** Everything [configure] sets, to put it back after a failed switch. */
+    data class Connection(val baseUrl: String?, val deviceId: String, val token: String?, val userId: String?)
+    fun snapshot() = Connection(baseUrl, deviceId, token, userId)
+    fun restore(c: Connection) { baseUrl = c.baseUrl; deviceId = c.deviceId; token = c.token; userId = c.userId }
+
+    private fun authHeader(): String = authHeaderFor(deviceId, token)
+
+    private fun authHeaderFor(deviceId: String, token: String?): String {
         fun esc(s: String) = s.replace("\"", "")
         val sb = StringBuilder("MediaBrowser ")
         sb.append("Client=\"$CLIENT_NAME\", Device=\"${esc(deviceName)}\", DeviceId=\"$deviceId\", Version=\"$version\"")
         if (!token.isNullOrEmpty()) sb.append(", Token=\"$token\"")
         return sb.toString()
+    }
+
+    /**
+     * Ends another saved profile's session on its server (not the one signed in now), so a forgotten profile's
+     * token stops working there too. Best effort: an unreachable server just keeps it.
+     */
+    suspend fun revoke(serverUrl: String, deviceId: String, token: String) {
+        if (token.isEmpty()) return
+        try {
+            val r = Request.Builder().url(serverUrl.trimEnd('/') + "/Sessions/Logout")
+                .header("Authorization", authHeaderFor(deviceId, token))
+                .post(ByteArray(0).toRequestBody(null)).build()
+            withTimeout(8_000) { http.newCall(r).await().close() }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { /* best effort */ }
     }
 
     /** The full client identity + token, for the WebSocket handshake. */
@@ -288,7 +326,7 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
         .add("ids", q.ids).add("years", q.years).add("is4K", q.is4K).add("isHd", q.isHd).add("nameLessThan", q.nameLessThan)
         .add("isMissing", q.isMissing)
         .add("fields", q.fields ?: CARD_FIELDS).add("imageTypeLimit", 1)
-        .add("enableImageTypes", "Primary,Backdrop,Thumb,Logo").add("enableTotalRecordCount", true)), itemsResult)
+        .add("enableImageTypes", "Primary,Backdrop,Thumb,Logo").add("enableTotalRecordCount", q.enableTotalRecordCount)), itemsResult)
 
     suspend fun getItem(id: String): BaseItemDto =
         send(req("GET", "/Items/$id" + Query().add("userId", userId).add("fields", DETAIL_FIELDS)), BaseItemDto.serializer())
@@ -344,6 +382,55 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
 
     suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String) {
         sendRaw(req("POST", "/Items/$itemId/RemoteSearch/Subtitles/${Query.escape(subtitleId)}"))
+    }
+
+    // ---------- SyncPlay (watch together) ----------
+
+    private fun jsonBody(o: kotlinx.serialization.json.JsonObject): RequestBody = o.toString().toRequestBody(JSON)
+
+    private suspend fun postSyncPlay(action: String, body: kotlinx.serialization.json.JsonObject? = null) {
+        sendRaw(req("POST", "/SyncPlay/$action", body?.let { jsonBody(it) }))
+    }
+
+    suspend fun syncPlayList(): List<SyncPlayGroupInfo> {
+        val text = sendRaw(req("GET", "/SyncPlay/List"))
+        val arr = runCatching { NettleJson.jellyfin.parseToJsonElement(text) }.getOrNull() as? kotlinx.serialization.json.JsonArray ?: return emptyList()
+        return arr.mapNotNull { SyncPlayGroupInfo.from(it) }
+    }
+
+    suspend fun syncPlayNew(name: String) = postSyncPlay("New", kotlinx.serialization.json.buildJsonObject { put("GroupName", kotlinx.serialization.json.JsonPrimitive(name)) })
+    suspend fun syncPlayJoin(groupId: String) = postSyncPlay("Join", kotlinx.serialization.json.buildJsonObject { put("GroupId", kotlinx.serialization.json.JsonPrimitive(groupId)) })
+    suspend fun syncPlayLeave() = postSyncPlay("Leave")
+    suspend fun syncPlayPause() = postSyncPlay("Pause")
+    suspend fun syncPlayUnpause() = postSyncPlay("Unpause")
+    suspend fun syncPlayStop() = postSyncPlay("Stop")
+    suspend fun syncPlaySeek(positionTicks: Long) = postSyncPlay("Seek", kotlinx.serialization.json.buildJsonObject { put("PositionTicks", kotlinx.serialization.json.JsonPrimitive(positionTicks)) })
+    suspend fun syncPlayNextItem(playlistItemId: String) = postSyncPlay("NextItem", kotlinx.serialization.json.buildJsonObject { put("PlaylistItemId", kotlinx.serialization.json.JsonPrimitive(playlistItemId)) })
+    suspend fun syncPlayPreviousItem(playlistItemId: String) = postSyncPlay("PreviousItem", kotlinx.serialization.json.buildJsonObject { put("PlaylistItemId", kotlinx.serialization.json.JsonPrimitive(playlistItemId)) })
+    suspend fun syncPlayPing(ms: Long) = postSyncPlay("Ping", kotlinx.serialization.json.buildJsonObject { put("Ping", kotlinx.serialization.json.JsonPrimitive(ms)) })
+
+    /** The group plays these items (from [index]), for everyone in it. */
+    suspend fun syncPlaySetNewQueue(itemIds: List<String>, index: Int, startTicks: Long) = postSyncPlay("SetNewQueue", kotlinx.serialization.json.buildJsonObject {
+        put("PlayingQueue", kotlinx.serialization.json.JsonArray(itemIds.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+        put("PlayingItemPosition", kotlinx.serialization.json.JsonPrimitive(index))
+        put("StartPositionTicks", kotlinx.serialization.json.JsonPrimitive(startTicks))
+    })
+
+    /** This player is ready (loaded, at [positionTicks]) or still buffering; [whenServerMs] is the server's clock. */
+    suspend fun syncPlayReport(ready: Boolean, whenServerMs: Long, positionTicks: Long, isPlaying: Boolean, playlistItemId: String) =
+        postSyncPlay(if (ready) "Ready" else "Buffering", kotlinx.serialization.json.buildJsonObject {
+            put("When", kotlinx.serialization.json.JsonPrimitive(SyncPlayJson.format(whenServerMs)))
+            put("PositionTicks", kotlinx.serialization.json.JsonPrimitive(positionTicks))
+            put("IsPlaying", kotlinx.serialization.json.JsonPrimitive(isPlaying))
+            put("PlaylistItemId", kotlinx.serialization.json.JsonPrimitive(playlistItemId))
+        })
+
+    /** The server's clock (Unix ms): when it got the request and when it answered. */
+    suspend fun getUtcTime(): Pair<Long, Long> {
+        val o = NettleJson.jellyfin.parseToJsonElement(sendRaw(req("GET", "/GetUtcTime"))) as? kotlinx.serialization.json.JsonObject
+            ?: throw ApiException("The server didn't send its time.")
+        val received = SyncPlayJson.time(o, "RequestReceptionTime") ?: throw ApiException("The server didn't send its time.")
+        return received to (SyncPlayJson.time(o, "ResponseTransmissionTime") ?: received)
     }
 
     // ---------- Session capabilities (remote control from other Jellyfin apps) ----------
@@ -451,4 +538,6 @@ data class ItemQuery(
     var nameLessThan: String? = null,
     /** false = leave out placeholder episodes that have no file. */
     var isMissing: Boolean? = null,
+    /** Counting every match costs the server a second query: later pages of a list skip it. */
+    var enableTotalRecordCount: Boolean = true,
 )

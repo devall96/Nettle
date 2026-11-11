@@ -178,14 +178,24 @@ class SessionService(private val client: JellyfinClient, private val accountStor
 
     /** Validates the stored token. False if the server rejected it; throws [ApiException] when unreachable. */
     suspend fun resume(account: SavedAccount): Boolean {
+        // Switching from another profile that's still signed in: if this one can't be used, stay on that one
+        // (otherwise the app would show one person while talking to the server as the other).
+        val before = client.snapshot()
+        val userConfigBefore = userConfig
         client.configure(account.serverUrl, account.deviceId, account.accessToken, account.userId)
-        when (check(account)) {
+        val c = try { check(account) } catch (e: Throwable) { restoreAfterFailedSwitch(before, userConfigBefore); throw e }
+        if (c != SessionCheck.Valid) restoreAfterFailedSwitch(before, userConfigBefore)
+        when (c) {
             SessionCheck.Unreachable -> throw ApiException("Can't reach the server.")
-            SessionCheck.Rejected -> { client.clearSession(); return false }
+            SessionCheck.Rejected -> return false
             SessionCheck.Valid -> {}
         }
         activate(account)
         return true
+    }
+
+    private fun restoreAfterFailedSwitch(before: JellyfinClient.Connection, config: UserConfiguration?) {
+        if (current != null) { client.restore(before); userConfig = config } else client.clearSession()
     }
 
     /** Instant start: uses the saved account straight away with no network round trip. Follow with [validate]. */
@@ -276,7 +286,7 @@ class SessionService(private val client: JellyfinClient, private val accountStor
             current = null
             userConfig = null
             client.clearSession()
-        }
+        } else client.revoke(account.serverUrl, account.deviceId, account.accessToken)
         accountStore.remove(account.id)
         if (settings.current.lastAccountId == account.id) {
             settings.current.lastAccountId = null

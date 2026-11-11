@@ -16,7 +16,10 @@ public static class VideoFormat
             "HDR10" => "HDR10",
             "HDR10Plus" => "HDR10+",
             "HLG" => "HLG",
-            "DOVI" or "DOVIWithHDR10" or "DOVIWithHDR10Plus" or "DOVIWithHLG" or "DOVIWithSDR" => "Dolby Vision",
+            // Every Dolby Vision type (incl. 10.11's DOVIWithEL / DOVIWithELHDR10Plus), but not DOVIInvalid
+            // (broken DV metadata: nothing is claimed for it).
+            "DOVIInvalid" => null,
+            { } r when r.StartsWith("DOVI", StringComparison.Ordinal) => "Dolby Vision",
             _ => null,
         };
     }
@@ -38,7 +41,9 @@ public static class VideoFormat
             "truehd" => "Dolby TrueHD",
             "eac3" => "Dolby Digital Plus",
             "ac3" => "Dolby Digital",
-            "dts" when has("ma") || has("hd") => "DTS-HD MA",
+            // Jellyfin's profile / title say "DTS-HD MA" or "DTS-HD HRA"; a bare "ma" can be any word ("German").
+            "dts" when has("dts-hd ma") || has("dts-hd master") => "DTS-HD MA",
+            "dts" when has("dts-hd") => "DTS-HD",
             "dts" => "DTS",
             "flac" when a.Channels >= 6 => "Lossless " + ChannelLayout(a.Channels),
             _ => null

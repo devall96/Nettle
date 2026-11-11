@@ -37,6 +37,7 @@ object RemoteControl {
     }
 
     private fun handle(type: String, data: JsonElement?) {
+        if (AppServices.syncPlay.handle(type, data)) return // watch together
         when (type) {
             "Play" -> main.launch { play(data) }
             "Playstate" -> playstate(data)

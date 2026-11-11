@@ -32,13 +32,16 @@ internal sealed class ExclusiveDisplay
                 if (m.dmPelsWidth == baseline.dmPelsWidth && m.dmPelsHeight == baseline.dmPelsHeight && m.dmBitsPerPel == baseline.dmBitsPerPel)
                     modes.Add(m);
             }
-            var best = modes
-                .Select(m => (mode: m, cadence: Cadence(m.dmDisplayFrequency, f)))
+            // An exact rate first; else one within 0.15 % (24 Hz for a 23.976 fps film), which mpv's
+            // display-resample makes smooth by speeding the video up by that much.
+            DEVMODE? Pick(double tolerance) => modes
+                .Select(m => (mode: m, cadence: Cadence(m.dmDisplayFrequency, f, tolerance)))
                 .Where(x => x.cadence > 0)
                 .OrderBy(x => x.cadence)
                 .ThenBy(x => Math.Abs(Hz(x.mode.dmDisplayFrequency) - f * x.cadence))
                 .Select(x => (DEVMODE?)x.mode)
                 .FirstOrDefault();
+            var best = Pick(ExactTolerance) ?? Pick(CloseTolerance);
 
             var current = NewDevMode();
             EnumDisplaySettingsW(device, ENUM_CURRENT_SETTINGS, ref current);
@@ -74,12 +77,14 @@ internal sealed class ExclusiveDisplay
     /// <summary>Windows lists 23.976 / 29.97 / 59.94 / 119.88 Hz as 23 / 29 / 59 / 119.</summary>
     private static double Hz(int listed) => listed is 23 or 29 or 47 or 59 or 71 or 119 or 143 ? (listed + 1) / 1.001 : listed;
 
-    /// <summary>How many refreshes each frame gets when the rate is a whole multiple of fps (0 = it isn't).</summary>
-    private static int Cadence(int listed, double fps)
+    private const double ExactTolerance = 0.0004, CloseTolerance = 0.0015;
+
+    /// <summary>How many refreshes each frame gets when the rate is (within <paramref name="tolerance"/>, relative) a whole multiple of fps (0 = it isn't).</summary>
+    internal static int Cadence(int listed, double fps, double tolerance = ExactTolerance)
     {
         double hz = Hz(listed);
         int n = (int)Math.Round(hz / fps);
-        return n >= 1 && Math.Abs(hz - fps * n) < 0.01 * n ? n : 0;
+        return n >= 1 && Math.Abs(hz - fps * n) <= fps * n * tolerance ? n : 0;
     }
 
     private static string? DeviceFor(IntPtr hwnd)

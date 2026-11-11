@@ -14,6 +14,9 @@ import io.github.devall96.nettle.tv.platform.KeystoreSecureStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
@@ -30,6 +33,8 @@ object AppServices {
     lateinit var secure: SecureStore; private set
     lateinit var accounts: AccountStore; private set
     lateinit var session: SessionService; private set
+    /** Watch together (Jellyfin SyncPlay). */
+    lateinit var syncPlay: SyncPlayService; private set
     lateinit var http: OkHttpClient; private set
     lateinit var jellyfin: JellyfinClient; private set
     lateinit var seerr: SeerrClient; private set
@@ -106,6 +111,14 @@ object AppServices {
         segments = SegmentService(jellyfin)
         ntvResolver = NtvItemResolver(jellyfin)
         socket = JellyfinSocket(jellyfin, http)
+        syncPlay = SyncPlayService(jellyfin, scope)
+        io.github.devall96.nettle.tv.vm.WatchTogether.attach(syncPlay)
+        // Seerr sign-ins (and a watch-together group) belong to a profile: follow whoever is signed in.
+        session.onSessionChanged = {
+            val id = session.current?.id
+            seerrReady = scope.launch { loadSeerrFor(id) }
+            syncPlay.reset()
+        }
 
         // Images: stricter allowlist, and the token header only for the signed-in Jellyfin server.
         val imageHttp = http.newBuilder().addInterceptor { chain ->
@@ -122,12 +135,78 @@ object AppServices {
             .build()
     }
 
-    /** Loads secrets for optional integrations (Seerr / NostalgiaTV). */
+    /**
+     * For Media3: the same allowlisted client, but without a limit on the whole call. The API client's 30 s call
+     * timeout would cut every video download after 30 s (Media3 then silently reconnects; a live feed restarts).
+     * A stalled read still times out after 30 s.
+     */
+    val mediaHttp: OkHttpClient by lazy {
+        http.newBuilder().callTimeout(java.time.Duration.ZERO).readTimeout(java.time.Duration.ofSeconds(30)).build()
+    }
+
+    /** Loads secrets for optional integrations (NostalgiaTV; Seerr follows the signed-in profile, see [loadSeerrFor]). */
     suspend fun loadIntegrations() {
         val s = settings.current
-        seerr.configure(s.seerrUrl, secure.get("seerr.apikey"), secure.get("seerr.cookie"))
+        if (seerr.baseUrl == null) seerr.configure(s.seerrUrl, null, null)
         seerr.allowDirectTmdbImages = s.allowDirectTmdbImages
         ntv.configure(s.ntvUrl, secure.get("ntv.apikey"))
+    }
+
+    /** Finishes when the signed-in profile's Seerr sign-in has been loaded (await before using Seerr). */
+    @Volatile var seerrReady: Job = Job().apply { complete() }; private set
+
+    /**
+     * Points the Seerr client at the household's Seerr server with THIS profile's own sign-in (none = not set up
+     * for this profile). A sign-in saved by an older version, shared by everyone, is handed to the first profile
+     * that loads it (normally the one that set it up) and the shared copy is deleted.
+     */
+    private suspend fun loadSeerrFor(accountId: String?) {
+        try {
+            var key: String? = null
+            var cookie: String? = null
+            if (!accountId.isNullOrEmpty()) {
+                val keyName = SeerrClient.apiKeySecret(accountId)
+                val cookieName = SeerrClient.cookieSecret(accountId)
+                key = secure.get(keyName)
+                cookie = secure.get(cookieName)
+                if (key == null && cookie == null) {
+                    val legacyKey = secure.get(SeerrClient.LEGACY_API_KEY)
+                    val legacyCookie = secure.get(SeerrClient.LEGACY_COOKIE)
+                    if (legacyKey != null || legacyCookie != null) {
+                        legacyKey?.let { secure.set(keyName, it) }
+                        legacyCookie?.let { secure.set(cookieName, it) }
+                        secure.remove(SeerrClient.LEGACY_API_KEY)
+                        secure.remove(SeerrClient.LEGACY_COOKIE)
+                        key = legacyKey
+                        cookie = legacyCookie
+                        Log.info("Seerr: the shared sign-in now belongs to this profile only")
+                    }
+                }
+            }
+            if (session.current?.id != accountId) return // switched profile meanwhile
+            seerr.configure(settings.current.seerrUrl, key, cookie)
+            seerr.allowDirectTmdbImages = settings.current.allowDirectTmdbImages
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.warn("Seerr sign-in couldn't be loaded: ${e.message}")
+        }
+    }
+
+    /** Saves the signed-in profile's Seerr sign-in (cookie OR API key; the other is removed). */
+    suspend fun saveSeerrSecrets(apiKey: String?, cookie: String?) {
+        val id = session.current?.id
+        if (apiKey.isNullOrEmpty()) secure.remove(SeerrClient.apiKeySecret(id)) else secure.set(SeerrClient.apiKeySecret(id), apiKey)
+        if (cookie.isNullOrEmpty()) secure.remove(SeerrClient.cookieSecret(id)) else secure.set(SeerrClient.cookieSecret(id), cookie)
+    }
+
+    /** A profile was signed out and forgotten: drop what this device kept for it. */
+    suspend fun forgetAccountData(accountId: String) {
+        forgetHome(accountId)
+        try {
+            secure.remove(SeerrClient.apiKeySecret(accountId))
+            secure.remove(SeerrClient.cookieSecret(accountId))
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.warn("couldn't remove a forgotten profile's Seerr sign-in: ${e.message}")
+        }
     }
 
     // ---- Home cache: the last Home this account saw, painted at once on the next start ----

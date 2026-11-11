@@ -14,6 +14,8 @@ import io.github.devall96.nettle.tv.player.PlayerModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.CancellationException
+import io.github.devall96.nettle.core.services.Log
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -69,6 +71,8 @@ class GuideRow(val channel: NtvChannel, val index: Int) {
  */
 class LiveTvModel : Page() {
     companion object {
+        private const val GUIDE_REFRESH_MS = 20 * 60_000L
+        private const val IDLE_BEFORE_REFRESH_MS = 2 * 60_000L
         const val PX_PER_MINUTE = 7f
         const val CHANNEL_COLUMN = 200f
     }
@@ -184,6 +188,7 @@ class LiveTvModel : Page() {
 
     /** A cell got focus: show it in the info panel and keep it in view. */
     fun onCellFocused(c: GuideCell, viewWidth: Float) {
+        lastFocusAt = System.currentTimeMillis()
         focusedKey = c.key
         inspect(c)
         val x0 = xOf(c.startMs)
@@ -214,7 +219,20 @@ class LiveTvModel : Page() {
     fun openSettings() = Main.shell?.navigateRoot(SettingsModel())
     fun reload() { scope.launch { loadGuide(force = true) } }
 
+    private var lastFocusAt = System.currentTimeMillis()
+
     override fun onActivated() {
-        scope.launch { while (isActive) { nowMs = System.currentTimeMillis(); delay(30_000) } }
+        scope.launch {
+            while (isActive) {
+                nowMs = System.currentTimeMillis()
+                val at = AppServices.ntv.guideLoadedAt
+                if (!notConfigured && at != null && nowMs - at > GUIDE_REFRESH_MS && nowMs - lastFocusAt > IDLE_BEFORE_REFRESH_MS) {
+                    Log.info("guide: left open, refreshing it")
+                    try { loadGuide(force = true) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                }
+                delay(30_000)
+            }
+        }
     }
+
 }

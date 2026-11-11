@@ -46,8 +46,12 @@ class HomeModel : Page() {
     val listState = io.github.devall96.nettle.tv.vm.tvListState()
     val rowStates = HashMap<String, LazyListState>()
 
+    /** True once the server's own list of libraries arrived (not just the cached one). */
+    private var freshLibraries = false
+
     fun setLibraries(libs: List<BaseItemDto>) {
         libraries = libs
+        freshLibraries = true
         scope.launch { reload(quiet = showingCache) }
     }
 
@@ -89,7 +93,8 @@ class HomeModel : Page() {
         }
     }
 
-    override suspend fun load() { if (libraries != null) reload(quiet = showingCache) }
+    // With only the cached libraries, setLibraries does the first load as soon as the server answers.
+    override suspend fun load() { if (freshLibraries) reload(quiet = showingCache) }
     override suspend fun refresh() = reload(quiet = true)
 
     // Reduce motion: the banner doesn't rotate by itself (arrows still work).

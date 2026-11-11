@@ -65,9 +65,13 @@ public sealed partial class HomeViewModel : PageViewModel
 
     private bool _showingCache;
 
+    /// <summary>True once the server's own list of libraries arrived (not just the cached one).</summary>
+    private bool _freshLibraries;
+
     public void SetLibraries(List<BaseItemDto> libs)
     {
         _libraries = libs;
+        _freshLibraries = true;
         _ = ReloadAsync(quiet: _showingCache);
     }
 
@@ -80,7 +84,9 @@ public sealed partial class HomeViewModel : PageViewModel
         Render(snapshot, newHeroes: true);
     }
 
-    protected override Task LoadAsync() => _libraries == null ? Task.CompletedTask : ReloadAsync(quiet: _showingCache);
+    // With only the cached libraries, SetLibraries does the first load as soon as the server answers (loading here
+    // too fetched every row twice at start).
+    protected override Task LoadAsync() => !_freshLibraries ? Task.CompletedTask : ReloadAsync(quiet: _showingCache);
     protected override Task RefreshAsync() => ReloadAsync(quiet: true);
     // Reduce motion: the banner doesn't rotate by itself (arrows still work).
     protected override void OnActivated() { if (!AppServices.Settings.Current.ReduceMotion) _heroTimer.Start(); }

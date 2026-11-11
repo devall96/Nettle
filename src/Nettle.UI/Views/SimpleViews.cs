@@ -14,6 +14,11 @@ public partial class AccountPickerView : UserControl
     public AccountPickerView() => InitializeComponent();
 }
 
+public partial class WatchTogetherView : UserControl
+{
+    public WatchTogetherView() => InitializeComponent();
+}
+
 public partial class ServerSelectView : UserControl
 {
     public ServerSelectView() => InitializeComponent();

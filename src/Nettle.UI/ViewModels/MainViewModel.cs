@@ -153,12 +153,17 @@ public sealed partial class MainViewModel : ViewModelBase
         AppServices.Remote.Start();
         MaybeOfferMenuEntry();
 #if DEBUG || NETTLE_DEV
-        // Developer convenience: NETTLE_DEV_PLAY=<itemId> starts playing that item after sign-in.
+        // NETTLE_DEV_SYNCPLAY=create:<name> | join:<name> starts / joins a watch-together group after sign-in, and
+        // NETTLE_DEV_SYNCPLAY_SCRIPT=pause@15,play@22,seek:300@30 then asks the group (seconds after the group starts).
+        var devSync = Environment.GetEnvironmentVariable("NETTLE_DEV_SYNCPLAY");
+        if (!string.IsNullOrEmpty(devSync)) _ = DevSyncPlayAsync(devSync, Environment.GetEnvironmentVariable("NETTLE_DEV_SYNCPLAY_SCRIPT"));
+        // Developer convenience: NETTLE_DEV_PLAY=<itemId> starts playing that item after sign-in (NETTLE_DEV_PLAY_DELAY seconds).
         var devPlay = Environment.GetEnvironmentVariable("NETTLE_DEV_PLAY");
+        var devPlayDelay = int.TryParse(Environment.GetEnvironmentVariable("NETTLE_DEV_PLAY_DELAY"), out var dpd) ? dpd * 1000 : 2500;
         if (!string.IsNullOrEmpty(devPlay))
             _ = Task.Run(async () =>
             {
-                await Task.Delay(2500);
+                await Task.Delay(devPlayDelay);
                 var item = await AppServices.Jellyfin.GetItemAsync(devPlay);
                 await Dispatcher.UIThread.InvokeAsync(() => PlayItem(item, resume: true));
             });
@@ -172,6 +177,7 @@ public sealed partial class MainViewModel : ViewModelBase
             "settings" => new SettingsViewModel(),
             "requests" => new RequestsViewModel(),
             "search" => new SearchViewModel(),
+            "together" => new WatchTogetherViewModel(),
             _ => null,
         };
         if (devPage != null)
@@ -197,6 +203,49 @@ public sealed partial class MainViewModel : ViewModelBase
     }
 
 #if DEBUG || NETTLE_DEV
+    private async Task DevSyncPlayAsync(string spec, string? script)
+    {
+        try
+        {
+            await Task.Delay(1500);
+            var sync = AppServices.SyncPlay;
+            var name = spec.Contains(':') ? spec[(spec.IndexOf(':') + 1)..] : "Nettle test";
+            if (spec.StartsWith("create")) await sync.CreateAsync(name);
+            else
+            {
+                for (int i = 0; i < 30 && !sync.InGroup; i++)
+                {
+                    var g = (await sync.ListAsync()).FirstOrDefault(x => x.Name == name);
+                    if (g != null) { await sync.JoinAsync(g.GroupId); break; }
+                    await Task.Delay(1000);
+                }
+            }
+            Nettle.Core.Services.Log.Info($"dev: SyncPlay {spec} done, in group: {sync.InGroup}");
+            if (string.IsNullOrWhiteSpace(script)) return;
+            // Wait for the group to start playing, then run the steps.
+            for (int i = 0; i < 120 && sync.State != "Playing"; i++) await Task.Delay(500);
+            var started = DateTime.UtcNow;
+            foreach (var step in script.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var at = step.Split('@');
+                if (at.Length != 2 || !int.TryParse(at[1], out var sec)) continue;
+                var wait = started.AddSeconds(sec) - DateTime.UtcNow;
+                if (wait > TimeSpan.Zero) await Task.Delay(wait);
+                Nettle.Core.Services.Log.Info($"dev: SyncPlay step {at[0]}");
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    var p = Player;
+                    if (p == null) return;
+                    if (at[0] == "pause" && p.IsPlaying) p.TogglePlayCommand.Execute(null);
+                    else if (at[0] == "play" && !p.IsPlaying) p.TogglePlayCommand.Execute(null);
+                    else if (at[0].StartsWith("seek:") && double.TryParse(at[0][5..], out var s)) p.SeekToMs(s * 1000);
+                    else if (at[0] == "leave") _ = sync.LeaveAsync();
+                });
+            }
+        }
+        catch (Exception ex) { Nettle.Core.Services.Log.Warn("dev: SyncPlay hook failed: " + ex.Message); }
+    }
+
     /// <summary>
     /// Developer hook for on-device test runs (Android: a new launch intent while the app runs):
     /// switch theme, page or start playing without restarting the app.
@@ -281,8 +330,9 @@ public sealed partial class MainViewModel : ViewModelBase
 
     public void PlayItem(BaseItemDto item, bool resume, string? mediaSourceId = null)
     {
-        ClosePlayer();
         long? start = resume && item.UserData?.PlaybackPositionTicks is > 0 ? item.UserData.PlaybackPositionTicks : null;
+        if (AppServices.SyncPlay.InGroup) { StartForGroup([item], 0, start ?? 0); return; }
+        ClosePlayer();
         Player = PlayerViewModel.ForItem(this, item, start, mediaSourceId);
     }
 
@@ -297,8 +347,31 @@ public sealed partial class MainViewModel : ViewModelBase
     public void PlayQueue(IReadOnlyList<BaseItemDto> items, int index = 0, long? startTicks = null)
     {
         if (items.Count == 0) return;
+        if (AppServices.SyncPlay.InGroup) { StartForGroup(items, index, startTicks ?? 0); return; }
         ClosePlayer();
         Player = PlayerViewModel.ForQueue(this, items, index, startTicks);
+    }
+
+    /// <summary>Watch together: the group plays it (for everyone, this device included, once all are ready).</summary>
+    private async void StartForGroup(IReadOnlyList<BaseItemDto> items, int index, long startTicks)
+    {
+        try
+        {
+            Toast("Starting it for everyone in your group…", 3000);
+            await AppServices.SyncPlay.PlayAsync(items.Select(i => i.Id).ToList(), Math.Clamp(index, 0, items.Count - 1), startTicks);
+        }
+        catch (Exception ex)
+        {
+            Nettle.Core.Services.Log.Warn("SyncPlay play failed: " + ex.Message);
+            Toast("The group couldn't start it: " + ex.Message, 5000);
+        }
+    }
+
+    /// <summary>The watch-together group plays this: open it here, paused at the group's spot, until everyone is ready.</summary>
+    public void OpenSyncPlay(BaseItemDto item, long startTicks, string playlistItemId)
+    {
+        ClosePlayer();
+        Player = PlayerViewModel.ForSyncPlay(this, item, startTicks, playlistItemId);
     }
 
     public void PlayLive(IReadOnlyList<NtvChannel> channels, int index)

@@ -28,6 +28,20 @@ import java.time.format.DateTimeFormatter
  * Streams are MPEG-TS played as they are. Only live channels are ever exposed; the
  * NostalgiaTV on-demand section is deliberately not integrated.
  */
+/**
+ * The channel name in "#EXTINF:-1 tvg-id="x" group-title="A, B",Name, with commas": everything after the
+ * first comma that isn't inside a quoted attribute (so names and attributes may both contain commas).
+ */
+internal fun extinfTitle(line: String): String? {
+    var quoted = false
+    for (i in line.indices) {
+        val c = line[i]
+        if (c == '"') quoted = !quoted
+        else if (c == ',' && !quoted) return line.substring(i + 1).trim()
+    }
+    return null
+}
+
 class NtvClient(base: OkHttpClient) {
     private val http = HttpFactory.builder(base, 60).build()
 
@@ -136,8 +150,7 @@ class NtvClient(base: OkHttpClient) {
             if (line.isEmpty()) continue
             if (line.startsWith("#EXTINF", ignoreCase = true)) {
                 attrs = attr.findAll(line).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
-                val comma = line.lastIndexOf(',')
-                title = if (comma >= 0) line.substring(comma + 1).trim() else null
+                title = extinfTitle(line)
             } else if (!line.startsWith('#') && attrs != null) {
                 val url = if (line.startsWith("http", ignoreCase = true)) line else baseUrl + "/" + line.trimStart('/')
                 // Security: only ever hand http(s) URLs to the player (never file://, smb://, etc.).

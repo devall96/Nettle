@@ -18,11 +18,11 @@ public static class NetworkSafety
 
     public static bool IsPrivateHost(string host)
     {
-        var h = host.ToLowerInvariant();
-        if (h == "localhost" || h.EndsWith(".local") || h.EndsWith(".lan") || h.EndsWith(".home") ||
-            h.EndsWith(".internal") || h.EndsWith(".ts.net") || !h.Contains('.'))
-            return true;
-        if (!IPAddress.TryParse(h, out var ip)) return false;
+        var h = host.ToLowerInvariant().Trim('[', ']');
+        if (!IPAddress.TryParse(h, out var ip))
+            return h == "localhost" || h.EndsWith(".local") || h.EndsWith(".lan") || h.EndsWith(".home") ||
+                   h.EndsWith(".internal") || h.EndsWith(".ts.net") || !h.Contains('.');
+        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
         if (IPAddress.IsLoopback(ip)) return true;
         if (ip.AddressFamily == AddressFamily.InterNetworkV6)
             return ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6UniqueLocal;

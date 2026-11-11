@@ -13,6 +13,51 @@ import kotlinx.coroutines.launch
  * Release builds never read these extras.
  */
 object DevHooks {
+    private suspend fun devSignIn(server: String, user: String) {
+        try {
+            AppServices.allowHostOf(server) // as the Connect screen does for a typed address
+            val (url, info) = AppServices.jellyfin.probeServer(server)
+            AppServices.session.beginLogin(url)
+            val auth = AppServices.jellyfin.authenticate(user, "")
+            AppServices.session.completeLogin(url, info, auth, false)
+            Main.showShell()
+            io.github.devall96.nettle.core.services.Log.info("dev: signed in to the test server")
+        } catch (e: Exception) { io.github.devall96.nettle.core.services.Log.warn("dev: test sign-in failed: ${e.message}") }
+    }
+
+    private suspend fun devSyncPlay(spec: String, script: String?) {
+        val sync = AppServices.syncPlay
+        try {
+            repeat(60) { if (Main.shell == null) delay(250) }
+            delay(1500)
+            val name = spec.substringAfter(':', "Nettle test")
+            if (spec.startsWith("create")) sync.create(name)
+            else for (i in 0 until 30) {
+                if (sync.inGroup) break
+                sync.list().firstOrNull { it.name == name }?.let { sync.join(it.groupId) }
+                delay(1000)
+            }
+            io.github.devall96.nettle.core.services.Log.info("dev: SyncPlay $spec done, in group: ${sync.inGroup}")
+            if (script.isNullOrBlank()) return
+            for (i in 0 until 120) { if (sync.state == "Playing") break; delay(500) }
+            val started = System.currentTimeMillis()
+            for (step in script.split(',')) {
+                val at = step.split('@')
+                val sec = at.getOrNull(1)?.toIntOrNull() ?: continue
+                val wait = started + sec * 1000L - System.currentTimeMillis()
+                if (wait > 0) delay(wait)
+                io.github.devall96.nettle.core.services.Log.info("dev: SyncPlay step ${at[0]}")
+                val p = Main.player ?: continue
+                when {
+                    at[0] == "pause" && p.engine.isPlaying -> p.togglePlay()
+                    at[0] == "play" && !p.engine.isPlaying -> p.togglePlay()
+                    at[0].startsWith("seek:") -> at[0].removePrefix("seek:").toLongOrNull()?.let { p.seekToMs(it * 1000) }
+                    at[0] == "leave" -> sync.leave()
+                }
+            }
+        } catch (e: Exception) { io.github.devall96.nettle.core.services.Log.warn("dev: SyncPlay hook failed: ${e.message}") }
+    }
+
     fun handle(intent: Intent?) {
         if (intent == null) return
         // Android keeps the launch that started the task and re-delivers it when the app is reopened from the
@@ -45,12 +90,17 @@ object DevHooks {
             return
         }
         if (!BuildConfig.DEBUG) return
+        // --es server https://demo.jellyfin.org/stable [--es user demo]: a test sign-in (empty password, not saved).
+        intent.getStringExtra("server")?.let { server -> AppServices.scope.launch { devSignIn(server, intent.getStringExtra("user") ?: "demo") } }
+        // --es syncplay create:NAME or join:NAME [--es syncscript pause@10,play@16,seek:300@22]
+        intent.getStringExtra("syncplay")?.let { spec -> AppServices.scope.launch { devSyncPlay(spec, intent.getStringExtra("syncscript")) } }
         val page = intent.getStringExtra("page")
         val query = intent.getStringExtra("query")
         val play = intent.getStringExtra("play")
         val details = intent.getStringExtra("details")
         val theme = intent.getStringExtra("theme")
         if (page == null && play == null && details == null && theme == null) return
+        val playDelay = (intent.getStringExtra("playdelay")?.toLongOrNull() ?: 0L) * 1000
         AppServices.scope.launch {
             // Wait until signed in and the shell is up.
             repeat(40) { if (Main.shell == null) delay(250) }
@@ -62,8 +112,10 @@ object DevHooks {
                 "livetv" -> shell.navigateRoot(LiveTvModel())
                 "requests" -> shell.navigateRoot(RequestsModel())
                 "settings" -> shell.navigateRoot(SettingsModel())
+                "together" -> shell.navigateRoot(WatchTogetherModel())
             }
             details?.let { shell.navigate(DetailsModel(it)) }
+            if (playDelay > 0) delay(playDelay)
             play?.let { id -> runCatching { AppServices.jellyfin.getItem(id) }.getOrNull()?.let { Main.playItem(it, resume = intent.getBooleanExtra("resume", false)) } }
         }
     }

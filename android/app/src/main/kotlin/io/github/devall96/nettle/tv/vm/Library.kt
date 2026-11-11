@@ -83,6 +83,8 @@ class LibraryModel(private val view: BaseItemDto, private val folderMode: Boolea
 
     var columns = 6; private set
     private var total = Int.MAX_VALUE
+    /** Items fetched from the server so far (some may be hidden, e.g. music), the next page starts here. */
+    private var fetched = 0
     private var loadingMore = false
     private var loadJob: Job? = null
     private var generation = 0
@@ -142,17 +144,24 @@ class LibraryModel(private val view: BaseItemDto, private val folderMode: Boolea
         cards.clear()
         rows.clear()
         total = Int.MAX_VALUE
+        fetched = 0
         run { loadPage(generation) }
     }
 
-    private suspend fun loadPage(gen: Int) {
+    /** [upTo]: load at least this many items in one request (A–Z jump far down the list). */
+    private suspend fun loadPage(gen: Int, upTo: Int = 0) {
         if (cards.size >= total) return
         // The server reshuffles on every request, so random is one larger batch with no further pages.
         val random = sort.sortBy == "Random"
-        val q = buildQuery().copy(startIndex = cards.size, limit = if (random) RANDOM_BATCH else PAGE_SIZE)
+        val first = cards.isEmpty() && fetched == 0
+        val limit = if (random) RANDOM_BATCH else maxOf(PAGE_SIZE, upTo - fetched + PAGE_SIZE / 2)
+        // The count is known from the first page; later pages skip the server's second (counting) query.
+        val q = buildQuery().copy(startIndex = fetched, limit = limit, enableTotalRecordCount = first)
         val res = AppServices.jellyfin.getItems(q)
         if (gen != generation) return
-        total = res.totalRecordCount
+        if (first) total = res.totalRecordCount
+        else if (res.items.size < limit) total = fetched + res.items.size // reached the end
+        fetched += res.items.size
         val shape = if (isLandscape) CardShape.Landscape else CardShape.Poster
         val start = cards.size
         cards.addAll(MediaCard.visible(res.items).map { MediaCard(it, shape) })
@@ -192,7 +201,8 @@ class LibraryModel(private val view: BaseItemDto, private val folderMode: Boolea
                 index = AppServices.jellyfin.getItems(buildQuery().copy(nameLessThan = letter, limit = 0)).totalRecordCount
             }
             if (sort.order == "Descending") index = maxOf(0, total - index - 1)
-            while (cards.size <= index && cards.size < total && gen == generation) loadPage(gen)
+            // Everything up to that letter in one request (not page after page).
+            if (fetched <= index && cards.size < total && gen == generation) loadPage(gen, upTo = index + 1)
             if (gen != generation || cards.isEmpty()) return@launch
             scrollToRow = minOf(index, cards.size - 1) / maxOf(1, columns)
         }

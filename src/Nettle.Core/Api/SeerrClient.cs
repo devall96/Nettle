@@ -32,8 +32,25 @@ public sealed class SeerrClient
 
     public SeerrClient() => _http = HttpFactory.Create(TimeSpan.FromSeconds(20), _cookies);
 
+    /// <summary>
+    /// Where a profile's Seerr sign-in is kept in the secure store. Each Jellyfin profile on the device has its
+    /// own, so one person's Seerr account (maybe an admin's, which auto-approves) isn't used by everyone.
+    /// </summary>
+    public static string ApiKeySecret(string? accountId) => string.IsNullOrEmpty(accountId) ? LegacyApiKeySecret : LegacyApiKeySecret + "." + accountId;
+    public static string CookieSecret(string? accountId) => string.IsNullOrEmpty(accountId) ? LegacyCookieSecret : LegacyCookieSecret + "." + accountId;
+    /// <summary>Before 0.5.1 one Seerr sign-in was shared by every profile on the device.</summary>
+    public const string LegacyApiKeySecret = "seerr.apikey", LegacyCookieSecret = "seerr.cookie";
+
+    /// <summary>Forgets every Seerr cookie, so a previous profile's (or a previous sign-in's) session can't linger.</summary>
+    private void ClearCookies()
+    {
+        foreach (Cookie c in _cookies.GetAllCookies()) c.Expired = true;
+        _me = null;
+    }
+
     public void Configure(string? baseUrl, string? apiKey, string? sessionCookie)
     {
+        ClearCookies();
         BaseUrl = string.IsNullOrWhiteSpace(baseUrl) ? null : NormalizeUrl(baseUrl);
         ApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
         if (BaseUrl != null && !string.IsNullOrEmpty(sessionCookie))
@@ -63,6 +80,7 @@ public sealed class SeerrClient
             HttpResponseMessage resp;
             try { resp = await _http.SendAsync(req, ct).ConfigureAwait(false); }
             catch (HttpRequestException ex) { throw new ApiException("Can't reach Seerr. " + ex.Message, null, ex); }
+            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested) { throw new ApiException("Seerr took too long to respond.", null, ex); }
             using (resp)
             {
                 if (!resp.IsSuccessStatusCode)
@@ -92,6 +110,7 @@ public sealed class SeerrClient
 
     public async Task<SeerrUser> SignInWithJellyfinAsync(string url, string username, string password, CancellationToken ct = default)
     {
+        ClearCookies();
         BaseUrl = NormalizeUrl(url);
         ApiKey = null;
         var req = Req(HttpMethod.Post, "/auth/jellyfin");

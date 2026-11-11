@@ -75,7 +75,7 @@ public enum PlayerFeatures
 public sealed record PlayerTrack(int Id, string Type, string Name, bool Selected, int? FfIndex = null, string? ExternalUrl = null);
 
 /// <summary>What to play and how.</summary>
-public sealed class PlayerLoad
+public sealed record PlayerLoad
 {
     /// <summary>The original file's direct-play URL (never a transcode / HLS URL).</summary>
     public required string Url { get; init; }
@@ -96,6 +96,8 @@ public sealed class PlayerLoad
     public string? AuthHeader { get; init; }
     /// <summary>Take the audio device exclusively (Windows: needed only to bitstream TrueHD / DTS-HD).</summary>
     public bool ExclusiveAudio { get; init; }
+    /// <summary>Open paused at the start position (watch together: the group starts once everyone is ready).</summary>
+    public bool StartPaused { get; init; }
     /// <summary>Play the file over and over (Settings → Lip sync check).</summary>
     public bool Loop { get; init; }
 }

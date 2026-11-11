@@ -55,6 +55,7 @@ public sealed class RemoteControl
 
     private void Handle(string type, JsonElement data)
     {
+        if (AppServices.SyncPlay.Handle(type, data)) return; // watch together
         switch (type)
         {
             case "Play": _ = PlayAsync(data); break;

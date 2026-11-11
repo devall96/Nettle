@@ -52,7 +52,7 @@ class AccountPickerModel : ViewModelBase() {
         scope.launch {
             val wasCurrent = AppServices.session.current?.id == tile.account.id
             AppServices.session.signOutAndForget(tile.account)
-            AppServices.forgetHome(tile.account.id)
+            AppServices.forgetAccountData(tile.account.id)
             accounts.remove(tile)
             if (wasCurrent) Main.showAccountPicker()
             else if (accounts.isEmpty() && AppServices.session.current == null) Main.showServerSelect()
@@ -177,6 +177,8 @@ class LoginModel(private val serverUrl: String, private var info: PublicSystemIn
 
     fun signIn() {
         if (username.isBlank()) { error = "Enter your username."; return }
+        // A Quick Connect code still waiting would otherwise sign in a second time if approved later.
+        cancelQuickConnect()
         launch {
             val user = username.trim()
             val pw = password
@@ -261,6 +263,7 @@ object IntegrationAutoSetup {
                 }
             }
 
+            AppServices.seerrReady.join() // this profile's own Seerr sign-in, if it has one
             if (!AppServices.seerr.isConfigured) {
                 for (scheme in schemes) {
                     val url = "$scheme://$host:$SEERR_PORT"
@@ -274,8 +277,7 @@ object IntegrationAutoSetup {
                     else if (!username.isNullOrEmpty() && password != null) {
                         try {
                             withTimeout(15_000) { AppServices.seerr.signInWithJellyfin(url, username, password) }
-                            AppServices.seerr.sessionCookie?.let { AppServices.secure.set("seerr.cookie", it) }
-                            AppServices.secure.remove("seerr.apikey")
+                            AppServices.saveSeerrSecrets(null, AppServices.seerr.sessionCookie)
                             done += "Requests"
                             Log.info("auto-setup: signed in to Seerr on the Jellyfin host")
                         } catch (e: CancellationException) {

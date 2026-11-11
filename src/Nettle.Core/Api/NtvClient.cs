@@ -88,6 +88,7 @@ public sealed partial class NtvClient
         HttpResponseMessage resp;
         try { resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false); }
         catch (HttpRequestException ex) { throw new ApiException("Can't reach NostalgiaTV. " + ex.Message, null, ex); }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested) { throw new ApiException("NostalgiaTV took too long to respond.", null, ex); }
         if (!resp.IsSuccessStatusCode)
         {
             resp.Dispose();
@@ -142,6 +143,21 @@ public sealed partial class NtvClient
     [GeneratedRegex("([A-Za-z][\\w-]*)=\"([^\"]*)\"")]
     private static partial Regex AttrRegex();
 
+    /// <summary>
+    /// The channel name in "#EXTINF:-1 tvg-id="x" group-title="A, B",Name, with commas": everything after the
+    /// first comma that isn't inside a quoted attribute (so names and attributes may both contain commas).
+    /// </summary>
+    internal static string? ExtinfTitle(string line)
+    {
+        bool quoted = false;
+        for (int i = 0; i < line.Length; i++)
+        {
+            if (line[i] == '"') quoted = !quoted;
+            else if (line[i] == ',' && !quoted) return line[(i + 1)..].Trim();
+        }
+        return null;
+    }
+
     private async Task<List<NtvChannel>> ParseM3uAsync(Stream s)
     {
         var list = new List<NtvChannel>();
@@ -157,8 +173,7 @@ public sealed partial class NtvClient
             {
                 attrs = new(StringComparer.OrdinalIgnoreCase);
                 foreach (Match m in AttrRegex().Matches(line)) attrs[m.Groups[1].Value] = m.Groups[2].Value;
-                var comma = line.LastIndexOf(',');
-                title = comma >= 0 ? line[(comma + 1)..].Trim() : null;
+                title = ExtinfTitle(line);
             }
             else if (!line.StartsWith('#') && attrs != null)
             {
@@ -192,25 +207,29 @@ public sealed partial class NtvClient
         return list;
     }
 
-    private static void ParseXmltv(Stream s, List<NtvChannel> channels, DateTimeOffset from, DateTimeOffset to)
+    internal static void ParseXmltv(Stream s, List<NtvChannel> channels, DateTimeOffset from, DateTimeOffset to)
     {
         var byId = new Dictionary<string, NtvChannel>(StringComparer.OrdinalIgnoreCase);
         foreach (var c in channels) byId.TryAdd(c.Id, c);
 
         var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore, IgnoreWhitespace = true, IgnoreComments = true, XmlResolver = null };
         using var r = XmlReader.Create(s, settings);
-        while (r.Read())
+        // The reader is moved by hand: Skip() and ReadElementContentAsString() already step past the element,
+        // so a plain "while (r.Read())" would then jump over the NEXT element too (that dropped every
+        // programme following a skipped one, and every second child element: sub-titles, categories).
+        r.Read();
+        while (!r.EOF)
         {
-            if (r.NodeType != XmlNodeType.Element) continue;
+            if (r.NodeType != XmlNodeType.Element) { r.Read(); continue; }
             if (r.Name == "channel")
             {
                 var id = r.GetAttribute("id");
-                if (id == null) continue;
-                using var sub = r.ReadSubtree();
                 string? icon = null;
-                while (sub.Read())
-                    if (sub.NodeType == XmlNodeType.Element && sub.Name == "icon") icon = sub.GetAttribute("src");
-                if (byId.TryGetValue(id, out var ch) && ch.LogoUrl == null) ch.LogoUrl = icon;
+                using (var sub = r.ReadSubtree())
+                    while (sub.Read())
+                        if (sub.NodeType == XmlNodeType.Element && sub.Name == "icon") icon = sub.GetAttribute("src");
+                if (id != null && byId.TryGetValue(id, out var ch) && ch.LogoUrl == null) ch.LogoUrl = icon;
+                r.Read();
             }
             else if (r.Name == "programme")
             {
@@ -225,12 +244,16 @@ public sealed partial class NtvClient
                 string title = "", sub2 = "", desc = "", ep = "", icon = "", cat = "";
                 using (var sub = r.ReadSubtree())
                 {
-                    while (sub.Read())
+                    sub.Read();
+                    while (!sub.EOF)
                     {
-                        if (sub.NodeType != XmlNodeType.Element) continue;
+                        if (sub.NodeType != XmlNodeType.Element || sub.Depth == 0) { sub.Read(); continue; }
                         switch (sub.Name)
                         {
-                            case "title": if (title.Length == 0) title = sub.ReadElementContentAsString(); break;
+                            case "title":
+                                var t = sub.ReadElementContentAsString();
+                                if (title.Length == 0) title = t;
+                                break;
                             case "sub-title": sub2 = sub.ReadElementContentAsString(); break;
                             case "desc": desc = sub.ReadElementContentAsString(); break;
                             case "episode-num":
@@ -239,11 +262,16 @@ public sealed partial class NtvClient
                                 if (sys == "xmltv_ns") v = FromXmltvNs(v) ?? "";
                                 if (v.Length > 0 && (ep.Length == 0 || sys == "onscreen")) ep = v;
                                 break;
-                            case "icon": icon = sub.GetAttribute("src") ?? ""; break;
-                            case "category": if (cat.Length == 0) cat = sub.ReadElementContentAsString(); break;
+                            case "category":
+                                var c = sub.ReadElementContentAsString();
+                                if (cat.Length == 0) cat = c;
+                                break;
+                            case "icon": icon = sub.GetAttribute("src") ?? ""; sub.Skip(); break;
+                            default: sub.Skip(); break;
                         }
                     }
                 }
+                r.Read();
                 ch.Programs.Add(new NtvProgram
                 {
                     Start = start.Value,
@@ -256,6 +284,7 @@ public sealed partial class NtvClient
                     Category = cat.Length > 0 ? cat : null,
                 });
             }
+            else r.Read(); // <tv> itself, or anything else: step inside / past it
         }
     }
 

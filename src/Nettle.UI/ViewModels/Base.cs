@@ -14,6 +14,7 @@ public abstract partial class ViewModelBase : ObservableObject
         if (showBusy) IsBusy = true;
         Error = null;
         try { await work(); }
+        catch (OperationCanceledException ex) when (ex.InnerException is TimeoutException) { Error = "The server took too long to respond."; }
         catch (OperationCanceledException) { }
         catch (ApiException ex) { Error = ex.Message; }
         catch (Exception ex) { Error = "Something went wrong: " + ex.Message; }

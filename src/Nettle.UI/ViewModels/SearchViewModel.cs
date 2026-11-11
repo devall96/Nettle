@@ -101,6 +101,7 @@ public sealed partial class SearchViewModel : PageViewModel
     /// <summary>Seerr's matches that aren't available yet, shown under the library results (only when Seerr is set up).</summary>
     private async Task SearchSeerrAsync(string term, CancellationToken ct)
     {
+        await AppServices.SeerrReady;
         if (!AppServices.Seerr.IsConfigured) return;
         try
         {

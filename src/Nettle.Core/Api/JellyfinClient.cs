@@ -54,19 +54,49 @@ public sealed class JellyfinClient
         UserId = userId;
     }
 
+    /// <summary>Everything <see cref="Configure"/> sets, to put it back after a failed switch.</summary>
+    public (string? BaseUrl, string DeviceId, string? Token, string? UserId) Snapshot() => (BaseUrl, DeviceId, Token, UserId);
+
+    public void Restore((string? BaseUrl, string DeviceId, string? Token, string? UserId) s)
+    {
+        BaseUrl = s.BaseUrl;
+        DeviceId = s.DeviceId;
+        Token = s.Token;
+        UserId = s.UserId;
+    }
+
     public void ClearSession()
     {
         Token = null;
         UserId = null;
     }
 
-    private string AuthHeader()
+    private string AuthHeader() => AuthHeaderFor(DeviceId, Token);
+
+    private string AuthHeaderFor(string deviceId, string? token)
     {
         static string Esc(string s) => s.Replace("\"", "");
         var sb = new StringBuilder("MediaBrowser ");
-        sb.Append($"Client=\"{ClientName}\", Device=\"{Esc(_deviceName)}\", DeviceId=\"{DeviceId}\", Version=\"{_version}\"");
-        if (!string.IsNullOrEmpty(Token)) sb.Append($", Token=\"{Token}\"");
+        sb.Append($"Client=\"{ClientName}\", Device=\"{Esc(_deviceName)}\", DeviceId=\"{deviceId}\", Version=\"{_version}\"");
+        if (!string.IsNullOrEmpty(token)) sb.Append($", Token=\"{token}\"");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Ends another saved profile's session on its server (not the one signed in now), so a forgotten profile's
+    /// token stops working there too. Best effort: an unreachable server just keeps it.
+    /// </summary>
+    public async Task RevokeAsync(string serverUrl, string deviceId, string token)
+    {
+        if (string.IsNullOrEmpty(token)) return;
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, serverUrl.TrimEnd('/') + "/Sessions/Logout");
+            req.Headers.TryAddWithoutValidation("Authorization", AuthHeaderFor(deviceId, token));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            using var resp = await _http.SendAsync(req, cts.Token).ConfigureAwait(false);
+        }
+        catch { /* best effort */ }
     }
 
     /// <summary>
@@ -252,7 +282,13 @@ public sealed class JellyfinClient
         {
             using var udp = new UdpClient(AddressFamily.InterNetwork) { EnableBroadcast = true };
             var msg = Encoding.UTF8.GetBytes("who is JellyfinServer?");
-            await udp.SendAsync(msg, msg.Length, new IPEndPoint(IPAddress.Broadcast, 7359)).ConfigureAwait(false);
+            // 255.255.255.255 only goes out of one network adapter (with a VPN such as Tailscale or Mullvad that is
+            // often the VPN), so also ask each local network directly at its own broadcast address.
+            foreach (var target in BroadcastAddresses())
+            {
+                try { await udp.SendAsync(msg, msg.Length, new IPEndPoint(target, 7359)).ConfigureAwait(false); }
+                catch (SocketException) { /* that network can't be reached right now */ }
+            }
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(window);
             while (!cts.IsCancellationRequested)
@@ -269,6 +305,41 @@ public sealed class JellyfinClient
         catch (OperationCanceledException) { }
         catch (SocketException) { }
         return found.Values.ToList();
+    }
+
+    /// <summary>The general broadcast address plus each active IPv4 network's own (e.g. 192.168.1.255).</summary>
+    internal static List<IPAddress> BroadcastAddresses()
+    {
+        var list = new List<IPAddress> { IPAddress.Broadcast };
+        try
+        {
+            foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up ||
+                    nic.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback) continue;
+                foreach (var u in nic.GetIPProperties().UnicastAddresses)
+                {
+                    if (u.Address.AddressFamily != AddressFamily.InterNetwork || u.IPv4Mask == null) continue;
+                    var b = DirectedBroadcast(u.Address, u.IPv4Mask);
+                    if (b != null && !list.Contains(b)) list.Add(b);
+                }
+            }
+        }
+        catch { /* the general broadcast alone */ }
+        return list;
+    }
+
+    /// <summary>192.168.1.20 / 255.255.255.0 → 192.168.1.255; null for point-to-point links (/31, /32) such as VPN tunnels.</summary>
+    internal static IPAddress? DirectedBroadcast(IPAddress address, IPAddress mask)
+    {
+        var a = address.GetAddressBytes();
+        var m = mask.GetAddressBytes();
+        if (a.Length != 4 || m.Length != 4) return null;
+        uint mm = (uint)(m[0] << 24 | m[1] << 16 | m[2] << 8 | m[3]);
+        if (mm == 0 || ~mm <= 1) return null;
+        var b = new byte[4];
+        for (int i = 0; i < 4; i++) b[i] = (byte)(a[i] | ~m[i]);
+        return new IPAddress(b);
     }
 
     public Task<List<UserDto>> GetPublicUsersAsync(CancellationToken ct = default) =>
@@ -352,7 +423,7 @@ public sealed class JellyfinClient
             .Add("ids", q.Ids).Add("years", q.Years).Add("is4K", q.Is4K).Add("isHd", q.IsHd).Add("nameLessThan", q.NameLessThan)
             .Add("isMissing", q.IsMissing)
             .Add("fields", q.Fields ?? CardFields).Add("imageTypeLimit", 1)
-            .Add("enableImageTypes", "Primary,Backdrop,Thumb,Logo").Add("enableTotalRecordCount", true)),
+            .Add("enableImageTypes", "Primary,Backdrop,Thumb,Logo").Add("enableTotalRecordCount", q.EnableTotalRecordCount)),
             JellyfinJson.Default.QueryResultBaseItemDto, ct);
 
     public Task<BaseItemDto> GetItemAsync(string id, CancellationToken ct = default) =>
@@ -525,6 +596,82 @@ public sealed class JellyfinClient
         catch { /* reporting must never break playback */ }
     }
 
+    // ---------- SyncPlay (watch together) ----------
+    // Bodies are built with JsonObject (no source-generated types needed); replies are read as JSON documents.
+
+    private async Task<JsonDocument> GetDocAsync(string path, CancellationToken ct)
+    {
+        using var req = Req(HttpMethod.Get, path);
+        HttpResponseMessage resp;
+        try { resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false); }
+        catch (HttpRequestException ex) { throw new ApiException("Can't reach the server. " + ex.Message, null, ex); }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested) { throw new ApiException("The server took too long to respond.", null, ex); }
+        using (resp)
+        {
+            CheckRejected(req, resp);
+            await EnsureOk(resp).ConfigureAwait(false);
+            await using var s = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            return await JsonDocument.ParseAsync(s, cancellationToken: ct).ConfigureAwait(false);
+        }
+    }
+
+    private Task PostSyncPlay(string action, System.Text.Json.Nodes.JsonObject? body = null, CancellationToken ct = default)
+    {
+        var req = Req(HttpMethod.Post, "/SyncPlay/" + action);
+        if (body != null) req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+        return SendAsync(req, ct);
+    }
+
+    public async Task<List<SyncPlayGroupInfo>> SyncPlayListAsync(CancellationToken ct = default)
+    {
+        using var doc = await GetDocAsync("/SyncPlay/List", ct).ConfigureAwait(false);
+        return doc.RootElement.ValueKind == JsonValueKind.Array
+            ? doc.RootElement.EnumerateArray().Select(SyncPlayGroupInfo.From).Where(g => g != null).Select(g => g!).ToList()
+            : new();
+    }
+
+    public async Task SyncPlayNewAsync(string name, CancellationToken ct = default) =>
+        await PostSyncPlay("New", new() { ["GroupName"] = name }, ct).ConfigureAwait(false);
+
+    public Task SyncPlayJoinAsync(string groupId, CancellationToken ct = default) => PostSyncPlay("Join", new() { ["GroupId"] = groupId }, ct);
+    public Task SyncPlayLeaveAsync(CancellationToken ct = default) => PostSyncPlay("Leave", null, ct);
+    public Task SyncPlayPauseAsync() => PostSyncPlay("Pause");
+    public Task SyncPlayUnpauseAsync() => PostSyncPlay("Unpause");
+    public Task SyncPlayStopAsync() => PostSyncPlay("Stop");
+    public Task SyncPlaySeekAsync(long positionTicks) => PostSyncPlay("Seek", new() { ["PositionTicks"] = positionTicks });
+    public Task SyncPlayNextItemAsync(string playlistItemId) => PostSyncPlay("NextItem", new() { ["PlaylistItemId"] = playlistItemId });
+    public Task SyncPlayPreviousItemAsync(string playlistItemId) => PostSyncPlay("PreviousItem", new() { ["PlaylistItemId"] = playlistItemId });
+    public Task SyncPlayPingAsync(long ms) => PostSyncPlay("Ping", new() { ["Ping"] = ms });
+
+    /// <summary>The group plays these items (from <paramref name="index"/>), for everyone in it.</summary>
+    public Task SyncPlaySetNewQueueAsync(IEnumerable<string> itemIds, int index, long startTicks)
+    {
+        var ids = new System.Text.Json.Nodes.JsonArray();
+        foreach (var id in itemIds) ids.Add(id);
+        return PostSyncPlay("SetNewQueue", new() { ["PlayingQueue"] = ids, ["PlayingItemPosition"] = index, ["StartPositionTicks"] = startTicks });
+    }
+
+    /// <summary>
+    /// This player is ready (loaded, at <paramref name="positionTicks"/>) or still buffering. <paramref name="whenServer"/>
+    /// is the server's clock: the group starts once everyone is ready.
+    /// </summary>
+    public Task SyncPlayReportAsync(bool ready, DateTime whenServer, long positionTicks, bool isPlaying, string playlistItemId) =>
+        PostSyncPlay(ready ? "Ready" : "Buffering", new()
+        {
+            ["When"] = SyncPlayJson.Format(whenServer),
+            ["PositionTicks"] = positionTicks,
+            ["IsPlaying"] = isPlaying,
+            ["PlaylistItemId"] = playlistItemId,
+        });
+
+    /// <summary>The server's clock: when it got the request and when it answered (both UTC).</summary>
+    public async Task<(DateTime Received, DateTime Sent)> GetUtcTimeAsync(CancellationToken ct = default)
+    {
+        using var doc = await GetDocAsync("/GetUtcTime", ct).ConfigureAwait(false);
+        var received = SyncPlayJson.Time(doc.RootElement, "RequestReceptionTime") ?? throw new ApiException("The server didn't send its time.");
+        return (received, SyncPlayJson.Time(doc.RootElement, "ResponseTransmissionTime") ?? received);
+    }
+
     // ---------- Plugin-provided segments ----------
 
     /// <summary>Jellyfin 10.10+ Media Segments API (populated by Intro Skipper and other segment plugins).</summary>
@@ -591,6 +738,8 @@ public sealed class ItemQuery
     public string? NameLessThan { get; set; }
     /// <summary>false = leave out placeholder episodes that have no file.</summary>
     public bool? IsMissing { get; set; }
+    /// <summary>Counting every match costs the server a second query: later pages of a list skip it.</summary>
+    public bool EnableTotalRecordCount { get; set; } = true;
 
     /// <summary>A copy with the same filters (for counting / paging the same result set).</summary>
     public ItemQuery Clone() => (ItemQuery)MemberwiseClone();

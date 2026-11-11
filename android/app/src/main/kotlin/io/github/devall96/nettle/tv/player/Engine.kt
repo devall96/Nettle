@@ -41,6 +41,8 @@ data class PlayerLoad(
     val bufferBytes: Long? = null,
     /** "Authorization" header for the user's Jellyfin server; null for NostalgiaTV's feed. */
     val authHeader: String? = null,
+    /** Open paused at the start position (watch together: the group starts once everyone is ready). */
+    val startPaused: Boolean = false,
 )
 
 /** An external subtitle file handed to the player, and the Jellyfin stream index it came from. */
@@ -126,8 +128,15 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
         // A TV that doesn't accept Dolby Vision gets the HDR10 / SDR base layer (profiles 7 / 8),
         // decoded as plain HEVC, instead of a Dolby Vision signal it can't show.
         renderers.setMediaCodecSelector { mime, secure, tunneling ->
-            if (mime == MimeTypes.VIDEO_DOLBY_VISION && !AppServices.displaySupportsDolbyVision) emptyList()
-            else MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling)
+            val all = MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling)
+            when {
+                mime == MimeTypes.VIDEO_DOLBY_VISION && !AppServices.displaySupportsDolbyVision -> emptyList()
+                // Old MPEG-4 Part 2 / H.263 (DivX / Xvid era, SD): some TV chips' hardware decoders (the onn 4K's
+                // Amlogic one) hand back frames in a layout the screen shows as green stripes. Android's own software
+                // decoder is reliable and easily fast enough at those sizes, so it goes first.
+                mime == MimeTypes.VIDEO_MP4V || mime == MimeTypes.VIDEO_H263 -> all.sortedBy { if (it.softwareOnly) 0 else 1 }
+                else -> all
+            }
         }
         val loadControl = DefaultLoadControl.Builder()
             // Original files can be big (4K remuxes): keep a generous read-ahead, start once 2.5 s is buffered.
@@ -206,7 +215,7 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
     private fun prepare(startMs: Long) {
         val l = load ?: return
         // The shared, allowlisted OkHttp client: the player can't reach any host the user didn't set up.
-        val http = OkHttpDataSource.Factory(AppServices.http).setUserAgent("Nettle")
+        val http = OkHttpDataSource.Factory(AppServices.mediaHttp).setUserAgent("Nettle")
         l.authHeader?.let { http.setDefaultRequestProperties(mapOf("Authorization" to it)) }
         val subs = (l.externalSubtitles + extraSubs).map { s ->
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(s.url)).setId(s.url).setLabel(s.title).setLanguage(s.language)
@@ -217,7 +226,7 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
         val source = if (l.url.startsWith("asset:")) androidx.media3.datasource.DefaultDataSource.Factory(context, http) else http
         exo.setMediaSource(DefaultMediaSourceFactory(source, TolerantExtractorsFactory()).createMediaSource(item), startMs.coerceAtLeast(0))
         exo.prepare()
-        exo.playWhenReady = true
+        exo.playWhenReady = !l.startPaused
     }
 
     /** Jellyfin serves external subtitles as /Stream.{format}: tell Media3 the type from that. */

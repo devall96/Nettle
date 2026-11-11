@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Nettle.UI.ViewModels"
+             x:Class="Nettle.UI.Views.WatchTogetherView"
+             x:DataType="vm:WatchTogetherViewModel">
+  <Grid Classes="page">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="56,40,56,40" Spacing="18" MaxWidth="900" HorizontalAlignment="Left">
+        <TextBlock Classes="h1" Text="Watch together" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="760"
+                   Text="Start a group or join one, then play anything: it plays for everyone in the group at the same moment, here and in other Jellyfin apps that support SyncPlay. Pausing, seeking and skipping happen for everyone too." />
+
+        <!-- In a group -->
+        <Border Classes="panel" IsVisible="{Binding InGroup}">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="section" Text="YOUR GROUP" />
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <PathIcon Data="{StaticResource Icon.Group}" Width="28" Height="28" Foreground="{DynamicResource AccentBrush}" />
+              <TextBlock Classes="h3" Text="{Binding GroupName}" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Text="{Binding GroupPeople, StringFormat='Watching: {0}'}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding GroupState}" Classes="muted" />
+            <TextBlock Classes="muted caption" TextWrapping="Wrap"
+                       Text="Pick something from your libraries and press Play: it starts for everyone once all players are ready." />
+            <Button Content="Leave the group" Command="{Binding LeaveCommand}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+          </StackPanel>
+        </Border>
+
+        <!-- Not in a group -->
+        <StackPanel Spacing="14" IsVisible="{Binding !InGroup}">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Button Classes="primary" Content="Start a group" Command="{Binding CreateCommand}" />
+            <Button Content="Refresh" Command="{Binding ReloadCommand}" />
+          </StackPanel>
+          <TextBlock Classes="section" Text="GROUPS ON YOUR SERVER" Margin="0,10,0,0" />
+          <TextBlock Classes="muted" Text="No groups right now. Start one, or ask someone else to." IsVisible="{Binding NoGroups}" />
+          <ItemsControl ItemsSource="{Binding Groups}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SyncGroupViewModel">
+                <Button Command="{Binding JoinCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="18,12">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <PathIcon Data="{StaticResource Icon.Group}" Width="24" Height="24" Margin="0,0,14,0" />
+                    <StackPanel Grid.Column="1" Spacing="2">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding People}" Classes="muted caption" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="Join" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <TextBlock Text="{Binding Error}" Foreground="#FF6B6B" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

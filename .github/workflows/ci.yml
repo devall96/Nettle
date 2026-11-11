@@ -1,4 +1,4 @@
-# Every push to main and every pull request: build Nettle for Windows and Linux and run the
+# Every push to main and every pull request: build Nettle for Windows, Linux and Android TV and run the
 # tests (including the "never transcode" guard). Releases are still built separately.
 name: CI
 
@@ -51,3 +51,20 @@ jobs:
           ffmpeg -loglevel error -f lavfi -i testsrc2=size=1280x720:rate=24 -f lavfi -i sine=frequency=440 -t 3 \
             -c:v libx264 -pix_fmt yuv420p -c:a aac clip.mp4
           ./out/Nettle --selftest clip.mp4
+
+  # Android TV (Kotlin): the core tests (incl. the Kotlin "never transcode" guard), the dependency allowlist check
+  # and a debug build of the app. No signing key involved.
+  android-tv:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Core tests, dependency check, debug build
+        run: bash ./gradlew --no-daemon :core:test :app:checkDependencies :app:assembleDebug

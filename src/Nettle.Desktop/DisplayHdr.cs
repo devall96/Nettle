@@ -14,7 +14,7 @@ internal static class DisplayHdr
     {
         try
         {
-            var gdiName = MonitorDeviceName(hwnd);
+            var gdiName = MonitorDeviceNameCore(hwnd);
             if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out var nPath, out var nMode) != 0) return HdrDisplayState.Unknown;
             var paths = new DISPLAYCONFIG_PATH_INFO[nPath];
             var modes = new DISPLAYCONFIG_MODE_INFO[nMode];
@@ -73,7 +73,100 @@ internal static class DisplayHdr
         return HdrDisplayState.Unknown;
     }
 
-    private static string? MonitorDeviceName(IntPtr hwnd)
+    /// <summary>The monitor (GDI name, e.g. \\.\DISPLAY1) showing the window.</summary>
+    internal static string? MonitorDeviceName(IntPtr hwnd) => MonitorDeviceNameCore(hwnd);
+
+    /// <summary>A monitor's HDR: whether it can do it, and whether Windows has it on now.</summary>
+    internal readonly record struct HdrInfo(bool Supported, bool On);
+
+    /// <summary>The display path behind a GDI monitor name (adapter + target), or null.</summary>
+    private static (LUID Adapter, uint Id)? TargetFor(string gdiName)
+    {
+        if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out var nPath, out var nMode) != 0) return null;
+        var paths = new DISPLAYCONFIG_PATH_INFO[nPath];
+        var modes = new DISPLAYCONFIG_MODE_INFO[nMode];
+        if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, ref nPath, paths, ref nMode, modes, IntPtr.Zero) != 0) return null;
+        for (int i = 0; i < nPath; i++)
+        {
+            var p = paths[i];
+            var src = new DISPLAYCONFIG_SOURCE_DEVICE_NAME
+            {
+                header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
+                {
+                    type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME,
+                    size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SOURCE_DEVICE_NAME>(),
+                    adapterId = p.sourceInfo.adapterId,
+                    id = p.sourceInfo.id,
+                }
+            };
+            if (DisplayConfigGetDeviceInfo(ref src) != 0) continue;
+            if (string.Equals(src.viewGdiDeviceName, gdiName, StringComparison.OrdinalIgnoreCase)) return (p.targetInfo.adapterId, p.targetInfo.id);
+        }
+        return null;
+    }
+
+    /// <summary>HDR support and state of the monitor with this GDI name (null if it can't be read).</summary>
+    internal static HdrInfo? Info(string gdiName)
+    {
+        try
+        {
+            if (TargetFor(gdiName) is not { } t) return null;
+            // Windows 11 24H2+: HDR is told apart from SDR wide-colour / auto colour management.
+            var info2 = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2
+            {
+                header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
+                {
+                    type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO_2,
+                    size = (uint)Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2>(),
+                    adapterId = t.Adapter,
+                    id = t.Id,
+                }
+            };
+            if (DisplayConfigGetDeviceInfo(ref info2) == 0)
+                return new HdrInfo((info2.value & (1u << 4)) != 0, info2.activeColorMode == 2);
+            var info = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO
+            {
+                header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
+                {
+                    type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO,
+                    size = (uint)Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>(),
+                    adapterId = t.Adapter,
+                    id = t.Id,
+                }
+            };
+            if (DisplayConfigGetDeviceInfo(ref info) == 0) return new HdrInfo((info.value & 0x1) != 0, (info.value & 0x2) != 0);
+        }
+        catch (Exception ex) { Nettle.Core.Services.Log.Warn("HDR info query failed: " + ex.Message); }
+        return null;
+    }
+
+    /// <summary>Turns Windows' "Use HDR" on or off for one monitor (the same switch as in Settings → Display).</summary>
+    internal static bool SetHdr(string gdiName, bool on)
+    {
+        try
+        {
+            if (TargetFor(gdiName) is not { } t) return false;
+            // Windows 11 24H2+: the HDR switch itself; older Windows: "advanced colour", which is HDR there.
+            var hdr = new DISPLAYCONFIG_SET_STATE
+            {
+                header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
+                {
+                    type = DISPLAYCONFIG_DEVICE_INFO_SET_HDR_STATE,
+                    size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SET_STATE>(),
+                    adapterId = t.Adapter,
+                    id = t.Id,
+                },
+                value = on ? 1u : 0u,
+            };
+            if (DisplayConfigSetDeviceInfo(ref hdr) == 0) return true;
+            var advanced = hdr;
+            advanced.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
+            return DisplayConfigSetDeviceInfo(ref advanced) == 0;
+        }
+        catch (Exception ex) { Nettle.Core.Services.Log.Warn("HDR switch failed: " + ex.Message); return false; }
+    }
+
+    private static string? MonitorDeviceNameCore(IntPtr hwnd)
     {
         var mon = MonitorFromWindow(hwnd, 2 /* MONITOR_DEFAULTTONEAREST */);
         var mi = new MONITORINFOEX { cbSize = (uint)Marshal.SizeOf<MONITORINFOEX>() };
@@ -85,6 +178,14 @@ internal static class DisplayHdr
     private const uint DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME = 1;
     private const uint DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO = 9;
     private const uint DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO_2 = 15;
+    private const uint DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE = 10;
+    private const uint DISPLAYCONFIG_DEVICE_INFO_SET_HDR_STATE = 16;
+
+    /// <summary>DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE / DISPLAYCONFIG_SET_HDR_STATE: a header and one bit field.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DISPLAYCONFIG_SET_STATE { public DISPLAYCONFIG_DEVICE_INFO_HEADER header; public uint value; }
+
+    [DllImport("user32.dll")] private static extern int DisplayConfigSetDeviceInfo(ref DISPLAYCONFIG_SET_STATE setPacket);
 
     [StructLayout(LayoutKind.Sequential)] private struct LUID { public uint LowPart; public int HighPart; }
 

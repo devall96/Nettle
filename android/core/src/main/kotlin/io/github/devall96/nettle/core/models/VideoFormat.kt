@@ -12,7 +12,9 @@ object VideoFormat {
             "HDR10" -> "HDR10"
             "HDR10Plus" -> "HDR10+"
             "HLG" -> "HLG"
-            "DOVI", "DOVIWithHDR10", "DOVIWithHDR10Plus", "DOVIWithHLG", "DOVIWithSDR" -> "Dolby Vision"
+            // Every Dolby Vision type (incl. 10.11's DOVIWithEL / DOVIWithELHDR10Plus), but not DOVIInvalid.
+            "DOVIInvalid" -> null
+            in DV_PREFIXED -> "Dolby Vision"
             else -> null
         }
         val warning = if (isDolbyVisionOnly(rangeType) && !displaySupportsDolbyVision)
@@ -20,6 +22,8 @@ object VideoFormat {
         else null
         return label to warning
     }
+
+    private object DV_PREFIXED { operator fun contains(r: String?) = r != null && r.startsWith("DOVI") }
 
     /** True for Dolby Vision profile 5 (no HDR10/SDR fallback layer). */
     fun isDolbyVisionOnly(rangeType: String?): Boolean = rangeType == "DOVI"
@@ -36,7 +40,9 @@ object VideoFormat {
             codec == "truehd" -> "Dolby TrueHD"
             codec == "eac3" -> "Dolby Digital Plus"
             codec == "ac3" -> "Dolby Digital"
-            codec == "dts" && (has("ma") || has("hd")) -> "DTS-HD MA"
+            // Jellyfin's profile / title say "DTS-HD MA" or "DTS-HD HRA"; a bare "ma" can be any word ("German").
+            codec == "dts" && (has("dts-hd ma") || has("dts-hd master")) -> "DTS-HD MA"
+            codec == "dts" && has("dts-hd") -> "DTS-HD"
             codec == "dts" -> "DTS"
             codec == "flac" && (a.channels ?: 0) >= 6 -> "Lossless " + channelLayout(a.channels)
             else -> null

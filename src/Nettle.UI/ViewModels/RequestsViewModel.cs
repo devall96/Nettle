@@ -176,6 +176,9 @@ public sealed partial class RequestsViewModel : PageViewModel
 
     public Task ReloadMyRequestsAsync() => LoadMyRequestsAsync();
 
+    /// <summary>Title and poster per requested title (they don't change), so My Requests isn't 20 lookups every visit.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SeerrDetails> DetailsCache = new();
+
     public override bool HandleBack()
     {
         if (SeasonPicker == null) return false;
@@ -189,6 +192,7 @@ public sealed partial class RequestsViewModel : PageViewModel
 
     protected override async Task LoadAsync()
     {
+        await AppServices.SeerrReady;
         NotConfigured = !AppServices.Seerr.IsConfigured;
         if (NotConfigured) return;
         if (!string.IsNullOrWhiteSpace(SearchText)) _ = SearchAsync(SearchText, 0);
@@ -222,12 +226,16 @@ public sealed partial class RequestsViewModel : PageViewModel
             var mine = await AppServices.Seerr.MyRequestsAsync(20);
             var tasks = mine.Where(r => r.Media?.TmdbId != null).Take(20).Select(async r =>
             {
-                SeerrDetails? d = null;
-                try
+                var cacheKey = $"{r.Media!.MediaType}:{r.Media.TmdbId}";
+                if (!DetailsCache.TryGetValue(cacheKey, out var d))
                 {
-                    d = r.Media!.MediaType == "tv" ? await AppServices.Seerr.TvAsync(r.Media.TmdbId!.Value) : await AppServices.Seerr.MovieAsync(r.Media.TmdbId!.Value);
+                    try
+                    {
+                        d = r.Media.MediaType == "tv" ? await AppServices.Seerr.TvAsync(r.Media.TmdbId!.Value) : await AppServices.Seerr.MovieAsync(r.Media.TmdbId!.Value);
+                        DetailsCache[cacheKey] = d;
+                    }
+                    catch { }
                 }
-                catch { }
                 var status = r.Status switch { 1 => "Pending approval", 3 => "Declined", 4 => "Failed", _ => SeerrMediaStatus.Describe(r.Media?.Status) };
                 return new MyRequestViewModel
                 {

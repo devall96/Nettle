@@ -27,6 +27,10 @@ public static class PlaybackEngine
         yield return O("resume-playback", "no");
         yield return O("save-position-on-quit", "no");
         yield return O("user-agent", "Nettle");
+        // HTTPS: check the server's certificate like the rest of the app does. libmpv builds that fetch over
+        // FFmpeg's HTTP (the distro libmpv on Linux) don't by default, and the video request carries the sign-in
+        // token, so a look-alike server could otherwise collect it. (Curl-based builds check already.)
+        yield return O("tls-verify", "yes");
         yield return O("audio-client-name", "Nettle");
 
         // Nettle draws all UI and handles all input itself.
@@ -47,6 +51,11 @@ public static class PlaybackEngine
         yield return O("cache", "yes");
         yield return O("demuxer-max-bytes", "400MiB");
         yield return O("network-timeout", "30");
+        // Short network drops (Wi-Fi blips, a router restart) reconnect at the same byte instead of ending the file:
+        // curl (newer libmpv builds, e.g. Windows) and FFmpeg's HTTP (older ones, e.g. the distro libmpv on Linux).
+        // An option a given libmpv doesn't know is just rejected (logged) and changes nothing.
+        yield return O("curl-max-retries", "10");
+        yield return O("stream-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=15");
         yield return O("vo", "gpu-next");
         yield return O("hwdec", hardwareDecoding ? "auto-safe" : "no");
         yield return O("video-sync", "display-resample"); // smooth motion, no 24p judder

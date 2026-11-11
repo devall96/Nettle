@@ -170,6 +170,7 @@ fun PlayerScreen(vm: PlayerModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         vm.subtitle?.let { T(it, Modifier.alpha(0.8f), color = White, maxLines = 1) }
                         if (vm.isVod) vm.sourceLabel?.takeIf { it.isNotEmpty() }?.let { SourcePill(it, true) }
+                        vm.syncPlayLabel?.let { SourcePill(it, false) }
                     }
                 }
                 OsdButton(Icons.Subtitles, { vm.toggleTracks() })
@@ -201,14 +202,7 @@ fun PlayerScreen(vm: PlayerModel) {
         }
         // ---- Between programs ----
         vm.liveInterstitial?.let { T(it, Modifier.align(Alignment.Center), size = 26.sp, weight = FontWeight.Bold, color = White, align = TextAlign.Center) }
-        // ---- Channel banner ----
-        if (vm.isChannelBannerVisible && vm.typedChannel == null && !vm.isTuningScreenVisible) Column(
-            Modifier.align(Alignment.TopEnd).padding(top = 40.dp, end = 44.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xCC000000)).padding(22.dp, 14.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            vm.channelNumber?.let { T(it, size = 34.sp, weight = FontWeight.ExtraBold, color = White) }
-            T(vm.title, weight = FontWeight.SemiBold, color = White)
-        }
+        // (Live TV: the channel shows once, on the tuning screen and then the controls bar, not also at the top right.)
         // ---- Channel number being typed on the remote ----
         vm.typedChannel?.let {
             Box(Modifier.align(Alignment.TopEnd).padding(top = 40.dp, end = 44.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xCC000000)).padding(22.dp, 14.dp)) {
@@ -222,17 +216,12 @@ fun PlayerScreen(vm: PlayerModel) {
         }
         // ---- Up next ----
         if (vm.isUpNextVisible) UpNext(vm, Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 150.dp))
-        // ---- Format badges ----
+        // ---- Format badges (bottom left, above the controls) ----
         val badgeAlpha by animateFloatAsState(if (vm.isFormatBadgesVisible) 1f else 0f, tween(450, easing = CubicOut), label = "badges")
         if (badgeAlpha > 0f) Column(
-            Modifier.align(Alignment.TopEnd).padding(top = 104.dp, end = 40.dp).alpha(badgeAlpha), verticalArrangement = Arrangement.spacedBy(10.dp),
-            horizontalAlignment = Alignment.End,
+            Modifier.align(Alignment.BottomStart).padding(start = 44.dp, bottom = 150.dp).alpha(badgeAlpha), verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.Start,
         ) {
-            // Live TV: the channel's logo, small, on top of the format tags (same dark chip style).
-            if (vm.isLive && vm.logoUrl != null) Box(
-                Modifier.size(112.dp, 60.dp).background(Color(0xD90A0A0F), RoundedCornerShape(12.dp)).padding(10.dp, 8.dp),
-                contentAlignment = Alignment.Center,
-            ) { NetImage(vm.logoUrl, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Fit) }
             vm.formatBadges.forEach { Badge(it) }
         }
         // ---- Error ----
@@ -525,10 +514,10 @@ private fun Badge(b: FormatBadge) {
     Column(
         Modifier.alpha(if (b.verified) 1f else 0.8f).widthIn(max = 420.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xD90A0A0F))
             .border(1.5.dp, if (b.verified) p.accent else Color(0x66FFFFFF), RoundedCornerShape(12.dp)).padding(16.dp, 10.dp),
-        horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         T(b.label, size = 20.sp, weight = FontWeight.ExtraBold, color = White, style = Nettle.type.body.copy(letterSpacing = 1.5.sp))
-        T(b.detail, Modifier.alpha(0.75f), size = 12.sp, color = White, align = TextAlign.End)
+        T(b.detail, Modifier.alpha(0.75f), size = 12.sp, color = White)
     }
 }
 

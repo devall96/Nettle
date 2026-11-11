@@ -50,7 +50,23 @@ data class PlaybackSettings(
      * set from the player's Audio timing row. TVs often add picture processing in one mode only (a TCL
      * had the sound 207 ms early at 24 Hz but ~20 ms at 60 Hz), and it belongs to the hardware, so it's kept for every file.
      */
-    var audioOffsets: Map<String, Int> = emptyMap(),)
+    var audioOffsets: Map<String, Int> = emptyMap(),
+    /**
+     * Per series (by Jellyfin series id): the audio / subtitle language last picked in the player, used for the
+     * series' other episodes (e.g. Japanese audio with English subtitles for one show only).
+     */
+    var seriesTracks: Map<String, SeriesTrackChoice> = emptyMap(),
+)
+
+/** What the viewer picked in one series' player. Null language = not picked (use the usual preference). */
+@Serializable
+data class SeriesTrackChoice(
+    val audioLanguage: String? = null,
+    val subtitleLanguage: String? = null,
+    val subtitlesOff: Boolean = false,
+    /** Unix ms; the oldest entries are dropped past a few hundred series. */
+    val lastUsed: Long = 0,
+)
 
 @Serializable
 data class AppSettings(

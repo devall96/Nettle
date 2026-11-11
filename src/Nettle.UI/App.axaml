@@ -33,6 +33,7 @@
     <DataTemplate DataType="vm:SearchViewModel"><v:SearchView /></DataTemplate>
     <DataTemplate DataType="vm:LiveTvViewModel"><v:LiveTvView /></DataTemplate>
     <DataTemplate DataType="vm:RequestsViewModel"><v:RequestsView /></DataTemplate>
+    <DataTemplate DataType="vm:WatchTogetherViewModel"><v:WatchTogetherView /></DataTemplate>
     <DataTemplate DataType="vm:SettingsViewModel"><v:SettingsView /></DataTemplate>
     <DataTemplate DataType="vm:PlayerViewModel"><v:PlayerView /></DataTemplate>
 

@@ -143,6 +143,7 @@ private fun PageHost(page: Page?) {
         is SearchModel -> SearchScreen(page)
         is LiveTvModel -> LiveTvScreen(page)
         is RequestsModel -> RequestsScreen(page)
+        is WatchTogetherModel -> WatchTogetherScreen(page)
         is SettingsModel -> SettingsScreen(page)
         else -> PlaceholderScreen(page)
     }

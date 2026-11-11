@@ -138,14 +138,16 @@ object Main {
     // ---------- Playback ----------
 
     fun playItem(item: BaseItemDto, resume: Boolean, mediaSourceId: String? = null) {
-        closePlayer()
         val start = if (resume) item.userData?.playbackPositionTicks?.takeIf { it > 0 } else null
+        if (AppServices.syncPlay.inGroup) { startForGroup(listOf(item), 0, start ?: 0); return }
+        closePlayer()
         player = PlayerModel.forItem(item, start, mediaSourceId)
     }
 
     /** Plays a list in order from [index] (Play all, Shuffle, remote control). */
     fun playQueue(items: List<BaseItemDto>, index: Int = 0, startTicks: Long? = null) {
         if (items.isEmpty()) return
+        if (AppServices.syncPlay.inGroup) { startForGroup(items, index, startTicks ?: 0); return }
         closePlayer()
         player = PlayerModel.forQueue(items, index, startTicks)
     }
@@ -160,6 +162,25 @@ object Main {
     fun playLipSyncCheck(films: Boolean) {
         closePlayer()
         player = io.github.devall96.nettle.tv.player.PlayerModel.forLipSyncCheck(films)
+    }
+
+    /** Watch together: the group plays it (for everyone, this TV included, once all are ready). */
+    private fun startForGroup(items: List<BaseItemDto>, index: Int, startTicks: Long) {
+        scope.launch {
+            try {
+                toast("Starting it for everyone in your group…", 3000)
+                AppServices.syncPlay.play(items.map { it.id }, index.coerceIn(0, items.size - 1), startTicks)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
+                io.github.devall96.nettle.core.services.Log.warn("SyncPlay play failed: ${e.message}")
+                toast("The group couldn't start it: ${e.message}", 5000)
+            }
+        }
+    }
+
+    /** The watch-together group plays this: open it here, paused at the group's spot, until everyone is ready. */
+    fun openSyncPlay(item: BaseItemDto, startTicks: Long, playlistItemId: String) {
+        closePlayer()
+        player = PlayerModel.forSyncPlay(item, startTicks, playlistItemId)
     }
 
     fun playLive(channels: List<NtvChannel>, index: Int) {

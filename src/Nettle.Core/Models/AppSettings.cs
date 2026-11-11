@@ -58,6 +58,22 @@ public sealed class PlaybackSettings
     /// hardware, so it's kept for every file. Same setting as the Android TV app.
     /// </summary>
     public Dictionary<string, int> AudioOffsets { get; set; } = new();
+
+    /// <summary>
+    /// Per series (by Jellyfin series id): the audio / subtitle language last picked in the player, used for the
+    /// series' other episodes (e.g. Japanese audio with English subtitles for one show only).
+    /// </summary>
+    public Dictionary<string, SeriesTrackChoice> SeriesTracks { get; set; } = new();
+}
+
+/// <summary>What the viewer picked in one series' player. Null language = not picked (use the usual preference).</summary>
+public sealed class SeriesTrackChoice
+{
+    public string? AudioLanguage { get; set; }
+    public string? SubtitleLanguage { get; set; }
+    public bool SubtitlesOff { get; set; }
+    /// <summary>Unix ms; the oldest entries are dropped past a few hundred series.</summary>
+    public long LastUsed { get; set; }
 }
 
 public sealed class AppSettings
@@ -97,6 +113,8 @@ public sealed class AppSettings
     public DisplayMode DisplayMode { get; set; } = DisplayMode.Windowed;
     /// <summary>The full-screen type F11 and the player switch to (Borderless or Exclusive).</summary>
     public DisplayMode FullScreenKind { get; set; } = DisplayMode.Borderless;
+    /// <summary>Windows: the screen goes into HDR for HDR videos and out of it for SDR ones, like a TV, and back afterwards.</summary>
+    public bool MatchHdrToVideo { get; set; } = true;
 }
 
 public sealed class WindowPlacement

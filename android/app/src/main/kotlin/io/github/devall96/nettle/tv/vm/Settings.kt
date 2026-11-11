@@ -89,7 +89,8 @@ class SettingsModel : Page() {
     var pluginsLoaded by mutableStateOf(false); private set
 
     override suspend fun load() {
-        seerrApiKey = AppServices.secure.get("seerr.apikey") ?: ""
+        AppServices.seerrReady.join()
+        seerrApiKey = AppServices.secure.get(SeerrClient.apiKeySecret(AppServices.session.current?.id)) ?: ""
         ntvApiKey = AppServices.secure.get("ntv.apikey") ?: ""
         if (AppServices.seerr.isConfigured) seerrStatus = "Connected"
         if (AppServices.ntv.isConfigured) ntvStatus = "Configured"
@@ -142,7 +143,7 @@ class SettingsModel : Page() {
                 AppServices.allowHostOf(url) // the user typed this address
                 save()
                 if (url == null) {
-                    AppServices.secure.remove("seerr.apikey"); AppServices.secure.remove("seerr.cookie")
+                    AppServices.saveSeerrSecrets(null, null)
                     AppServices.seerr.configure(null, null, null)
                     seerrStatus = "Removed"
                     return@launch
@@ -150,11 +151,10 @@ class SettingsModel : Page() {
                 if (seerrUser.isNotBlank()) {
                     AppServices.seerr.signInWithJellyfin(url, seerrUser.trim(), seerrPassword)
                     seerrPassword = ""
-                    AppServices.seerr.sessionCookie?.let { AppServices.secure.set("seerr.cookie", it) }
-                    AppServices.secure.remove("seerr.apikey")
+                    AppServices.saveSeerrSecrets(null, AppServices.seerr.sessionCookie)
                     seerrApiKey = ""
                 } else {
-                    AppServices.secure.set("seerr.apikey", seerrApiKey.trim())
+                    AppServices.saveSeerrSecrets(seerrApiKey.trim(), null)
                     AppServices.seerr.configure(url, seerrApiKey, null)
                 }
                 val me = AppServices.seerr.getMe()
@@ -190,7 +190,7 @@ class SettingsModel : Page() {
         scope.launch {
             val wasCurrent = AppServices.session.current?.id == t.account.id
             AppServices.session.signOutAndForget(t.account)
-            AppServices.forgetHome(t.account.id)
+            AppServices.forgetAccountData(t.account.id)
             accounts.remove(t)
             if (wasCurrent) Main.showAccountPicker()
         }

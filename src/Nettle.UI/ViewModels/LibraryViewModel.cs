@@ -184,18 +184,22 @@ public sealed partial class LibraryViewModel : PageViewModel
         await RunAsync(() => LoadPageAsync(_cts.Token));
     }
 
-    private async Task LoadPageAsync(CancellationToken ct)
+    /// <param name="upTo">Load at least this many items in one request (A–Z jump far down the list).</param>
+    private async Task LoadPageAsync(CancellationToken ct, int upTo = 0)
     {
         if (_cards.Count >= _total) return;
         // The server reshuffles on every request, so a second "page" of a random sort would
         // repeat and skip items: random is one larger batch, with no further pages.
         bool random = Sort.SortBy == "Random";
+        bool first = _cards.Count == 0;
         var q = BuildQuery();
         q.StartIndex = _cards.Count;
-        q.Limit = random ? RandomBatch : PageSize;
+        q.Limit = random ? RandomBatch : Math.Max(PageSize, upTo - _cards.Count + PageSize / 2);
+        q.EnableTotalRecordCount = first; // the count is known from the first page
         var res = await AppServices.Jellyfin.GetItemsAsync(q, ct);
         if (ct.IsCancellationRequested) return;
-        _total = res.TotalRecordCount;
+        if (first) _total = res.TotalRecordCount;
+        else if (res.Items.Count < q.Limit) _total = _cards.Count + res.Items.Count; // reached the end
         var shape = IsLandscape ? CardShape.Landscape : CardShape.Poster;
         int start = _cards.Count;
         _cards.AddRange(res.Items.Select(i => new MediaCardViewModel(i, shape)));
@@ -254,8 +258,9 @@ public sealed partial class LibraryViewModel : PageViewModel
                 index = (await AppServices.Jellyfin.GetItemsAsync(q, ct)).TotalRecordCount;
             }
             if (Sort.Order == "Descending") index = Math.Max(0, _total - index - 1);
-            while (_cards.Count <= index && _cards.Count < _total && !ct.IsCancellationRequested)
-                await LoadPageAsync(ct);
+            // Everything up to that letter in one request (not page after page).
+            if (_cards.Count <= index && _cards.Count < _total && !ct.IsCancellationRequested)
+                await LoadPageAsync(ct, upTo: index + 1);
             if (ct.IsCancellationRequested || _cards.Count == 0) return;
             ScrollToRow?.Invoke(Math.Min(index, _cards.Count - 1) / Math.Max(1, _columns));
         }, showBusy: false);

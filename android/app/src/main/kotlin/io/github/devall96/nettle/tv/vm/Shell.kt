@@ -34,6 +34,7 @@ class Shell : ViewModelBase() {
     val navBottom = listOf(
         NavItem("livetv", "Live TV", { Icons.LiveTv }) { navigateRoot(LiveTvModel()) },
         NavItem("requests", "Requests", { Icons.Request }) { navigateRoot(RequestsModel()) },
+        NavItem("together", "Watch together", { Icons.Group }) { navigateRoot(WatchTogetherModel()) },
         NavItem("settings", "Settings", { Icons.Settings }) { navigateRoot(SettingsModel()) },
     )
 
@@ -159,7 +160,7 @@ class Shell : ViewModelBase() {
         AppServices.scope.launch {
             if (acc != null) {
                 AppServices.session.signOutAndForget(acc)
-                AppServices.forgetHome(acc.id)
+                AppServices.forgetAccountData(acc.id)
             }
             Main.showAccountPicker()
         }

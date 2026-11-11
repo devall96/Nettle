@@ -124,6 +124,10 @@
                       IsVisible="{Binding SourceLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <TextBlock Text="{Binding SourceLabel}" FontSize="11" FontWeight="Bold" Foreground="#86EFAC" />
               </Border>
+              <Border CornerRadius="4" Padding="7,1" Background="{DynamicResource AccentSoftBrush}" VerticalAlignment="Center"
+                      IsVisible="{Binding SyncPlayLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{Binding SyncPlayLabel}" FontSize="11" FontWeight="Bold" />
+              </Border>
             </StackPanel>
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
@@ -259,22 +263,6 @@
       <TextBlock Text="{Binding LiveInterstitial}" IsVisible="{Binding LiveInterstitial, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                  HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" FontSize="26" FontWeight="Bold" />
 
-      <!-- Channel banner (always shows briefly when tuning) -->
-      <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,40,44,0"
-              Background="#CC000000" CornerRadius="14" Padding="22,14">
-        <Border.IsVisible>
-          <MultiBinding Converter="{x:Static BoolConverters.And}">
-            <Binding Path="IsChannelBannerVisible" />
-            <Binding Path="!IsTuningScreenVisible" />
-            <Binding Path="TypedChannel" Converter="{x:Static ObjectConverters.IsNull}" />
-          </MultiBinding>
-        </Border.IsVisible>
-        <StackPanel>
-          <TextBlock Text="{Binding ChannelNumber}" FontSize="34" FontWeight="ExtraBold" HorizontalAlignment="Right" />
-          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" HorizontalAlignment="Right" />
-        </StackPanel>
-      </Border>
-
       <!-- Channel number being typed (number keys on Live TV) -->
       <Border IsVisible="{Binding TypedChannel, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalAlignment="Right" VerticalAlignment="Top"
               Margin="0,40,44,0" Background="#CC000000" CornerRadius="14" Padding="22,14" IsHitTestVisible="False">
@@ -313,28 +301,25 @@
         </Grid>
       </Border>
 
-      <!-- TV-style format badges (verified output; press I to show again). Live TV: the channel's logo on top, same chip style. -->
-      <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,104,40,0" Spacing="10"
+      <!-- TV-style format badges (verified output; press I to show again), bottom left above the controls. -->
+      <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="44,0,0,150" Spacing="10"
                   Opacity="{Binding IsFormatBadgesVisible, Converter={x:Static c:BoolToOpacity.Instance}}" IsHitTestVisible="False">
         <StackPanel.Transitions>
           <Transitions>
             <DoubleTransition Property="Opacity" Duration="0:0:0.45" Easing="CubicEaseOut" />
           </Transitions>
         </StackPanel.Transitions>
-        <Border IsVisible="{Binding ShowBadgeLogo}" HorizontalAlignment="Right" Width="112" Height="60" CornerRadius="12" Padding="10,8" Background="#D90A0A0F">
-          <Image Classes="fade" Opacity="0" Stretch="Uniform" c:ImageLoader.DecodeWidth="224" c:ImageLoader.Source="{Binding LogoUrl}" />
-        </Border>
       <ItemsControl ItemsSource="{Binding FormatBadges}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:FormatBadgeViewModel">
-            <Border CornerRadius="12" Padding="16,10" Background="#D90A0A0F" BorderThickness="1.5" HorizontalAlignment="Right" MaxWidth="420"
+            <Border CornerRadius="12" Padding="16,10" Background="#D90A0A0F" BorderThickness="1.5" HorizontalAlignment="Left" MaxWidth="420"
                     BorderBrush="{DynamicResource AccentBrush}" Classes.dim="{Binding NotVerified}">
               <StackPanel Spacing="2">
-                <TextBlock Text="{Binding Label}" FontSize="20" FontWeight="ExtraBold" LetterSpacing="1.5" HorizontalAlignment="Right" />
-                <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" HorizontalAlignment="Right" />
+                <TextBlock Text="{Binding Label}" FontSize="20" FontWeight="ExtraBold" LetterSpacing="1.5" />
+                <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
           </DataTemplate>

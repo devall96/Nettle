@@ -54,6 +54,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         NavTop.Add(new NavItemViewModel("search", "Search", "Icon.Search", () => NavigateRoot(new SearchViewModel())));
         NavBottom.Add(new NavItemViewModel("livetv", "Live TV", "Icon.LiveTv", () => NavigateRoot(new LiveTvViewModel())));
         NavBottom.Add(new NavItemViewModel("requests", "Requests", "Icon.Request", () => NavigateRoot(new RequestsViewModel())));
+        NavBottom.Add(new NavItemViewModel("together", "Watch together", "Icon.Group", () => NavigateRoot(new WatchTogetherViewModel())));
         NavBottom.Add(new NavItemViewModel("settings", "Settings", "Icon.Settings", () => NavigateRoot(new SettingsViewModel())));
     }
 
@@ -196,7 +197,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         if (acc != null)
         {
             await AppServices.Session.SignOutAndForgetAsync(acc);
-            Services.HomeCache.Delete(acc.Id);
+            await AppServices.ForgetAccountDataAsync(acc.Id);
         }
         _main.ShowAccountPicker();
     }

@@ -23,6 +23,7 @@ public sealed class MpvPlayer : IVideoPlayer
     private volatile bool _paused, _cacheWait, _fileLoaded, _restarted, _ended;
     private double _timeSec = -1, _durationSec;
     private long _width, _height, _audioRate;
+    private double _displayFps;
     private long _currentEntry = -1;
     private PlayerLoad? _currentLoad;
     private readonly HashSet<string> _loggedThisFile = new();
@@ -69,6 +70,7 @@ public sealed class MpvPlayer : IVideoPlayer
             Observe(5, "width", Mpv.FormatInt64);
             Observe(6, "height", Mpv.FormatInt64);
             Observe(7, "audio-params/samplerate", Mpv.FormatInt64);
+            Observe(8, "display-fps", Mpv.FormatDouble);
             _initialized = true;
             _events = new Thread(EventLoop) { IsBackground = true, Name = "mpv events" };
             _events.Start();
@@ -226,6 +228,7 @@ public sealed class MpvPlayer : IVideoPlayer
             case 5: _width = has ? Marshal.ReadInt64(value) : 0; break;
             case 6: _height = has ? Marshal.ReadInt64(value) : 0; break;
             case 7: _audioRate = has ? Marshal.ReadInt64(value) : 0; break;
+            case 8: _displayFps = has ? BitConverter.Int64BitsToDouble(Marshal.ReadInt64(value)) : 0; break;
         }
     }
 
@@ -247,8 +250,7 @@ public sealed class MpvPlayer : IVideoPlayer
     public PlayerFeatures Features => PlayerFeatures.All;
 
     /// <summary>mpv's idea of the display's refresh rate (it follows exclusive full screen's switches).</summary>
-    public double? DisplayFps =>
-        double.TryParse(GetProperty("display-fps"), NumberStyles.Float, CultureInfo.InvariantCulture, out var hz) && hz > 1 ? hz : null;
+    public double? DisplayFps => _displayFps > 1 ? _displayFps : null;
 
     // What mpv is really sending to the screen: "pq" / "hlg" = HDR signal.
     public string? HdrOutputSignal => GetProperty("video-target-params/gamma");
@@ -294,7 +296,7 @@ public sealed class MpvPlayer : IVideoPlayer
             // is the screen's calibration, set by the player view model, so it stays.
             Mpv.mpv_set_property_string(h, "sub-delay", "0");
             Mpv.mpv_set_property_string(h, "loop-file", load.Loop ? "inf" : "no");
-            Mpv.mpv_set_property_string(h, "pause", "no");
+            Mpv.mpv_set_property_string(h, "pause", load.StartPaused ? "yes" : "no");
             int r = Mpv.Command(h, "loadfile", load.Url, "replace");
             if (r < 0) Error?.Invoke(Mpv.ErrorString(r));
         });
@@ -303,8 +305,10 @@ public sealed class MpvPlayer : IVideoPlayer
     private void AddExternalSubtitles(PlayerLoad? load)
     {
         if (load == null) return;
+        // Asynchronous: each subtitle is a download, and a blocking call here would hold the player lock (and the
+        // event thread) for all of them, freezing the interface at the start of a file.
         foreach (var (url, title, lang) in load.ExternalSubtitles)
-            Run(h => Mpv.Command(h, "sub-add", url, "auto", title, lang ?? ""));
+            Run(h => Mpv.CommandAsync(h, "sub-add", url, "auto", title, lang ?? ""));
     }
 
     /// <summary>

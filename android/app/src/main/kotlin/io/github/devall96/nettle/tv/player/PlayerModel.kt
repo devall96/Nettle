@@ -86,6 +86,9 @@ class PlayerModel private constructor() {
     private var livePausedAt: Long? = null
     private var feedWatchStart: Long? = null
     private var liveRetryVersion = -1
+    private var lastLoad: PlayerLoad? = null
+    private var reconnects = 0
+    private val RECONNECT_DELAYS_MS = longArrayOf(2000, 5000, 10000)
 
     // ---- what the screen shows ----
     var title by mutableStateOf("")
@@ -180,8 +183,46 @@ class PlayerModel private constructor() {
     val subtitleScaleText get() = "${(subtitleScale * 100).toInt()}%"
     val audioOffsetText get() = if (audioOffsetMs == 0) "0 ms" else "${if (audioOffsetMs > 0) "+" else "−"}${kotlin.math.abs(audioOffsetMs)} ms"
 
-    private val audioLang get() = AppServices.session.preferredAudioLanguage(settings.preferredAudioLanguage)
-    private val subLang get() = AppServices.session.preferredSubtitleLanguage(settings.preferredSubtitleLanguage)
+    private val audioLang get() = seriesChoice?.audioLanguage ?: AppServices.session.preferredAudioLanguage(settings.preferredAudioLanguage)
+    private val subLang get() = seriesChoice?.subtitleLanguage ?: AppServices.session.preferredSubtitleLanguage(settings.preferredSubtitleLanguage)
+
+    /** The languages last picked in this episode's series (null for films, live TV, or nothing picked yet). */
+    private val seriesChoice: SeriesTrackChoice?
+        get() {
+            val it = item ?: return null
+            val sid = it.seriesId
+            return if (!isLive && it.isEpisode && sid != null) settings.seriesTracks[sid] else null
+        }
+
+    private fun subtitleModeFor(): String = seriesChoice.let { c ->
+        when {
+            c?.subtitlesOff == true -> "None"
+            c?.subtitleLanguage != null -> "Always"
+            else -> AppServices.session.subtitleMode(settings.subtitleMode)
+        }
+    }
+
+    /** A track picked in a series' player is used for the rest of that series. */
+    private fun rememberForSeries(t: TrackOption) {
+        val it = item ?: return
+        val sid = it.seriesId
+        if (isLive || !it.isEpisode || sid == null) return
+        val idx = t.streamIndex
+        val lang = if (idx != null && idx >= 0) sourceStreams?.firstOrNull { s -> s.index == idx }?.language else null
+        var c = settings.seriesTracks[sid] ?: SeriesTrackChoice()
+        c = when {
+            t.audio -> if (lang != null) c.copy(audioLanguage = lang) else c
+            idx == -1 -> c.copy(subtitlesOff = true, subtitleLanguage = null)
+            lang != null -> c.copy(subtitlesOff = false, subtitleLanguage = lang)
+            else -> c
+        }.copy(lastUsed = System.currentTimeMillis())
+        var map = settings.seriesTracks + (sid to c)
+        if (map.size > MAX_REMEMBERED_SERIES)
+            map = map.entries.sortedByDescending { e -> e.value.lastUsed }.take(MAX_REMEMBERED_SERIES).associate { e -> e.key to e.value }
+        settings.seriesTracks = map
+    }
+
+    private val MAX_REMEMBERED_SERIES = 300
     private val bufferSeconds get() = settings.networkBufferSeconds.coerceIn(2, 300)
 
     /** Live TV asks after this long with no input at all. */
@@ -197,6 +238,7 @@ class PlayerModel private constructor() {
         engine.onEnded = { onEnded() }
         engine.onError = { reason -> val t = tuneVersion; scope.launch { onPlaybackError(t, reason) } }
         engine.onReady = {
+            reconnects = 0 // playing again: a later drop gets its own tries
             Log.info("playing: ${engine.describeOutput()}")
             isBuffering = false
             // Some files don't tell the decoder their frame rate: use what Jellyfin measured for refresh-rate matching.
@@ -227,6 +269,16 @@ class PlayerModel private constructor() {
             this.channels = channels
             channels.forEach { AppServices.allowHostOf(it.streamUrl) }
             tuneTo(index)
+        }
+
+        /** Watch together: the group's current item, opened paused at the group's spot; it reports ready once loaded. */
+        fun forSyncPlay(item: BaseItemDto, startTicks: Long, playlistItemId: String): PlayerModel = PlayerModel().apply {
+            syncEntry = playlistItemId
+            syncWantReady = true
+            syncReadyTargetMs = startTicks / 10_000
+            engine.setSpeed(1.0) // everyone at normal speed
+            updateSyncLabel()
+            scope.launch { startItem(item, startTicks, null) }
         }
 
         /** Sync-test builds: plays a bundled clip (nothing is reported to the server). */
@@ -273,6 +325,7 @@ class PlayerModel private constructor() {
 
     /** Like a CD player: early in an item goes back one, otherwise restarts this one. */
     fun playPrevious() {
+        if (isSyncPlay) { askGroup("previous") { sync.previous() }; return }
         if (isLive) return
         val q = queue
         if (q != null && queueIndex > 0 && engine.timeMs < 5000) {
@@ -300,6 +353,10 @@ class PlayerModel private constructor() {
         subtitle = if (it.isEpisode) "S${it.parentIndexNumber}:E${it.indexNumber}  ${it.name}" else it.productionYear?.toString()
         logoUrl = it.tag("Logo")?.let { t -> Img.of(it.id, "Logo", t, 500) } ?: it.parentLogoImageTag?.let { t -> Img.of(it.parentLogoItemId, "Logo", t, 500) }
         val jf = AppServices.jellyfin
+        // Skip segments are fetched alongside, so an intro right at the start is known before the video is.
+        val segmentsJob = scope.async {
+            try { AppServices.segments.getSegments(it.id, legacyFallback = it.isEpisode) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+        }
         try {
             // Ask the server for media sources with transcoding explicitly disabled.
             val info = jf.getPlaybackInfo(it.id, startTicks)
@@ -321,8 +378,10 @@ class PlayerModel private constructor() {
             lastReport = System.currentTimeMillis()
             scope.launch { loadTrickplay(it.id, source.id!!) }
             scope.launch { loadChapters(it.id) }
-            segments = AppServices.segments.getSegments(it.id)
-            if (queue == null && it.isEpisode && settings.autoPlayNextEpisode) findNextEpisode(it)
+            val found = segmentsJob.await()
+            if (item !== it || disposed) return // a quick switch: these belong to the previous item
+            segments = found
+            if (queue == null && syncEntry == null && it.isEpisode && settings.autoPlayNextEpisode) findNextEpisode(it)
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             error = e.message
             isBuffering = false
@@ -342,10 +401,11 @@ class PlayerModel private constructor() {
             startMs = startMs,
             audioLanguage = audioLang,
             subtitleLanguage = subLang,
-            subtitleMode = AppServices.session.subtitleMode(settings.subtitleMode),
+            subtitleMode = subtitleModeFor(),
             externalSubtitles = externalSubsOf(itemId, source),
             bufferSeconds = bufferSeconds,
             authHeader = jf.tokenHeaderValue,
+            startPaused = syncEntry != null && !isLive,
         )
     }
 
@@ -520,6 +580,7 @@ class PlayerModel private constructor() {
     private fun swapMedia(load: PlayerLoad) {
         if (disposed) return
         currentUrl = load.url
+        lastLoad = load
         mediaGeneration++
         audioTracks.clear(); subtitleTracks.clear()
         isFormatBadgesVisible = false
@@ -558,6 +619,7 @@ class PlayerModel private constructor() {
             endsAtText = "Ends " + LocalDateTime.now().plusNanos((len - pos) * 1_000_000).format(clockAmPm)
         }
         updateSegments(maxOf(0, time), len)
+        syncTick(time)
 
         val due = now - lastReport >= 10_000 || (reportAfter?.let { now >= it } == true)
         if (due && canReport && time > 0 && !engine.isBuffering) {
@@ -570,6 +632,8 @@ class PlayerModel private constructor() {
     }
 
     private var currentSkip: PlaybackSegment? = null
+    /** With no credits marker, the Up Next card shows for this long before the end of the file. */
+    private val UP_NEXT_LEAD_MS = 25_000L
 
     private fun updateSegments(posMs: Long, lenMs: Long) {
         var active = segments.firstOrNull { posMs >= it.startMs && posMs < it.endMs - 500 }
@@ -581,13 +645,19 @@ class PlayerModel private constructor() {
                 active = null
             } else if (action != SegmentAction.ShowButton || active == dismissedSegment) active = null
         }
-        // Credits with a known next episode turn into the "Up Next" card instead of a plain skip.
-        val creditsNow = active?.kind == SegmentKind.Credits ||
-            (segments.none { it.kind == SegmentKind.Credits } && lenMs > 0 && lenMs - posMs < 25_000 && posMs > 60_000)
+        // Credits with a known next episode turn into the "Up Next" card instead of a plain skip. Without a
+        // credits marker the card shows for the last 25 s and counts down to the end of the file, which then
+        // starts the next one (onEnded): nothing of the episode is cut off.
+        val remainingMs = lenMs - posMs
+        val nearEndNoMarker = segments.none { it.kind == SegmentKind.Credits } && lenMs > 0 && remainingMs < UP_NEXT_LEAD_MS && posMs > 60_000
+        val creditsNow = active?.kind == SegmentKind.Credits || nearEndNoMarker
         if (nextEpisode != null && creditsNow && !upNextDismissed) {
             if (!isUpNextVisible) { isUpNextVisible = true; upNextShownAt = System.currentTimeMillis() }
-            upNextCountdown = maxOf(0, settings.upNextCountdownSeconds - ((System.currentTimeMillis() - upNextShownAt) / 1000).toInt())
-            if (upNextCountdown == 0 && isPlaying && !isStillWatchingVisible) { autoPlayNext(); return }
+            if (active?.kind != SegmentKind.Credits) upNextCountdown = ((remainingMs.coerceAtLeast(0) + 999) / 1000).toInt()
+            else {
+                upNextCountdown = maxOf(0, settings.upNextCountdownSeconds - ((System.currentTimeMillis() - upNextShownAt) / 1000).toInt())
+                if (upNextCountdown == 0 && isPlaying && !isStillWatchingVisible) { autoPlayNext(); return }
+            }
             active = null
         } else if (isUpNextVisible && !creditsNow) isUpNextVisible = false
         isSkipVisible = active != null
@@ -603,7 +673,7 @@ class PlayerModel private constructor() {
     }
 
     /** Next episode chosen by the user: counts as being here. */
-    fun playNext() { autoPlayedInARow = 0; playNextCore() }
+    fun playNext() { if (isSyncPlay) { askGroup("next") { sync.next() }; return }; autoPlayedInARow = 0; playNextCore() }
 
     private fun playNextCore() {
         val next = nextEpisode ?: return
@@ -715,6 +785,19 @@ class PlayerModel private constructor() {
             liveRetryVersion = tuneVersion
             return
         }
+        // A video whose connection dropped (Wi-Fi, a router or server restart): reopen it where it was, a few
+        // times with growing pauses, before giving up. The server answered nothing, or "busy" / gateway errors.
+        val again = lastLoad
+        if (!isLive && again != null && reconnects < RECONNECT_DELAYS_MS.size && (status == null || status in listOf(408, 502, 503, 504))) {
+            val wait = RECONNECT_DELAYS_MS[reconnects++]
+            isBuffering = true
+            Main.toast("Connection lost. Reconnecting…", wait + 3000)
+            Log.warn("connection lost (HTTP ${status ?: "none"}), reconnecting in ${wait / 1000} s (try $reconnects)")
+            delay(wait)
+            if (disposed || tuneAtError != tuneVersion || lastLoad !== again) return
+            swapMedia(again.copy(startMs = if (lastPositionMs > 500) lastPositionMs else again.startMs))
+            return
+        }
         isBuffering = false
         error = if (!isLive) "Playback failed ($reason). The file may be unreachable from this TV, or use a format this TV can't decode."
         else if (isLiveDirect) "This program couldn't be loaded from your Jellyfin server."
@@ -732,10 +815,23 @@ class PlayerModel private constructor() {
                 isBuffering = false
                 return
             }
+            // NostalgiaTV's feed can end when it restarts or changes program: tune in again once.
+            if (liveRetryVersion != tuneVersion) {
+                Log.warn("live feed ended, tuning in again once")
+                tuneTo(channelIndex)
+                liveRetryVersion = tuneVersion
+                return
+            }
             error = "The channel stream ended."
             return
         }
         if (isStillWatchingVisible) return
+        if (isSyncPlay) {
+            // The group's queue moves on (every player asks; the server takes the first), or this was the last item.
+            val q = sync.queue
+            if (q != null && q.playingIndex + 1 < q.playlist.size) askGroup("next") { sync.next() } else close()
+            return
+        }
         // A list the user started always moves on; single episodes follow the setting.
         if (nextEpisode != null && (settings.autoPlayNextEpisode || queue != null) && !upNextDismissed) { autoPlayNext(); return }
         close()
@@ -744,6 +840,7 @@ class PlayerModel private constructor() {
     fun togglePlay() {
         if (isScrubbing) { commitScrub(); return }
         showOsd()
+        if (isSyncPlay) { val pause = engine.isPlaying; askGroup(if (pause) "pause" else "play") { if (pause) sync.pause() else sync.unpause() }; return }
         val it = item
         if (engine.ended && !isLive && it != null) { scope.launch { startItem(it, null, mediaSourceId) }; return }
         val willPause = engine.isPlaying || !engine.isPaused
@@ -775,6 +872,7 @@ class PlayerModel private constructor() {
 
     fun seekToMs(ms: Long, fast: Boolean = false) {
         if (isLive) return
+        if (isSyncPlay) { positionMs = ms; askGroup("seek") { sync.seek(maxOf(0, ms) * 10_000) }; return }
         lastSeekTargetMs = ms
         lastSeekAt = System.currentTimeMillis()
         positionMs = ms
@@ -909,6 +1007,7 @@ class PlayerModel private constructor() {
         val list = if (t.audio) audioTracks else subtitleTracks
         for (i in list.indices) list[i] = list[i].copy(selected = list[i].id == t.id)
         if (t.audio) audioStreamIndex = t.streamIndex else subtitleStreamIndex = t.streamIndex
+        rememberForSeries(t)
         // Tell the server right away, so resuming (here or elsewhere) keeps this choice.
         if (canReport) { val p = progress(!isPlaying, if (t.audio) "AudioTrackChange" else "SubtitleTrackChange"); AppServices.scope.launch { AppServices.jellyfin.reportProgress(p) } }
     }
@@ -1279,9 +1378,146 @@ class PlayerModel private constructor() {
         t?.let { selectTrack(it) }
     }
 
+    // ===================== Watch together (SyncPlay) =====================
+    // Port of PlayerViewModel.SyncPlay.cs: play / pause / seek / next are asked of the group (everyone gets the
+    // command), the file starts paused and reports "ready", and a drift check keeps it in step.
+
+    private val sync get() = AppServices.syncPlay
+    /** The group's queue entry this player shows (null = not playing for a group). */
+    var syncEntry: String? = null; private set
+    val isSyncPlay: Boolean get() = syncEntry != null && sync.inGroup
+    var syncPlayLabel by mutableStateOf<String?>(null); private set
+    private var syncWantReady = false
+    private var syncReadyTargetMs = -1L
+    private var syncReportedBuffering = false
+    private var syncBufferingSince = Long.MAX_VALUE
+    private var syncNextDriftCheck = 0L
+    private var syncSpeedUntil = 0L
+    private var syncSpeedActive = false
+    private var syncUnpausedAt = 0L
+    private var syncUnpauseJob: Job? = null
+
+    fun updateSyncLabel() {
+        syncPlayLabel = if (isSyncPlay) sync.group?.let { "Watching together · ${it.participants.size}" } else null
+        if (isSyncPlay) sync.queue?.let { q -> hasNext = q.playingIndex + 1 < q.playlist.size }
+    }
+
+    /** A command for the whole group (from the server). */
+    fun applySyncCommand(cmd: SyncPlayCommand) {
+        if (!isSyncPlay || disposed || (cmd.playlistItemId != null && cmd.playlistItemId != syncEntry)) return
+        syncUnpauseJob?.cancel()
+        val posMs = cmd.positionTicks / 10_000
+        when (cmd.command) {
+            "Unpause" -> {
+                val delayMs = sync.toLocalMs(cmd.whenMs) - System.currentTimeMillis()
+                if (delayMs > 0) {
+                    syncSeekIfOff(posMs, paused = true)
+                    syncUnpauseJob = scope.launch {
+                        delay(delayMs)
+                        engine.setPause(false)
+                        syncUnpausedAt = System.currentTimeMillis()
+                    }
+                } else {
+                    // Late (the command took a while to arrive): join where the group already is.
+                    syncSeekIfOff(posMs - delayMs)
+                    engine.setPause(false)
+                    syncUnpausedAt = System.currentTimeMillis()
+                }
+            }
+            "Pause" -> { engine.setPause(true); syncSeekIfOff(posMs, paused = true) }
+            "Seek" -> {
+                engine.setPause(true)
+                syncSeekIfOff(posMs, always = true)
+                syncWantReady = true // ready again once the jump has landed
+                syncReadyTargetMs = posMs
+            }
+            "Stop" -> close()
+        }
+    }
+
+    /** Moves this player without asking the group (it's the group's own command). */
+    private fun syncSeekIfOff(ms: Long, always: Boolean = false, paused: Boolean = false) {
+        val target = maxOf(0L, ms)
+        // Paused, a seek is cheap and exact: line up closely. Playing, small gaps are left to the drift check.
+        val tolerance = if (paused || !engine.isPlaying) (SyncPlayMath.TOLERANCE_MS / 2).toLong() else 300L
+        if (!always && kotlin.math.abs(engine.timeMs - target) < tolerance) return
+        lastSeekTargetMs = target
+        lastSeekAt = System.currentTimeMillis()
+        positionMs = target
+        lastPositionMs = target
+        engine.seekTo(target)
+    }
+
+    /** From the player's tick: ready / buffering reports and the drift check. */
+    private fun syncTick(timeMs: Long) {
+        if (!isSyncPlay || sourcePending) return
+        val now = System.currentTimeMillis()
+        val ticks = maxOf(0L, timeMs) * 10_000
+        if (syncWantReady) {
+            val landed = syncReadyTargetMs < 0 || kotlin.math.abs(timeMs - syncReadyTargetMs) < 1500
+            if (engine.lengthMs > 0 && !engine.isBuffering && timeMs >= 0 && landed) {
+                syncWantReady = false
+                syncReport(true, ticks, engine.isPlaying)
+            }
+            return
+        }
+        // Stalled while the group plays: say so (the group waits), and say when it's over.
+        if (engine.isBuffering) {
+            if (syncBufferingSince == Long.MAX_VALUE) syncBufferingSince = now
+            if (!syncReportedBuffering && sync.state == "Playing" && now - syncBufferingSince > 1000) {
+                syncReportedBuffering = true
+                syncReport(false, ticks, false)
+            }
+        } else {
+            syncBufferingSince = Long.MAX_VALUE
+            if (syncReportedBuffering) { syncReportedBuffering = false; syncReport(true, ticks, engine.isPlaying) }
+        }
+        if (syncSpeedActive && now >= syncSpeedUntil) { syncSpeedActive = false; engine.setSpeed(1.0) }
+        if (now < syncNextDriftCheck || syncSpeedActive || !engine.isPlaying || isScrubbing || now - syncUnpausedAt < 3000) return
+        syncNextDriftCheck = now + 2000
+        val cmd = sync.lastCommand ?: return
+        if (sync.state != "Playing" || cmd.command != "Unpause" || (cmd.playlistItemId != null && cmd.playlistItemId != syncEntry)) return
+        val expected = SyncPlayMath.expectedMs(cmd, sync.serverNowMs)
+        val fix = SyncPlayMath.correction(timeMs.toDouble(), expected)
+        when (fix.kind) {
+            SyncCorrectionKind.Speed -> {
+                engine.setSpeed(fix.speed)
+                syncSpeedActive = true
+                syncSpeedUntil = now + fix.durationMs.toLong()
+                Log.info("SyncPlay: ${(expected - timeMs).toLong()} ms from the group, catching up at ${"%.2f".format(fix.speed)}x")
+            }
+            SyncCorrectionKind.Skip -> {
+                Log.info("SyncPlay: ${(expected - timeMs).toLong()} ms from the group, jumping to it")
+                syncSeekIfOff(fix.targetMs.toLong(), always = true)
+                syncUnpausedAt = now // let the jump land before measuring again
+            }
+            SyncCorrectionKind.None -> {}
+        }
+    }
+
+    private fun syncReport(ready: Boolean, ticks: Long, playing: Boolean) {
+        AppServices.scope.launch {
+            try { sync.report(ready, ticks, playing) } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                Log.warn("SyncPlay ${if (ready) "ready" else "buffering"} report failed: ${e.message}")
+            }
+        }
+    }
+
+    /** Asks the group (pause / play / seek / next): everyone, this player included, follows the command. */
+    private fun askGroup(what: String, request: suspend () -> Unit) {
+        showOsd()
+        AppServices.scope.launch {
+            try { request() } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                Log.warn("SyncPlay $what failed: ${e.message}")
+                flash("The group didn't answer: ${e.message}", 3500)
+            }
+        }
+    }
+
     fun dispose() {
         if (disposed) return
         disposed = true
+        syncUnpauseJob?.cancel()
         runCatching { displays?.unregisterDisplayListener(displayListener) }
         val stop = reportStopped()
         scope.launch { AppServices.settings.save() }

@@ -52,6 +52,12 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // Without the release key the APK is signed with this PC's debug key: it can't update (or be updated by)
+            // an official install. Say so loudly and mark the version, so such a build is never mistaken for a release.
+            if (signingConfigs.findByName("release") == null) {
+                versionNameSuffix = "-unofficial"
+                logger.warn("WARNING: no release key (~/.nettle/nettle-release.properties): this release build is debug-signed and marked -unofficial.")
+            }
         }
     }
 

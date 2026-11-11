@@ -67,7 +67,7 @@ public sealed partial class AccountPickerViewModel : ViewModelBase
     {
         bool wasCurrent = AppServices.Session.Current?.Id == tile.Account.Id;
         await AppServices.Session.SignOutAndForgetAsync(tile.Account);
-        Services.HomeCache.Delete(tile.Account.Id);
+        await AppServices.ForgetAccountDataAsync(tile.Account.Id);
         Accounts.Remove(tile);
         if (wasCurrent) _main.ShowAccountPicker();
         else if (Accounts.Count == 0 && AppServices.Session.Current == null) _main.ShowServerSelect();
@@ -233,6 +233,8 @@ public sealed partial class LoginViewModel : ViewModelBase
     private async Task SignInAsync()
     {
         if (string.IsNullOrWhiteSpace(Username)) { Error = "Enter your username."; return; }
+        // A Quick Connect code still waiting would otherwise sign in a second time if approved later.
+        CancelQuickConnect();
         await RunAsync(async () =>
         {
             var user = Username.Trim();

@@ -48,6 +48,14 @@
             </StackPanel>
             <ComboBox Grid.Column="1" ItemsSource="{Binding DisplayModes}" SelectedItem="{Binding DisplayModeChoice}" MinWidth="220" VerticalAlignment="Center" />
           </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding ShowHdrMatching}">
+            <StackPanel>
+              <TextBlock Text="Match HDR to the video" FontWeight="SemiBold" />
+              <TextBlock TextWrapping="Wrap" Classes="muted caption"
+                         Text="Like a TV: Windows' HDR is turned on for HDR videos and off for SDR ones, then put back as it was when you leave the player. Only on screens that can do HDR; the screen goes dark for a moment when it switches." />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding MatchHdrToVideo}" OnContent="" OffContent="" VerticalAlignment="Center" />
+          </Grid>
         </StackPanel>
       </Border>
 

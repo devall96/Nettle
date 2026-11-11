@@ -17,7 +17,19 @@ public partial class PlayerView : UserControl
         if (AppServices.Profile.VideoBehindUi) Background = Avalonia.Media.Brushes.Transparent;
 
         // The overlay may live in its own window (Windows), so wire its input directly.
-        Overlay.PointerMoved += (_, _) => Vm?.UserActivity();
+        Overlay.PointerMoved += (_, e) =>
+        {
+            // Windows (and X11) also report a "move" when the window under a still mouse is resized, moved or
+            // re-shown, which the controls' own window is all the time; that made the controls pop up by themselves.
+            // Only a real movement of the mouse on screen counts.
+            var s = Overlay.PointToScreen(e.GetPosition(Overlay));
+            var p = new Point(s.X, s.Y);
+            if (_lastPointer is { } last && Math.Abs(last.X - p.X) < 3 && Math.Abs(last.Y - p.Y) < 3) return;
+            bool first = _lastPointer == null;
+            _lastPointer = p;
+            if (first) return; // where the mouse already was when the player opened
+            Vm?.UserActivity();
+        };
         Overlay.PointerPressed += OnOverlayPressed;
 
         // Scrubbing preview: follows the pointer over the seek bar, and the thumb while dragging.
@@ -74,10 +86,26 @@ public partial class PlayerView : UserControl
         if (_vm != null) _vm.PropertyChanged -= OnVmChanged;
         _vm = Vm;
         if (_vm != null) _vm.PropertyChanged += OnVmChanged;
+        UpdateCursor();
+    }
+
+    private static readonly Cursor HiddenCursor = new(StandardCursorType.None);
+
+    /// <summary>
+    /// Like other video players: the pointer disappears together with the controls (they only hide while the
+    /// video plays), and the next mouse movement brings both back (PointerMoved → UserActivity → ShowOsd).
+    /// </summary>
+    private void UpdateCursor()
+    {
+        var hide = _vm is { IsOsdVisible: false, IsStillWatchingVisible: false };
+        var cursor = hide ? HiddenCursor : null;
+        Overlay.Cursor = cursor;
+        Cursor = cursor;
     }
 
     private void OnVmChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(PlayerViewModel.IsOsdVisible) or nameof(PlayerViewModel.IsStillWatchingVisible)) UpdateCursor();
         // Remote / keyboard users land on "Continue watching" when the question appears.
         if (e.PropertyName == nameof(PlayerViewModel.IsStillWatchingVisible) && _vm?.IsStillWatchingVisible == true)
             Avalonia.Threading.Dispatcher.UIThread.Post(() => ContinueButton.Focus(), Avalonia.Threading.DispatcherPriority.Input);
@@ -89,7 +117,9 @@ public partial class PlayerView : UserControl
         PlayPause.Focus();
     }
 
+    private Point? _lastPointer;
     private DateTime _lastClick;
+    private bool _lastClickToggledPlay;
 
     private void OnOverlayPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -103,12 +133,16 @@ public partial class PlayerView : UserControl
         if ((now - _lastClick).TotalMilliseconds < 350)
         {
             vm.ToggleFullScreenCommand.Execute(null);
+            // The first click of the double-click paused (or resumed): undo that.
+            if (_lastClickToggledPlay) vm.TogglePlayCommand.Execute(null);
             _lastClick = DateTime.MinValue;
+            _lastClickToggledPlay = false;
         }
         else
         {
             _lastClick = now;
-            if (vm.IsOsdVisible && !vm.IsTracksOpen) vm.TogglePlayCommand.Execute(null);
+            _lastClickToggledPlay = vm.IsOsdVisible && !vm.IsTracksOpen;
+            if (_lastClickToggledPlay) vm.TogglePlayCommand.Execute(null);
             else vm.ShowOsd();
             vm.IsTracksOpen = false;
         }

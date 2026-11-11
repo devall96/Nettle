@@ -107,7 +107,7 @@ public sealed partial class LiveTvViewModel : PageViewModel
     public LiveTvViewModel()
     {
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        _clock.Tick += (_, _) => UpdateNow();
+        _clock.Tick += (_, _) => { UpdateNow(); _ = RefreshIfLeftOpenAsync(); };
     }
 
     protected override Task LoadAsync() => LoadGuideAsync(force: false);
@@ -301,9 +301,30 @@ public sealed partial class LiveTvViewModel : PageViewModel
                 if (c.Program is { } p) c.IsNow = p.Start <= now && p.Stop > now;
     }
 
+    private DateTime _lastInspect = DateTime.UtcNow;
+    private bool _refreshing;
+
+    /// <summary>
+    /// The guide keeps itself current when it's left open: once it's 20 minutes old, and only while nobody is
+    /// moving around in it (2 minutes), so the focus never jumps under someone's hand.
+    /// </summary>
+    private async Task RefreshIfLeftOpenAsync()
+    {
+        if (_refreshing || NotConfigured || AppServices.Ntv.GuideLoadedAt is not { } at) return;
+        if (DateTimeOffset.Now - at < TimeSpan.FromMinutes(20) || DateTime.UtcNow - _lastInspect < TimeSpan.FromMinutes(2)) return;
+        _refreshing = true;
+        try
+        {
+            Nettle.Core.Services.Log.Info("guide: left open, refreshing it");
+            await LoadGuideAsync(force: true);
+        }
+        finally { _refreshing = false; }
+    }
+
     public void Inspect(GuideProgramViewModel vm)
     {
         if (vm.IsSpacer) return;
+        _lastInspect = DateTime.UtcNow;
         // Keyboard focus moving toward the window's edge pulls more of the schedule in.
         if (vm.Start > _winEnd - WindowMargin || vm.Start < _winStart + WindowMargin)
             EnsureWindowAround(vm.Start);

@@ -28,7 +28,8 @@ public sealed class SegmentService
     private readonly JellyfinClient _client;
     public SegmentService(JellyfinClient client) => _client = client;
 
-    public async Task<List<PlaybackSegment>> GetSegmentsAsync(string itemId, CancellationToken ct = default)
+    /// <param name="legacyFallback">Also ask the Intro Skipper plugin's old endpoint (it only knows episodes).</param>
+    public async Task<List<PlaybackSegment>> GetSegmentsAsync(string itemId, bool legacyFallback = true, CancellationToken ct = default)
     {
         var result = new List<PlaybackSegment>();
         var segs = await _client.GetMediaSegmentsAsync(itemId, ct).ConfigureAwait(false);
@@ -47,7 +48,7 @@ public sealed class SegmentService
                 result.Add(new PlaybackSegment(kind.Value, TimeSpan.FromTicks(s.StartTicks), TimeSpan.FromTicks(s.EndTicks)));
         }
 
-        if (result.Count == 0)
+        if (result.Count == 0 && legacyFallback)
         {
             var legacy = await _client.GetIntroSkipperSegmentsAsync(itemId, ct).ConfigureAwait(false);
             foreach (var (key, v) in legacy)

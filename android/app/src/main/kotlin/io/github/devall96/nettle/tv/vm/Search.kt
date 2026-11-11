@@ -89,6 +89,7 @@ class SearchModel : Page() {
 
     /** Seerr's matches that aren't available yet (only when Seerr is set up). */
     private suspend fun searchSeerr(term: String) {
+        AppServices.seerrReady.join()
         if (!AppServices.seerr.isConfigured) return
         try {
             val page = AppServices.seerr.search(term, 1)

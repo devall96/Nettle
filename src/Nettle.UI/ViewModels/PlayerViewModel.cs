@@ -193,7 +193,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                ?? audio.FirstOrDefault(a => a.IsDefault) ?? audio[0];
     }
     public ObservableCollection<TrackOptionViewModel> SubtitleTracks { get; } = new();
-    public bool HasNext => _nextEpisode != null;
+    public bool HasNext => _nextEpisode != null || (IsSyncPlay && Sync.Queue is { } q && q.PlayingIndex + 1 < q.Playlist.Count);
     public bool IsVod => !IsLive;
 
     /// <summary>Highest volume step: mpv can boost past 100%, other engines stop at 100.</summary>
@@ -202,9 +202,6 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     public bool CanAdjustSubtitleDelay => Player.Features.HasFlag(PlayerFeatures.SubtitleDelay);
     /// <summary>TV: no window to make full screen, and the remote controls the TV's own volume.</summary>
     public bool IsTv => AppServices.Profile.IsTv;
-    /// <summary>Live TV: the channel's logo sits on top of the format badges and fades with them.</summary>
-    public bool ShowBadgeLogo => IsLive && LogoUrl != null;
-    partial void OnLogoUrlChanged(string? value) => OnPropertyChanged(nameof(ShowBadgeLogo));
 
     /// <summary>False when the user turned on Reduce motion (fades and slides are skipped).</summary>
     public bool MotionEnabled { get; } = !AppServices.Settings.Current.ReduceMotion;
@@ -230,6 +227,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             {
                 IsBuffering = false;
                 IsTuning = false;
+                _reconnects = 0; // playing again: a later drop gets its own tries
                 // Exclusive full screen: the monitor's refresh rate follows the video (Jellyfin's measured frame rate).
                 var video = _sourceStreams?.FirstOrDefault(s => s.Type == "Video");
                 AppServices.Window?.SetVideoFrameRate(IsLipSyncCheck ? _checkFps : video?.RealFrameRate ?? video?.AverageFrameRate);
@@ -358,6 +356,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     public void PlayPrevious()
     {
         if (IsLive) return;
+        if (IsSyncPlay) { AskGroup(Sync.PreviousAsync, "previous"); return; }
         if (_queue != null && _queueIndex > 0 && Player.TimeMs < 5000)
         {
             _ = ReportStoppedAsync();
@@ -394,6 +393,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         LogoUrl = item.Tag("Logo") is { } logo ? jf.ImageUrl(item.Id, "Logo", logo, 500)
             : item.ParentLogoImageTag != null ? jf.ImageUrl(item.ParentLogoItemId, "Logo", item.ParentLogoImageTag, 500) : null;
 
+        // Skip segments are fetched alongside, so an intro right at the start is known before the video is.
+        var segmentsTask = AppServices.Segments.GetSegmentsAsync(item.Id, legacyFallback: item.IsEpisode);
         try
         {
             // Ask the server for media sources with transcoding explicitly disabled.
@@ -408,6 +409,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 .Where(x => !string.IsNullOrEmpty(x)));
             _playSessionId = info.PlaySessionId;
 
+            await MatchScreenHdrAsync(source.MediaStreams);
+            if (_item != item || _disposed) return;
+
             // External subtitle files are fetched as-is (no burn-in, no conversion) and handed to mpv.
             _externalSubs = ExternalSubs(item.Id, source);
             _lastPositionMs = startTicks is > 0 ? TimeSpan.FromTicks(startTicks.Value).TotalMilliseconds : 0;
@@ -418,8 +422,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             _lastReport = DateTime.UtcNow;
 
             _ = LoadTrickplayAsync(item.Id, source.Id!);
-            _segments = await AppServices.Segments.GetSegmentsAsync(item.Id);
-            if (_queue == null && item.IsEpisode && _settings.AutoPlayNextEpisode) _ = FindNextEpisodeAsync(item);
+            var segments = await segmentsTask;
+            if (_item != item || _disposed) return; // a quick switch: these belong to the previous item
+            _segments = segments;
+            if (_queue == null && _syncEntry == null && item.IsEpisode && _settings.AutoPlayNextEpisode) _ = FindNextEpisodeAsync(item);
         }
         catch (Exception ex)
         {
@@ -437,8 +443,37 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private int BufferSeconds => Math.Clamp(_settings.NetworkBufferSeconds, 2, 300);
 
     /// <summary>Languages: this device's setting when filled in, otherwise the signed-in user's Jellyfin profile.</summary>
-    private string? AudioLang => AppServices.Session.PreferredAudioLanguage(_settings.PreferredAudioLanguage);
-    private string? SubLang => AppServices.Session.PreferredSubtitleLanguage(_settings.PreferredSubtitleLanguage);
+    private string? AudioLang => SeriesChoice?.AudioLanguage ?? AppServices.Session.PreferredAudioLanguage(_settings.PreferredAudioLanguage);
+    private string? SubLang => SeriesChoice?.SubtitleLanguage ?? AppServices.Session.PreferredSubtitleLanguage(_settings.PreferredSubtitleLanguage);
+
+    /// <summary>The languages last picked in this episode's series (null for films, live TV, or nothing picked yet).</summary>
+    private SeriesTrackChoice? SeriesChoice =>
+        !IsLive && _item is { IsEpisode: true, SeriesId: { } sid } && _settings.SeriesTracks.TryGetValue(sid, out var c) ? c : null;
+
+    private string SubtitleModeFor() => SeriesChoice switch
+    {
+        { SubtitlesOff: true } => "None",
+        { SubtitleLanguage: not null } => "Always",
+        _ => AppServices.Session.SubtitleMode(_settings.SubtitleMode),
+    };
+
+    /// <summary>A track picked in a series' player is used for the rest of that series.</summary>
+    private void RememberForSeries(TrackOptionViewModel t, bool audio)
+    {
+        if (IsLive || _item is not { IsEpisode: true, SeriesId: { } sid }) return;
+        var lang = t.StreamIndex is >= 0 and var i ? _sourceStreams?.FirstOrDefault(s => s.Index == i)?.Language : null;
+        var c = _settings.SeriesTracks.TryGetValue(sid, out var old) ? old : new SeriesTrackChoice();
+        if (audio) { if (lang != null) c.AudioLanguage = lang; }
+        else if (t.StreamIndex == -1) { c.SubtitlesOff = true; c.SubtitleLanguage = null; }
+        else if (lang != null) { c.SubtitlesOff = false; c.SubtitleLanguage = lang; }
+        c.LastUsed = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        _settings.SeriesTracks[sid] = c;
+        if (_settings.SeriesTracks.Count > MaxRememberedSeries)
+            foreach (var k in _settings.SeriesTracks.OrderBy(e => e.Value.LastUsed).Take(_settings.SeriesTracks.Count - MaxRememberedSeries).Select(e => e.Key).ToList())
+                _settings.SeriesTracks.Remove(k);
+    }
+
+    private const int MaxRememberedSeries = 300;
 
     /// <summary>
     /// Everything mpv needs for one file from the user's Jellyfin server: the original file, its
@@ -456,12 +491,13 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             StartSeconds = startSeconds,
             AudioLanguage = AudioLang,
             SubtitleLanguage = SubLang,
-            SubtitleMode = AppServices.Session.SubtitleMode(_settings.SubtitleMode),
+            SubtitleMode = SubtitleModeFor(),
             ExternalSubtitles = ExternalSubs(itemId, source).Select(s => (s.Url, s.Title, s.Language)).ToList(),
             CacheSeconds = BufferSeconds,
             CacheBytes = CacheBytesFor(source),
             AuthHeader = jf.TokenHeaderValue,
             ExclusiveAudio = _settings.AudioPassthrough && PlaybackEngine.NeedsExclusiveAudio(audio?.Codec, audio?.Profile),
+            StartPaused = _syncEntry != null && !IsLive,
         };
     }
 
@@ -617,6 +653,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _sourceStreams = null; // feed: no file metadata, so only verified resolution is badged
         _feedWatchStart = DateTime.UtcNow;
         LiveSourceLabel = "NostalgiaTV broadcast feed";
+        _ = MatchScreenHdrAsync(null); // NostalgiaTV's feed is SDR
         // NostalgiaTV's own feed: no Jellyfin token goes to it (AuthHeader stays empty).
         SwapMedia(new PlayerLoad { Url = ch.StreamUrl, CacheSeconds = Math.Max(20, BufferSeconds), CacheBytes = 150L << 20 });
         UpdateLiveInfo();
@@ -641,6 +678,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         var source = info.MediaSources.FirstOrDefault();
         if (source?.Id == null) throw new InvalidOperationException("No media source");
 
+        await MatchScreenHdrAsync(source.MediaStreams);
+        if (version != _tuneVersion) return;
+        // Computed after the lookup (and any HDR switch) so the time spent doesn't put us behind live.
+        offsetMs = Math.Max(0, (DateTimeOffset.Now - slot.Start).TotalMilliseconds) + (slot.PlaybackStartTimeMs ?? 0);
         var load = LibraryLoad(itemId, source, info.PlaySessionId, offsetMs > 500 ? offsetMs / 1000.0 : null);
 
         _liveSlot = slot;
@@ -792,6 +833,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         if (_disposed) return;
         _currentUrl = load.Url;
+        _lastLoad = load;
         _mediaGeneration++;
         AudioTracks.Clear();
         SubtitleTracks.Clear();
@@ -807,6 +849,24 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             (load.AuthHeader != null ? " (token sent as a header)" : ""));
         Player.Load(load);
     }
+
+    /// <summary>
+    /// Settings → Match HDR to the video (Windows): the screen goes into HDR for an HDR file and out of it for an SDR
+    /// one, like a TV. When it really switched, the screen goes dark for a moment, so the file starts after that.
+    /// </summary>
+    private async Task MatchScreenHdrAsync(IReadOnlyList<MediaStream>? streams)
+    {
+        if (AppServices.Window is not { } w) return;
+        var v = streams?.FirstOrDefault(s => s.Type == "Video");
+        bool hdr = VideoFormat.HdrLabel(v?.VideoRangeType, out _) != null;
+        try
+        {
+            if (await w.SetVideoHdrAsync(hdr)) await Task.Delay(HdrSettleMs);
+        }
+        catch (Exception ex) { Nettle.Core.Services.Log.Warn("HDR switch failed: " + ex.Message); }
+    }
+
+    private const int HdrSettleMs = 2000;
 
     /// <summary>Strips the access token from URLs before they reach the log.</summary>
     private static string Redact(string? url) =>
@@ -852,6 +912,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         }
 
         UpdateSegments(pos, len);
+        SyncTick(time);
 
         bool due = (DateTime.UtcNow - _lastReport).TotalSeconds >= 10 || (_reportAfter is { } after && DateTime.UtcNow >= after);
         if (due && CanReport && time > 0 && !Player.IsBuffering)
@@ -883,9 +944,12 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             else if (action != SegmentAction.ShowButton || active == _dismissedSegment) active = null;
         }
 
-        // Credits with a known next episode turn into the "Up Next" card instead of a plain skip.
-        bool creditsNow = active?.Kind == SegmentKind.Credits ||
-                          (_segments.All(s => s.Kind != SegmentKind.Credits) && lenMs > 0 && lenMs - pos.TotalMilliseconds < 25_000 && pos.TotalSeconds > 60);
+        // Credits with a known next episode turn into the "Up Next" card instead of a plain skip. Without a
+        // credits marker the card shows for the last 25 s and counts down to the end of the file, which then
+        // starts the next one (OnEnded): nothing of the episode is cut off.
+        double remainingMs = lenMs - pos.TotalMilliseconds;
+        bool nearEndNoMarker = _segments.All(s => s.Kind != SegmentKind.Credits) && lenMs > 0 && remainingMs < UpNextLeadMs && pos.TotalSeconds > 60;
+        bool creditsNow = active?.Kind == SegmentKind.Credits || nearEndNoMarker;
         if (_nextEpisode != null && creditsNow && !_upNextDismissed)
         {
             if (!IsUpNextVisible)
@@ -893,8 +957,13 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 IsUpNextVisible = true;
                 _upNextShownAt = DateTime.UtcNow;
             }
-            UpNextCountdown = Math.Max(0, _settings.UpNextCountdownSeconds - (int)(DateTime.UtcNow - _upNextShownAt).TotalSeconds);
-            if (UpNextCountdown == 0 && IsPlaying && !IsStillWatchingVisible) { AutoPlayNext(); return; }
+            if (active?.Kind != SegmentKind.Credits)
+                UpNextCountdown = (int)Math.Ceiling(Math.Max(0, remainingMs) / 1000);
+            else
+            {
+                UpNextCountdown = Math.Max(0, _settings.UpNextCountdownSeconds - (int)(DateTime.UtcNow - _upNextShownAt).TotalSeconds);
+                if (UpNextCountdown == 0 && IsPlaying && !IsStillWatchingVisible) { AutoPlayNext(); return; }
+            }
             active = null;
         }
         else if (IsUpNextVisible && !creditsNow) IsUpNextVisible = false;
@@ -905,6 +974,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     }
 
     private PlaybackSegment? _currentSkip;
+    /// <summary>With no credits marker, the Up Next card shows for this long before the end of the file.</summary>
+    private const double UpNextLeadMs = 25_000;
 
     [RelayCommand]
     private void Skip()
@@ -919,6 +990,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void PlayNext()
     {
+        if (IsSyncPlay) { AskGroup(Sync.NextAsync, "next"); return; }
         _autoPlayedInARow = 0;
         PlayNextCore();
     }
@@ -1027,6 +1099,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     }
 
     private int _liveRetryVersion = -1;
+    private PlayerLoad? _lastLoad;
+    private int _reconnects;
+    private static readonly int[] ReconnectDelaysMs = [2000, 5000, 10000];
     private static readonly HttpClient ProbeHttp = Nettle.Core.Api.HttpFactory.Create(TimeSpan.FromSeconds(8));
 
     /// <summary>Requests the first byte of the stream to learn the HTTP status after a failure.</summary>
@@ -1087,6 +1162,20 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        // A video whose connection dropped (Wi-Fi, a router or server restart): reopen it where it was, a few
+        // times with growing pauses, before giving up. The server answered nothing, or "busy" / gateway errors.
+        if (!IsLive && !IsLipSyncCheck && _lastLoad is { } again && _reconnects < ReconnectDelaysMs.Length && status is null or 408 or 502 or 503 or 504)
+        {
+            var wait = ReconnectDelaysMs[_reconnects++];
+            IsBuffering = true;
+            Flash("Connection lost. Reconnecting…", wait + 3000);
+            Nettle.Core.Services.Log.Warn($"connection lost (HTTP {status?.ToString() ?? "none"}), reconnecting in {wait / 1000} s (try {_reconnects})");
+            await Task.Delay(wait);
+            if (_disposed || tuneAtError != _tuneVersion || _lastLoad != again) return;
+            SwapMedia(again with { StartSeconds = _lastPositionMs > 500 ? _lastPositionMs / 1000 : again.StartSeconds });
+            return;
+        }
+
         IsBuffering = false;
         Error = !IsLive ? "Playback failed. The file may be unreachable from this PC."
             : IsLiveDirect ? "This program couldn't be loaded from your Jellyfin server."
@@ -1106,10 +1195,25 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 IsBuffering = false;
                 return;
             }
+            // NostalgiaTV's feed can end when it restarts or changes program: tune in again once.
+            if (_liveRetryVersion != _tuneVersion)
+            {
+                Nettle.Core.Services.Log.Warn("live feed ended, tuning in again once");
+                TuneTo(_channelIndex);
+                _liveRetryVersion = _tuneVersion;
+                return;
+            }
             Error = "The channel stream ended.";
             return;
         }
         if (IsStillWatchingVisible) return;
+        if (IsSyncPlay)
+        {
+            // The group's queue moves on (every player asks; the server takes the first), or this was the last item.
+            if (Sync.Queue is { } q && q.PlayingIndex + 1 < q.Playlist.Count) AskGroup(Sync.NextAsync, "next");
+            else Close();
+            return;
+        }
         // A list the user started (Play all / Shuffle / remote) always moves on; single episodes follow the setting.
         if (_nextEpisode != null && (_settings.AutoPlayNextEpisode || _queue != null) && !_upNextDismissed) { AutoPlayNext(); return; }
         Close();
@@ -1120,6 +1224,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         if (_scrubbing) { CommitScrub(); return; }
         ShowOsd();
+        if (IsSyncPlay) { var pause = Player.IsPlaying; AskGroup(() => pause ? Sync.PauseAsync() : Sync.UnpauseAsync(), pause ? "pause" : "play"); return; }
         if (Player.HasEnded && !IsLive && _item != null) { _ = StartItemAsync(_item, null, _mediaSourceId); return; }
         var willPause = Player.IsPlaying;
         if (IsLive && IsLiveDirect)
@@ -1254,6 +1359,13 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     public void SeekToMs(double ms)
     {
         if (IsLive) return;
+        if (IsSyncPlay)
+        {
+            SeekValue = ms;
+            var ticks = (long)(Math.Max(0, ms) * 10_000);
+            AskGroup(() => Sync.SeekAsync(ticks), "seek");
+            return;
+        }
         _lastSeekTargetMs = ms;
         _lastSeekAt = DateTime.UtcNow;
         SeekValue = ms;
@@ -1317,6 +1429,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         Player.SelectTrack(audio ? "audio" : "sub", t.Id);
         foreach (var o in audio ? AudioTracks : SubtitleTracks) o.IsSelected = o == t;
         if (audio) _audioStreamIndex = t.StreamIndex; else _subtitleStreamIndex = t.StreamIndex;
+        RememberForSeries(t, audio);
         // Tell the server right away, so resuming (here or on another device) keeps this choice.
         if (CanReport)
             _ = AppServices.Jellyfin.ReportProgressAsync(Progress(!IsPlaying, audio ? "AudioTrackChange" : "SubtitleTrackChange"));
@@ -1482,7 +1595,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 if (IsTracksOpen) { IsTracksOpen = false; return true; }
                 Close(); return true;
         }
-        ShowOsd();
+        // Only keys that move around the controls bring them up. Any other key (Shift, Ctrl, the Windows key, the
+        // keyboard's own volume keys, another app's shortcut) used to pop the controls up for no visible reason.
+        if (key is Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down) ShowOsd();
         return false;
     }
 
@@ -1505,6 +1620,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private readonly HashSet<int> _trickLoading = new();
     private readonly List<int> _trickOrder = new();
     private double _trickWantedMs = -1;
+    private (int Sheet, int Index) _trickShown = (-1, -1);
+    private const int MaxTrickSheets = 3;
     [ObservableProperty] private bool _isTrickVisible;
     [ObservableProperty] private Avalonia.Media.IImage? _trickImage;
     [ObservableProperty] private string _trickTime = "";
@@ -1516,6 +1633,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private async Task LoadTrickplayAsync(string itemId, string sourceId)
     {
         _trick = null;
+        _trickShown = (-1, -1);
         _trickSheets.Clear();
         _trickOrder.Clear();
         _trickLoading.Clear();
@@ -1557,9 +1675,11 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         {
             if (_trickOrder.Count > 0 && _trickOrder[^1] != sheet) { _trickOrder.Remove(sheet); _trickOrder.Add(sheet); }
             if (bmp == null) { HasTrickImage = false; return; }
+            if (_trickShown == (sheet, k) && HasTrickImage) return; // same thumbnail as on screen
             int x = k % info.TileWidth * info.Width, y = k / info.TileWidth * info.Height;
             if (x + info.Width > bmp.PixelSize.Width || y + info.Height > bmp.PixelSize.Height) { HasTrickImage = false; return; }
             TrickImage = new Avalonia.Media.Imaging.CroppedBitmap(bmp, new Avalonia.PixelRect(x, y, info.Width, info.Height));
+            _trickShown = (sheet, k);
             HasTrickImage = true;
             return;
         }
@@ -1571,12 +1691,13 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         var url = AppServices.Jellyfin.TrickplayTileUrl(itemId, sourceId, info.Width, sheet);
         var bmp = await AppServices.Images.LoadUncachedAsync(url);
         if (_item?.Id != itemId || _disposed) return;
-        // Keep only a few sheets in memory (each holds up to 100 thumbnails).
+        // Keep only a few sheets in memory (each holds up to 100 thumbnails, ~23 MB decoded).
         // Least recently used first: the sheet around where you're scrubbing stays.
-        while (_trickSheets.Count >= 6 && _trickOrder.Count > 0)
+        while (_trickSheets.Count >= MaxTrickSheets && _trickOrder.Count > 0)
         {
-            _trickSheets.Remove(_trickOrder[0]);
+            var old = _trickOrder[0];
             _trickOrder.RemoveAt(0);
+            if (_trickSheets.Remove(old, out var gone) && old != _trickShown.Sheet) gone?.Dispose();
         }
         _trickSheets[sheet] = bmp;
         _trickOrder.Remove(sheet);
@@ -1597,8 +1718,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _disposed = true;
         _tick.Stop();
         AppServices.KeepAwake?.SetActive(false);
+        _syncUnpauseCts?.Cancel();
         if (!IsLive) Stopped = ReportStoppedAsync();
         AppServices.Window?.SetVideoFrameRate(null);
+        _ = AppServices.Window?.SetVideoHdrAsync(null); // the screen's HDR back to how it was
         if (!_wasFullScreen) AppServices.Window?.SetFullScreen(false);
         _ = AppServices.Settings.SaveAsync();
         Nettle.Core.Services.Log.Info("player closed");

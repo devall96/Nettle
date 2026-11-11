@@ -23,7 +23,8 @@ data class PlaybackSegment(val kind: SegmentKind, val startMs: Long, val endMs: 
  * Media Segments API (10.10+) and falls back to the Intro Skipper plugin's legacy endpoint.
  */
 class SegmentService(private val client: JellyfinClient) {
-    suspend fun getSegments(itemId: String): List<PlaybackSegment> {
+    /** [legacyFallback]: also ask the Intro Skipper plugin's old endpoint (it only knows episodes). */
+    suspend fun getSegments(itemId: String, legacyFallback: Boolean = true): List<PlaybackSegment> {
         val result = ArrayList<PlaybackSegment>()
         for (s in client.getMediaSegments(itemId)) {
             val kind = when (s.type) {
@@ -36,7 +37,7 @@ class SegmentService(private val client: JellyfinClient) {
             }
             if (kind != null && s.endTicks > s.startTicks) result += PlaybackSegment(kind, s.startTicks / 10_000, s.endTicks / 10_000)
         }
-        if (result.isEmpty()) {
+        if (result.isEmpty() && legacyFallback) {
             for ((key, v) in client.getIntroSkipperSegments(itemId)) {
                 if (!v.valid) continue
                 val start = if (v.introEnd > 0) v.introStart else v.start

@@ -122,6 +122,7 @@ Google TV built in…).** If you have a Jellyfin server and a few minutes, you'd
 - **Subtitles turn on the way you like:** default track, always, only forced (foreign dialogue), smart (when the audio is in another language), or off. By default this, and your audio and subtitle languages, follow each person's own Jellyfin profile.
 - **Play all and Shuffle** for libraries and collections, and **Shuffle for a whole series** (every episode of every season, in random order).
 - **Play on Nettle from other Jellyfin apps.** Nettle shows up as a "Play on" target: your phone can start, queue, pause, seek, skip and change the volume or tracks.
+- **Watch together (SyncPlay).** Start or join a group from *Watch together* on the rail, then play anything: it plays for everyone in the group at the same moment, on Windows, Linux, Android TV and other Jellyfin apps that support SyncPlay. Pausing, seeking and skipping happen for everyone, and players that drift apart are brought back in step.
 
 ### On Android TV
 Everything above and below works on the TV too, with these differences:

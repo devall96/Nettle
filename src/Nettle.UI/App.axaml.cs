@@ -15,6 +15,8 @@ public partial class App : Application
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
+    private static readonly List<DateTime> _uiErrors = new();
+
     /// <summary>Build-time mode: render the installer splash art to this path, then exit.</summary>
     public static string? RenderSplashPath { get; set; }
     /// <summary>Build-time mode: render the GitHub README banner to this path, then exit.</summary>
@@ -42,6 +44,19 @@ public partial class App : Application
             Environment.Exit(code);
             return;
         }
+
+        // An unexpected error in one button or page used to close the whole app (and the video with it). Log it,
+        // say so, and carry on; only a storm of them (something really broken) still ends the app.
+        Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            Nettle.Core.Services.Log.Error("UI error (Nettle kept running)", e.Exception);
+            var now = DateTime.UtcNow;
+            _uiErrors.RemoveAll(t => now - t > TimeSpan.FromSeconds(10));
+            _uiErrors.Add(now);
+            if (_uiErrors.Count > 5) return; // not handled: the app closes and crash.log gets the details
+            e.Handled = true;
+            AppServices.Main?.Toast("Something went wrong: " + e.Exception.Message, 5000);
+        };
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var theme = AppServices.Settings.Current.Theme;

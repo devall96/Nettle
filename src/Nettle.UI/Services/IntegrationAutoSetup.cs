@@ -42,6 +42,7 @@ public static class IntegrationAutoSetup
                 }
             }
 
+            await AppServices.SeerrReady; // this profile's own Seerr sign-in, if it has one
             if (!AppServices.Seerr.IsConfigured)
             {
                 foreach (var scheme in schemes)
@@ -62,9 +63,7 @@ public static class IntegrationAutoSetup
                         {
                             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
                             await AppServices.Seerr.SignInWithJellyfinAsync(url, username, password, cts.Token);
-                            var cookie = AppServices.Seerr.SessionCookie;
-                            if (cookie != null) await AppServices.Secure.SetAsync("seerr.cookie", cookie);
-                            await AppServices.Secure.RemoveAsync("seerr.apikey");
+                            await AppServices.SaveSeerrSecretsAsync(null, AppServices.Seerr.SessionCookie);
                             done.Add("Requests");
                             Log.Info("auto-setup: signed in to Seerr on the Jellyfin host");
                         }

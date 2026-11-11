@@ -61,16 +61,25 @@ public sealed class SessionService
     /// </summary>
     public async Task<bool> ResumeAsync(SavedAccount account, CancellationToken ct = default)
     {
+        // Switching from another profile that's still signed in: if this one can't be used, stay on that one
+        // (otherwise the app would show one person while talking to the server as the other).
+        var before = _client.Snapshot();
+        var userConfigBefore = UserConfig;
         _client.Configure(account.ServerUrl, account.DeviceId, account.AccessToken, account.UserId);
-        var check = await CheckAsync(account, ct).ConfigureAwait(false);
+        SessionCheck check;
+        try { check = await CheckAsync(account, ct).ConfigureAwait(false); }
+        catch { RestoreAfterFailedSwitch(before, userConfigBefore); throw; }
+        if (check != SessionCheck.Valid) RestoreAfterFailedSwitch(before, userConfigBefore);
         if (check == SessionCheck.Unreachable) throw new ApiException("Can't reach the server.");
-        if (check == SessionCheck.Rejected)
-        {
-            _client.ClearSession();
-            return false;
-        }
+        if (check == SessionCheck.Rejected) return false;
         await ActivateAsync(account).ConfigureAwait(false);
         return true;
+    }
+
+    private void RestoreAfterFailedSwitch((string? BaseUrl, string DeviceId, string? Token, string? UserId) before, UserConfiguration? userConfig)
+    {
+        if (Current != null) { _client.Restore(before); UserConfig = userConfig; }
+        else _client.ClearSession();
     }
 
     /// <summary>
@@ -185,6 +194,7 @@ public sealed class SessionService
             UserConfig = null;
             _client.ClearSession();
         }
+        else await _client.RevokeAsync(account.ServerUrl, account.DeviceId, account.AccessToken).ConfigureAwait(false);
         await _accounts.RemoveAsync(account.Id).ConfigureAwait(false);
         if (_settings.Current.LastAccountId == account.Id)
         {

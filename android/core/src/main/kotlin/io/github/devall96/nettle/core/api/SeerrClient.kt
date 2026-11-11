@@ -59,6 +59,17 @@ class SeerrClient(base: OkHttpClient) {
     }
 
     companion object {
+        /** Before 0.5.1 one Seerr sign-in was shared by every profile on the device. */
+        const val LEGACY_API_KEY = "seerr.apikey"
+        const val LEGACY_COOKIE = "seerr.cookie"
+
+        /**
+         * Where a profile's Seerr sign-in is kept in the secure store. Each Jellyfin profile on the device has its
+         * own, so one person's Seerr account (maybe an admin's, which auto-approves) isn't used by everyone.
+         */
+        fun apiKeySecret(accountId: String?) = if (accountId.isNullOrEmpty()) LEGACY_API_KEY else "$LEGACY_API_KEY.$accountId"
+        fun cookieSecret(accountId: String?) = if (accountId.isNullOrEmpty()) LEGACY_COOKIE else "$LEGACY_COOKIE.$accountId"
+
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
         fun normalizeUrl(url: String): String {

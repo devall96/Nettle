@@ -124,6 +124,7 @@ class RequestsModel : Page() {
     }
 
     override suspend fun load() {
+        AppServices.seerrReady.join()
         notConfigured = !AppServices.seerr.isConfigured
         if (notConfigured) return
         if (searchText.isNotBlank()) search(searchText, 0)
@@ -149,15 +150,21 @@ class RequestsModel : Page() {
         if (items.isNotEmpty()) rows += SeerrRow(title, items)
     }
 
+    private companion object {
+        /** Title and poster per requested title (they don't change), so My Requests isn't 20 lookups every visit. */
+        val detailsCache = java.util.concurrent.ConcurrentHashMap<String, io.github.devall96.nettle.core.models.SeerrDetails>()
+    }
+
     suspend fun loadMyRequests() {
         try {
             val mine = AppServices.seerr.myRequests(20)
             val built = coroutineScope {
                 mine.filter { it.media?.tmdbId != null }.take(20).map { r ->
                     async {
-                        val d = runCatching {
+                        val cacheKey = "${r.media!!.mediaType}:${r.media!!.tmdbId}"
+                        val d = detailsCache[cacheKey] ?: runCatching {
                             if (r.media!!.mediaType == "tv") AppServices.seerr.tv(r.media!!.tmdbId!!) else AppServices.seerr.movie(r.media!!.tmdbId!!)
-                        }.getOrNull()
+                        }.getOrNull()?.also { detailsCache[cacheKey] = it }
                         val status = when (r.status) { 1 -> "Pending approval"; 3 -> "Declined"; 4 -> "Failed"; else -> SeerrMediaStatus.describe(r.media?.status) }
                         MyRequest(
                             title = d?.title ?: d?.name ?: "Unknown title",

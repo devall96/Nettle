@@ -31,6 +31,7 @@ internal sealed class MainWindow : Window, IWindowHost
     private DisplayMode _mode = DisplayMode.Windowed;
     private double? _videoFps;
     private readonly ExclusiveDisplay _exclusive = new();
+    private readonly HdrSwitcher _hdr = new(AppServices.Platform.DataDirectory);
 
     private static Nettle.Core.Models.AppSettings S => AppServices.Settings.Current;
 
@@ -74,13 +75,45 @@ internal sealed class MainWindow : Window, IWindowHost
             // Images are fetched at the screen's real pixel size (e.g. 200% on a 4K display).
             AppServices.UiScale = RenderScaling;
             if (_mode == DisplayMode.Exclusive) EnterExclusive();
+#if DEBUG || NETTLE_DEV
+            // NETTLE_DEV_SHOT=<folder>@12,30,45: saves the app's own picture (UI layers; video drawn by OpenGL may be
+            // missing) at those seconds after start, for test runs where the desktop can't be captured (GNOME Wayland).
+            if (Environment.GetEnvironmentVariable("NETTLE_DEV_SHOT") is { } shot && shot.Split('@') is [var folder, var times])
+                foreach (var t in times.Split(',')) if (int.TryParse(t, out var sec))
+                    Avalonia.Threading.DispatcherTimer.RunOnce(() => DevShot(Path.Combine(folder, $"nettle-{sec:000}s.png")), TimeSpan.FromSeconds(sec));
+#endif
         };
         ScalingChanged += (_, _) => AppServices.UiScale = RenderScaling;
         // Exclusive full screen gives the display back while you're in another app.
         Activated += (_, _) => { if (_mode == DisplayMode.Exclusive) EnterExclusive(); };
         Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(OnMaybeLeftApp, TimeSpan.FromMilliseconds(200));
-        Closed += (_, _) => _exclusive.Restore();
+        Closed += (_, _) => { _exclusive.Restore(); _hdr.Restore(); };
+        if (OperatingSystem.IsWindows()) _hdr.RecoverAfterCrash();
     }
+
+#if DEBUG || NETTLE_DEV
+    private void DevShot(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var size = new PixelSize(Math.Max(1, (int)ClientSize.Width), Math.Max(1, (int)ClientSize.Height));
+            using var bmp = new Avalonia.Media.Imaging.RenderTargetBitmap(size);
+            bmp.Render(this);
+            // The player's controls may live in their own window (Windows): draw those over it too.
+            foreach (var w in OwnedWindows.Where(w => w.IsVisible))
+            {
+                using var over = new Avalonia.Media.Imaging.RenderTargetBitmap(size);
+                over.Render(w);
+                using var ctx = bmp.CreateDrawingContext(false);
+                ctx.DrawImage(over, new Rect(0, 0, size.Width, size.Height));
+            }
+            bmp.Save(path);
+            Nettle.Core.Services.Log.Info("dev: saved " + path);
+        }
+        catch (Exception ex) { Nettle.Core.Services.Log.Warn("dev: snapshot failed: " + ex.Message); }
+    }
+#endif
 
     // ---------- Display modes: windowed, borderless, exclusive ----------
 
@@ -113,6 +146,18 @@ internal sealed class MainWindow : Window, IWindowHost
             if (WindowState != WindowState.FullScreen) WindowState = WindowState.FullScreen;
             if (mode == DisplayMode.Exclusive) EnterExclusive();
         }
+    }
+
+    public bool SupportsHdrSwitching => OperatingSystem.IsWindows();
+
+    public async Task<bool> SetVideoHdrAsync(bool? hdr)
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        if (hdr != null && !S.MatchHdrToVideo) return false;
+        var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        var monitor = hwnd == IntPtr.Zero ? null : DisplayHdr.MonitorDeviceName(hwnd);
+        // Switching takes Windows a moment (the screen goes dark), so it's done off the UI thread.
+        return await Task.Run(() => _hdr.Apply(monitor, hdr));
     }
 
     public void SetVideoFrameRate(double? fps)

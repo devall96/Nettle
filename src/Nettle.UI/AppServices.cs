@@ -48,6 +48,8 @@ public static class AppServices
     public static MainViewModel Main { get; set; } = null!;
     /// <summary>The server WebSocket: remote control from other Jellyfin apps, live updates.</summary>
     public static RemoteControl Remote { get; private set; } = null!;
+    /// <summary>Watch together (Jellyfin SyncPlay).</summary>
+    public static SyncPlayService SyncPlay { get; private set; } = null!;
     /// <summary>Display scaling of the main window (2 on a 4K screen at 200%), for sizing images.</summary>
     public static double UiScale { get; set; } = 1;
 
@@ -76,7 +78,13 @@ public static class AppServices
         NtvItems = new NtvItemResolver(Jellyfin);
         Seerr = new SeerrClient();
         Ntv = new NtvClient();
+        SyncPlay = new SyncPlayService(Jellyfin);
+        Services.WatchTogether.Attach(SyncPlay);
         Remote = new RemoteControl(Jellyfin);
+        // Seerr sign-ins belong to a profile: follow whoever is signed in.
+        Session.SessionChanged += () => SeerrReady = LoadSeerrForAsync(Session.Current?.Id);
+        // A watch-together group belongs to the signed-in profile too.
+        Session.SessionChanged += () => SyncPlay.Reset();
         Images = new ImageCache(Path.Combine(platform.CacheDirectory, "images")) { IsAllowed = IsAllowedHost,
             AuthHeaderFor = u => Jellyfin.IsServerUrl(u.AbsoluteUri) ? Jellyfin.TokenHeaderValue : null };
     }
@@ -100,9 +108,71 @@ public static class AppServices
     public static async Task LoadIntegrationsAsync()
     {
         var s = Settings.Current;
-        Seerr.Configure(s.SeerrUrl, await Secure.GetAsync("seerr.apikey"), await Secure.GetAsync("seerr.cookie"));
-        Seerr.AllowDirectTmdbImages = s.AllowDirectTmdbImages;
+        SeerrReady = LoadSeerrForAsync(Session.Current?.Id);
+        await SeerrReady;
         Ntv.Configure(s.NtvUrl, await Secure.GetAsync("ntv.apikey"));
+    }
+
+    /// <summary>Finishes when the signed-in profile's Seerr sign-in has been loaded (await before using Seerr).</summary>
+    public static Task SeerrReady { get; private set; } = Task.CompletedTask;
+
+    /// <summary>
+    /// Points the Seerr client at the household's Seerr server with THIS profile's own sign-in (none = not set up
+    /// for this profile). A sign-in saved by an older version, shared by everyone, is handed to the first profile
+    /// that loads it (normally the one that set it up) and the shared copy is deleted.
+    /// </summary>
+    public static async Task LoadSeerrForAsync(string? accountId)
+    {
+        try
+        {
+            var s = Settings.Current;
+            string? key = null, cookie = null;
+            if (!string.IsNullOrEmpty(accountId))
+            {
+                var keyName = SeerrClient.ApiKeySecret(accountId);
+                var cookieName = SeerrClient.CookieSecret(accountId);
+                key = await Secure.GetAsync(keyName);
+                cookie = await Secure.GetAsync(cookieName);
+                if (key == null && cookie == null)
+                {
+                    var legacyKey = await Secure.GetAsync(SeerrClient.LegacyApiKeySecret);
+                    var legacyCookie = await Secure.GetAsync(SeerrClient.LegacyCookieSecret);
+                    if (legacyKey != null || legacyCookie != null)
+                    {
+                        if (legacyKey != null) await Secure.SetAsync(keyName, legacyKey);
+                        if (legacyCookie != null) await Secure.SetAsync(cookieName, legacyCookie);
+                        await Secure.RemoveAsync(SeerrClient.LegacyApiKeySecret);
+                        await Secure.RemoveAsync(SeerrClient.LegacyCookieSecret);
+                        (key, cookie) = (legacyKey, legacyCookie);
+                        Log.Info("Seerr: the shared sign-in now belongs to this profile only");
+                    }
+                }
+            }
+            if (Session.Current?.Id != accountId) return; // switched profile meanwhile
+            Seerr.Configure(s.SeerrUrl, key, cookie);
+            Seerr.AllowDirectTmdbImages = s.AllowDirectTmdbImages;
+        }
+        catch (Exception ex) { Log.Warn("Seerr sign-in couldn't be loaded: " + ex.Message); }
+    }
+
+    /// <summary>Saves the signed-in profile's Seerr sign-in (cookie OR API key; the other is removed).</summary>
+    public static async Task SaveSeerrSecretsAsync(string? apiKey, string? cookie)
+    {
+        var id = Session.Current?.Id;
+        if (string.IsNullOrEmpty(apiKey)) await Secure.RemoveAsync(SeerrClient.ApiKeySecret(id)); else await Secure.SetAsync(SeerrClient.ApiKeySecret(id), apiKey);
+        if (string.IsNullOrEmpty(cookie)) await Secure.RemoveAsync(SeerrClient.CookieSecret(id)); else await Secure.SetAsync(SeerrClient.CookieSecret(id), cookie);
+    }
+
+    /// <summary>A profile was signed out and forgotten: drop what this device kept for it.</summary>
+    public static async Task ForgetAccountDataAsync(string accountId)
+    {
+        Services.HomeCache.Delete(accountId);
+        try
+        {
+            await Secure.RemoveAsync(SeerrClient.ApiKeySecret(accountId));
+            await Secure.RemoveAsync(SeerrClient.CookieSecret(accountId));
+        }
+        catch (Exception ex) { Log.Warn("couldn't remove a forgotten profile's Seerr sign-in: " + ex.Message); }
     }
 }
 
@@ -121,6 +191,15 @@ public interface IWindowHost
     void SetDisplayMode(Nettle.Core.Models.DisplayMode mode) => SetFullScreen(mode != Nettle.Core.Models.DisplayMode.Windowed);
     /// <summary>Frame rate of the video now playing (null when none), for exclusive full screen's refresh-rate matching.</summary>
     void SetVideoFrameRate(double? fps) { }
+
+    /// <summary>
+    /// Like a TV: puts the screen into HDR for an HDR video (true) and out of it for an SDR one (false); null = the
+    /// player closed, back to how it was. True when the screen really switched (wait a moment before playing).
+    /// </summary>
+    Task<bool> SetVideoHdrAsync(bool? hdr) => Task.FromResult(false);
+
+    /// <summary>Switching the screen's HDR per video is possible here (Windows).</summary>
+    bool SupportsHdrSwitching => false;
 }
 
 public enum HdrDisplayState { Unknown, Sdr, Hdr }
