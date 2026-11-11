@@ -240,7 +240,40 @@
     }
     .ai-warning svg { width: 26px; height: 26px; flex: none; fill: #e89a1c; margin-top: 1px; }
     .ai-warning p { margin: 0; }
-    .ai-warning + .cards { margin-top: 18px; }
+    .note + .ai-warning { margin-top: 18px; }
+
+    .hero-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 22px; }
+    .hero-row .release { margin-top: 0; }
+    .jump {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 16px; border-radius: 999px;
+      background: var(--primary-bg); color: var(--on-accent);
+      font-size: 14px; font-weight: 600; text-decoration: none;
+    }
+    .jump.ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 8px 15px; }
+    .jump:hover { filter: var(--hover); }
+    .jump:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+    .jump svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+
+    .section-title { font-size: 28px; letter-spacing: -0.6px; margin: 56px 0 0; scroll-margin-top: 24px; }
+    .section-title + .cards { margin-top: 22px; }
+    .details {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 14px; margin: 22px 0 0;
+    }
+    .details section { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px; }
+    .details h3 { margin: 0 0 10px; font-size: 17px; letter-spacing: -0.2px; }
+    .details ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14.5px; }
+    .details li { margin: 6px 0; }
+    .details li::marker { color: var(--accent); }
+    .details li b { color: var(--text); font-weight: 600; }
+    .gallery {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px; margin: 14px 0 0;
+    }
+    .gallery figure { margin: 0; }
+    .gallery img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-radius: 12px; border: 1px solid var(--border); }
+    .gallery figcaption { margin-top: 8px; color: var(--muted); font-size: 13px; text-align: center; }
 
     .note {
       background: var(--bg-alt);
@@ -332,15 +365,94 @@
       </div>
       <h1>Your Jellyfin, at full quality.</h1>
       <p class="lede">A fast, good-looking Jellyfin client for <b>Windows</b>, <b>Linux</b> and <b>Android TV</b>. It always plays the original file, so your server never has to transcode.</p>
-      <div class="release" id="release"><span class="dot"></span><span>Newest version: <b id="release-name">see the release page</b></span><span id="release-date"></span></div>
+      <div class="hero-row">
+        <a class="jump" href="#download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>Download</a>
+        <a class="jump ghost" href="https://github.com/devall96/Nettle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.6-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5z"/></svg>GitHub</a>
+        <div class="release" id="release"><span class="dot"></span><span>Newest version: <b id="release-name">see the release page</b></span><span id="release-date"></span></div>
+      </div>
     </header>
 
     <main>
-      <aside class="ai-warning" role="note" aria-label="Made with AI">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-        <p><b>Entirely AI-coded.</b> All of Nettle's code was written by Claude, Anthropic's AI, directed and reviewed by one person, and so far tested by that one person on one Windows PC, one Ubuntu PC and one Google TV box. If you don't want to run code made that way, don't install it. As with anything from the internet, you run it at your own risk.</p>
-      </aside>
+      <figure class="shot">
+        <img src="images/home.png" alt="Nettle's Home screen: a spotlight banner with Continue Watching underneath" width="1440" height="900">
+      </figure>
 
+      <ul class="points">
+        <li><b>Original quality, always</b>Direct play of the original file. 4K, HDR10, Dolby Vision, Atmos and DTS go out as they are.</li>
+        <li><b>Live TV like cable</b>A full guide, channel surfing and a tuning screen, with NostalgiaTV.</li>
+        <li><b>Private by design</b>No analytics or crash reporting. Nettle only connects to the servers you set up.</li>
+        <li><b>Same app everywhere</b>Windows, Linux and Android TV share one version and the same features.</li>
+      </ul>
+
+      <h2 class="section-title">What's in it</h2>
+      <div class="details">
+        <section>
+          <h3>Playback</h3>
+          <ul>
+            <li><b>Never transcodes.</b> Nettle plays the file itself, so your server's CPU stays idle and the picture is untouched.</li>
+            <li><b>HDR10, HDR10+, HLG and Dolby Vision</b>, including Dolby Vision profile 5.</li>
+            <li><b>Audio passthrough:</b> Dolby Digital, Atmos, TrueHD, DTS-HD and DTS:X go to your receiver as they are.</li>
+            <li><b>Format badges you can trust:</b> 4K, Dolby Vision or Atmos only show when that is what's really playing.</li>
+            <li><b>Skip intros, recaps and credits</b>, with an Up Next countdown into the next episode.</li>
+            <li><b>Scrubbing with thumbnail previews</b>, and chapter marks on the seek bar.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Live TV</h3>
+          <ul>
+            <li><b>A cable-style guide</b> for everything NostalgiaTV has scheduled, with a live "now" line.</li>
+            <li><b>Original-quality channels:</b> each program plays from its real file on your server, at the live position.</li>
+            <li><b>Surf like a TV:</b> channel up and down, type a channel number, or jump back to the last channel.</li>
+            <li><b>A tuning screen</b> with the channel's logo covers each switch.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Browsing</h3>
+          <ul>
+            <li><b>Home</b> with a spotlight carousel, Continue Watching, Next Up and Recently Added, on screen the moment Nettle opens.</li>
+            <li><b>Libraries</b> with sorting, filters (unwatched, genre, decade, 4K / HD / SD) and an A–Z strip.</li>
+            <li><b>Details</b> with cast and crew, trailers, extras, More Like This and a version picker.</li>
+            <li><b>Search</b> across your library by kind.</li>
+            <li><b>Requests with Seerr:</b> browse what's trending, then request a movie or the seasons you want.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Together</h3>
+          <ul>
+            <li><b>Watch together</b> (Jellyfin SyncPlay): play, pause and seek happen for everyone in the group at the same moment.</li>
+            <li><b>Play on Nettle</b> from other Jellyfin apps: your phone can start, queue, pause and seek.</li>
+            <li><b>Multiple profiles</b> with a "Who's watching?" picker and Quick Connect sign-in.</li>
+            <li><b>Up to date everywhere:</b> resume points and watched status stay in sync with your server.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>On Android TV</h3>
+          <ul>
+            <li><b>Built for the remote</b>, not a port of the desktop window, with the same look and features.</li>
+            <li><b>The TV's own hardware decoders</b> (Media3): HDR and Dolby Vision reach your TV as they are.</li>
+            <li><b>Refresh rate follows the video</b>, so films play at 24 Hz without judder.</li>
+            <li><b>Fast on cheap boxes:</b> about 0.8 seconds from a cold start to Home on a 2 GB onn 4K box.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Look and privacy</h3>
+          <ul>
+            <li><b>Sixteen themes</b>, from true black for OLED screens to three light ones. This page wears them too.</li>
+            <li><b>Keyboard and remote ready:</b> arrow keys move focus the way a D-pad does.</li>
+            <li><b>No telemetry of any kind.</b></li>
+            <li><b>Passwords are never stored.</b> Only Jellyfin's session token is kept, encrypted on your device.</li>
+            <li><b>Updates itself</b> from Settings → Updates on all three platforms.</li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="gallery">
+        <figure><img src="images/library.png" alt="A movie library as a grid of posters" loading="lazy"><figcaption>Libraries</figcaption></figure>
+        <figure><img src="images/details.png" alt="A movie's details page with its backdrop, ratings and cast" loading="lazy"><figcaption>Details</figcaption></figure>
+        <figure><img src="images/themes.png" alt="The theme picker showing Nettle's themes" loading="lazy"><figcaption>Themes</figcaption></figure>
+      </div>
+
+      <h2 class="section-title" id="download">Download</h2>
       <section class="cards" aria-label="Downloads">
         <!-- Windows -->
         <article class="card" id="card-windows">
@@ -405,16 +517,10 @@
 
       <p class="note">These are the only files you need. The release page on GitHub also lists files ending in <b>.nupkg</b>, <b>.json</b> and <b>RELEASES</b>: Nettle's built-in updater reads those, so you can ignore them.</p>
 
-      <figure class="shot">
-        <img src="images/home.png" alt="Nettle's Home screen: a spotlight banner with Continue Watching underneath" width="1440" height="900" loading="lazy">
-      </figure>
-
-      <ul class="points">
-        <li><b>Original quality, always</b>Direct play of the original file. 4K, HDR10, Dolby Vision, Atmos and DTS go out as they are.</li>
-        <li><b>Live TV like cable</b>A full guide, channel surfing and a tuning screen, with NostalgiaTV.</li>
-        <li><b>Private by design</b>No analytics or crash reporting. Nettle only connects to the servers you set up.</li>
-        <li><b>Same app everywhere</b>Windows, Linux and Android TV share one version and the same features.</li>
-      </ul>
+      <aside class="ai-warning" role="note" aria-label="Made with AI">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+        <p><b>Entirely AI-coded.</b> All of Nettle's code was written by Claude, Anthropic's AI, directed and reviewed by one person, and so far tested by that one person on one Windows PC, one Ubuntu PC and one Google TV box. If you don't want to run code made that way, don't install it. As with anything from the internet, you run it at your own risk.</p>
+      </aside>
     </main>
 
     <footer>
