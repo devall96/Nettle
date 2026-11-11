@@ -228,11 +228,14 @@ fun PlayerScreen(vm: PlayerModel) {
         vm.error?.let { err ->
             Column(Modifier.align(Alignment.Center).widthIn(max = 560.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xDD111111)).padding(28.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                T("Playback problem", size = 20.sp, weight = FontWeight.Bold, color = White)
+                T(if (vm.canRetry) "Connection lost" else "Playback problem", size = 20.sp, weight = FontWeight.Bold, color = White)
                 T(err, Modifier.alpha(0.85f), color = White)
-                val close = remember { FocusRequester() }
-                LaunchedEffect(err) { runCatching { close.requestFocus() } }
-                TextButton("Close", { vm.close() }, focusRequester = close)
+                val first = remember { FocusRequester() }
+                LaunchedEffect(err) { runCatching { first.requestFocus() } }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (vm.canRetry) TextButton("Try again", { vm.retryAfterError() }, kind = ButtonKind.Primary, focusRequester = first)
+                    TextButton("Close", { vm.close() }, focusRequester = if (vm.canRetry) null else first)
+                }
             }
         }
         // ---- Tracks panel / find subtitles ----
@@ -276,6 +279,9 @@ private fun handleKey(vm: PlayerModel, e: KeyEvent): Boolean {
         if (code == AKey.KEYCODE_MEDIA_PLAY_PAUSE || code == AKey.KEYCODE_MEDIA_PLAY) { if (up) vm.continueWatching(); return true }
         return false // the prompt's buttons have focus until it's answered
     }
+    // An error box is up: its buttons have focus and get OK / Left / Right (the first OK used to only wake the
+    // controls, and Left / Right seeked the dead video). Back still closes the player.
+    if (vm.error != null && code != AKey.KEYCODE_BACK && code != AKey.KEYCODE_MEDIA_STOP) return false
     // Scrubbing: OK / Play jump to the preview and carry on, Back cancels (key-up, so the key's other half
     // doesn't also press whatever is focused).
     if (vm.isScrubbing) when (code) {

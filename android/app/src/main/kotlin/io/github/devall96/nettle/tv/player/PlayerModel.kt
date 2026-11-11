@@ -88,7 +88,8 @@ class PlayerModel private constructor() {
     private var liveRetryVersion = -1
     private var lastLoad: PlayerLoad? = null
     private var reconnects = 0
-    private val RECONNECT_DELAYS_MS = longArrayOf(2000, 5000, 10000)
+    // About two minutes in all: long enough for a router or the server PC to restart, or Wi-Fi to come back.
+    private val RECONNECT_DELAYS_MS = longArrayOf(2000, 5000, 10000, 15000, 20000, 30000, 30000)
 
     // ---- what the screen shows ----
     var title by mutableStateOf("")
@@ -130,6 +131,15 @@ class PlayerModel private constructor() {
     /** Live TV shows its tuning screen while a channel or program switch has no picture yet. */
     val isTuningScreenVisible: Boolean get() = isLive && error == null && (tuning || !engine.firstFrameShown)
     var error by mutableStateOf<String?>(null)
+    /** The error is a lost connection: "Try again" reopens the video where it stopped. */
+    var canRetry by mutableStateOf(false); private set
+
+    fun retryAfterError() {
+        val again = lastLoad ?: return
+        error = null; canRetry = false; reconnects = 0; isBuffering = true
+        Log.info("retrying after a lost connection at ${lastPositionMs / 1000} s")
+        swapMedia(again.copy(startMs = if (lastPositionMs > 500) lastPositionMs else again.startMs))
+    }
     val audioTracks = mutableStateListOf<TrackOption>()
     val subtitleTracks = mutableStateListOf<TrackOption>()
     val formatBadges = mutableStateListOf<FormatBadge>()
@@ -805,7 +815,10 @@ class PlayerModel private constructor() {
             return
         }
         isBuffering = false
-        error = if (!isLive) "Playback failed ($reason). The file may be unreachable from this TV, or use a format this TV can't decode."
+        // Every reconnect failed with no answer from the server: that's the network or the server, not the file.
+        canRetry = !isLive && again != null && (status == null || status in listOf(408, 502, 503, 504))
+        error = if (canRetry) "Lost the connection to your Jellyfin server. Check that this TV is online and the server is running, then try again: it picks up where it stopped."
+        else if (!isLive) "Playback failed ($reason). The file may be unreachable from this TV, or use a format this TV can't decode."
         else if (isLiveDirect) "This program couldn't be loaded from your Jellyfin server."
         else "This channel couldn't be played. Check that NostalgiaTV is running."
         Log.warn("playback error shown: $error")
