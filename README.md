@@ -34,6 +34,10 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > **1.0.1 fixes Android TV on Android 9 to 12,** where Nettle closed right after signing in. If that
 > happened to you, install it once more with the Downloader code **3148086**.
 > [What's in 1.0.1](https://github.com/devall96/Nettle/releases/tag/v1.0.1)
+>
+> **1.0.2 fixes a second Android TV crash,** where Nettle could close when a list became empty (for
+> example, clearing the search box).
+> [What's in 1.0.2](https://github.com/devall96/Nettle/releases/tag/v1.0.2)
 
 > [!IMPORTANT]
 > ### 🪟 Coming to the Microsoft Store (pending certification)
