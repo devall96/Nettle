@@ -69,11 +69,12 @@ class LibraryModel(private val view: BaseItemDto, private val folderMode: Boolea
     var decade by mutableStateOf(decadeOptions[0]); private set
     var quality by mutableStateOf(qualityOptions[0]); private set
 
-    fun changeSort(v: SortOption) { sort = v; reload() }
-    fun changeFilter(v: FilterOption) { filter = v; reload() }
-    fun changeGenre(v: ChoiceOption) { genre = v; reload() }
-    fun changeDecade(v: ChoiceOption) { decade = v; reload() }
-    fun changeQuality(v: ChoiceOption) { quality = v; reload() }
+    // Picking the option that's already chosen changes nothing, so nothing is reloaded.
+    fun changeSort(v: SortOption) { if (v != sort || v.sortBy == "Random") { sort = v; reload() } }
+    fun changeFilter(v: FilterOption) { if (v != filter) { filter = v; reload() } }
+    fun changeGenre(v: ChoiceOption) { if (v != genre) { genre = v; reload() } }
+    fun changeDecade(v: ChoiceOption) { if (v != decade) { decade = v; reload() } }
+    fun changeQuality(v: ChoiceOption) { if (v != quality) { quality = v; reload() } }
 
     val showLetters get() = sort.sortBy == "SortName"
     /** Genre / decade / quality filters make sense for movie, show and video libraries (and people). */
@@ -133,19 +134,24 @@ class LibraryModel(private val view: BaseItemDto, private val folderMode: Boolea
         val n = maxOf(1, c)
         if (n == columns && rows.isNotEmpty()) return
         columns = n
-        rows.clear()
-        appendRows(0)
+        appendRows(0) // replaces every row in one go: the grid never sees an empty list in between
     }
 
-    private fun reload() { loadJob?.cancel(); loadJob = scope.launch { reloadNow() } }
+    /** A filter or sort changed: the new results start at the top (the old rows stay up until they arrive). */
+    private var backToTop = false
+    private fun reload() { backToTop = true; loadJob?.cancel(); loadJob = scope.launch { reloadNow() } }
 
     private suspend fun reloadNow() {
         generation++
         cards.clear()
-        rows.clear()
+        // The old rows stay on screen until the new first page replaces them (appendRows(0)), instead of the grid
+        // emptying and refilling: an emptied list is what tripped Compose's list crash on 1.0.1 (Wuuden, filter "All" twice).
         total = Int.MAX_VALUE
         fetched = 0
-        guarded { loadPage(generation) }
+        guarded {
+            try { loadPage(generation) }
+            catch (e: Exception) { if (e !is kotlinx.coroutines.CancellationException) rows.clear(); throw e }
+        }
     }
 
     /** [upTo]: load at least this many items in one request (A–Z jump far down the list). */
@@ -166,6 +172,7 @@ class LibraryModel(private val view: BaseItemDto, private val folderMode: Boolea
         val start = cards.size
         cards.addAll(MediaCard.visible(res.items).map { MediaCard(it, shape) })
         appendRows(start)
+        if (first && backToTop) { backToTop = false; scrollToRow = 0 }
         countText = when (total) { 0 -> "Nothing matches these filters"; 1 -> "1 item"; else -> "%,d items".format(total) }
         if (random && cards.size < total) {
             countText = "%,d of %,d items, picked at random".format(cards.size, total)
