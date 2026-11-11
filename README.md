@@ -24,11 +24,19 @@ It also brings in a TV-style live guide for **NostalgiaTV**, **Seerr** requests,
 and credits, multiple profiles, and sixteen hand-made themes. It has **no telemetry of any kind**.
 
 > [!IMPORTANT]
-> ### 🆕 New in 0.6.0
-> **Watch together** (Jellyfin SyncPlay) across Windows, Linux and Android TV, **HDR that turns on
-> and off with the video** on Windows, a calmer player (the pointer and controls stay out of the
-> way), per-profile Seerr sign-ins, and many fixes from a full review of all three apps.
-> [What's in 0.6.0](https://github.com/devall96/Nettle/releases/tag/v0.6.0)
+> ### 🆕 Nettle 1.0
+> **Nettle is now 1.0.** It has been used every day on several devices and has been stable, so the
+> "0." comes off, and it's ready for more people to try and report back. The app is the same as
+> 0.6.0 (**watch together**, **HDR that follows the video** on Windows, the calmer player), plus
+> support for a **Microsoft Store** version, which is in Microsoft's review now.
+> [Why the jump from 0.6 to 1.0](https://github.com/devall96/Nettle/releases/tag/v1.0.0)
+
+> [!IMPORTANT]
+> ### 🪟 Coming to the Microsoft Store (pending certification)
+> Nettle has been submitted to the **Microsoft Store** and is waiting for Microsoft's certification,
+> so it isn't available there yet. Once it passes, Windows users can install it from the Store with
+> no "Windows protected your PC" warning, and Windows keeps it up to date. Until then, use the
+> [installer](https://devall96.github.io/Nettle/).
 
 > [!IMPORTANT]
 > ### 📺 Nettle for Android TV
@@ -50,8 +58,9 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > [Full steps ↓](#android-tv)
 
 > [!NOTE]
-> **Nettle is in beta on Windows, Linux and Android TV.** It works well on the devices it has been
-> tested on, but it hasn't been tried on much other hardware yet, so expect some rough edges.
+> **Stable in daily use, but not widely tested yet.** Nettle 1.0 has been used every day on Windows,
+> Linux and Android TV and works well there. It hasn't been tried on much other hardware, so you
+> may still find rough edges on yours.
 >
 > **Entirely AI-coded, single-user tested.** All of Nettle's code was written by an AI coding
 > assistant (Anthropic's Claude), directed and reviewed by one person. So far it has been tested by
@@ -202,6 +211,8 @@ Everything above and below works on the TV too, with these differences:
 
 Prefer not to install? Download **`Nettle-win-Portable.zip`**, extract it, and run `Nettle.exe`.
 
+**Microsoft Store:** a Store version is pending Microsoft's certification and isn't available yet.
+
 **Requirements**
 - Windows 10 or 11 (64-bit).
 - A Jellyfin server, 10.9 or newer.
@@ -338,8 +349,8 @@ Other privacy details:
 > This program will not transfer any information to other networked systems unless specifically
 > requested by the user or the person installing or operating it.
 
-## Known limitations (0.6.0 beta)
-- **All three platforms are beta.** Expect some bugs, and please report them.
+## Known limitations (1.0.0)
+- **Tested by one person so far.** It has been stable in daily use, but expect some bugs on hardware it hasn't seen, and please report them.
 - **Watch together** has been tested between Nettle apps (Windows, Linux and Android TV in one group). Groups with other Jellyfin apps should work, but haven't been tried yet.
 - **Match HDR to the video** (Windows) is new. If your screen misbehaves, turn it off in Settings → Appearance and please open an issue.
 - **Android TV:**

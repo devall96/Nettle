@@ -211,6 +211,10 @@
       color: var(--on-accent);
       font-size: 17px;
     }
+    /* Not available yet (e.g. a store listing still in review): greyed out, and not a link. */
+    .btn.pending { filter: grayscale(1); opacity: 0.55; cursor: not-allowed; border-style: dashed; }
+    .btn.pending:hover { filter: grayscale(1); }
+    .btn.pending:active { transform: none; }
     .btn .file { display: flex; flex-direction: column; min-width: 0; }
     .btn .file small { font-weight: 500; opacity: 0.8; font-size: 12.5px; overflow-wrap: anywhere; }
     .btn .size { font-weight: 500; font-size: 13px; opacity: 0.85; white-space: nowrap; }
@@ -469,6 +473,12 @@
             <span class="file">Portable, no install<small>Nettle-win-Portable.zip</small></span>
             <span class="size" data-asset="Nettle-win-Portable.zip"></span>
           </a>
+          <!-- Microsoft Store: submitted, waiting for Microsoft's certification. Once it passes, make this an
+               <a class="btn" href="https://apps.microsoft.com/detail/9P8RBDLZBJK0"> and drop "pending" / aria-disabled. -->
+          <div class="btn pending" role="link" aria-disabled="true">
+            <span class="file">Microsoft Store<small>Pending Microsoft's certification: not available yet</small></span>
+            <span class="size">Pending</span>
+          </div>
           <ol class="steps">
             <li>Run the installer. It installs for your user only, no admin needed.</li>
             <li>If Windows says <b>"Windows protected your PC"</b> (Nettle isn't code-signed yet), click <b>More info → Run anyway</b>.</li>
