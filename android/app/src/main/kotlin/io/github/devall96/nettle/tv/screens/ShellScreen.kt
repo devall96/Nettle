@@ -57,7 +57,7 @@ fun ShellScreen(shell: Shell) {
         // Back button (floating). The remote's Back key does this on TV, so it isn't a focus stop.
         if (shell.canGoBack) Box(
             Modifier.padding(start = 100.dp, top = 36.dp).zIndex(5f).padding(10.dp),
-        ) { Icon(Icons.Back, tint = Color.White) }
+        ) { Icon(Icons.Back, tint = if (Nettle.colors.isLight) Nettle.colors.text else Color.White) }
 
         // Navigation rail
         Box(

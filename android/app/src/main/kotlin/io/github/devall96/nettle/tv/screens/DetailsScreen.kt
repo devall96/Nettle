@@ -115,7 +115,7 @@ private fun Header(vm: DetailsModel) {
                 .clip(RoundedCornerShape(16.dp)).background(p.surface),
         ) { NetImage(vm.posterUrl, Modifier.fillMaxSize()) }
         Column(Modifier.align(Alignment.Bottom).widthIn(max = 900.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (vm.hasLogo) NetImage(vm.logoUrl, Modifier.heightIn(max = 140.dp).widthIn(max = 520.dp), contentScale = ContentScale.Fit, alignment = Alignment.CenterStart)
+            if (vm.hasLogo) NetImage(vm.logoUrl, Modifier.heightIn(max = 140.dp).widthIn(max = 520.dp), contentScale = ContentScale.Fit, alignment = Alignment.CenterStart, colorFilter = logoTint())
             else T(vm.titleText, style = Nettle.type.display)
             vm.subtitleText?.takeIf { it.isNotEmpty() }?.let { T(it, style = Nettle.type.h3) }
             T(vm.meta, weight = FontWeight.SemiBold, muted = true)

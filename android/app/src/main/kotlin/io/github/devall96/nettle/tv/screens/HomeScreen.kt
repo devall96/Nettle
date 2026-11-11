@@ -80,7 +80,7 @@ private fun Hero(vm: HomeModel, hero: HeroItem, play: FocusRequester) {
             Modifier.align(Alignment.BottomStart).padding(start = 56.dp, end = 56.dp, bottom = 56.dp).widthIn(max = 640.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            if (hero.hasLogo) NetImage(hero.logoUrl, Modifier.heightIn(max = 130.dp).widthIn(max = 460.dp), contentScale = ContentScale.Fit, alignment = Alignment.CenterStart)
+            if (hero.hasLogo) NetImage(hero.logoUrl, Modifier.heightIn(max = 130.dp).widthIn(max = 460.dp), contentScale = ContentScale.Fit, alignment = Alignment.CenterStart, colorFilter = logoTint())
             else T(hero.title, style = Nettle.type.display)
             T(hero.meta, muted = true, weight = FontWeight.SemiBold)
             // 90% text colour instead of a 90% alpha layer: same look without an offscreen buffer.
@@ -98,7 +98,8 @@ private fun Hero(vm: HomeModel, hero: HeroItem, play: FocusRequester) {
         }
         Row(Modifier.align(Alignment.BottomEnd).padding(end = 56.dp, bottom = 60.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(Icons.ChevronLeft, Icons.ChevronRight).forEach {
-                Box(Modifier.clip(CircleShape).background(Color(0x33FFFFFF)).padding(10.dp)) { Icon(it, tint = Color.White) }
+                val light = Nettle.colors.isLight
+                Box(Modifier.clip(CircleShape).background(if (light) Color(0x26000000) else Color(0x33FFFFFF)).padding(10.dp)) { Icon(it, tint = if (light) Nettle.colors.text else Color.White) }
             }
         }
     }

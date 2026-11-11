@@ -115,7 +115,8 @@ fun NButton(
         background != null -> background
         kind == ButtonKind.Primary -> p.accentGradient
         kind == ButtonKind.Ghost || kind == ButtonKind.Icon -> SolidColor(Color.Transparent)
-        kind == ButtonKind.Glass -> SolidColor(Color(0x33FFFFFF))
+        // Glass sits on artwork: a light wash on dark themes, a dark one on light themes (white on the Daylight fade was unreadable).
+        kind == ButtonKind.Glass -> SolidColor(if (p.isLight) Color(0x26000000) else Color(0x33FFFFFF))
         kind == ButtonKind.Chip -> SolidColor(if (selected) p.accent else p.surface)
         kind == ButtonKind.Nav -> SolidColor(if (selected) p.accentSoft else Color.Transparent)
         else -> SolidColor(p.surfaceHigh)
@@ -123,7 +124,7 @@ fun NButton(
     val fg = when {
         !enabled -> p.textMuted
         kind == ButtonKind.Primary -> p.onAccent
-        kind == ButtonKind.Glass -> Color.White
+        kind == ButtonKind.Glass -> if (p.isLight) p.text else Color.White
         kind == ButtonKind.Chip && selected -> p.onAccent
         kind == ButtonKind.Nav -> if (selected) p.accent else if (focused) p.text else p.textMuted
         else -> p.text

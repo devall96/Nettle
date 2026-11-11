@@ -66,13 +66,23 @@ import io.github.devall96.nettle.tv.vm.Page
 /** An image from one of the user's servers, fading in when loaded (Image.fade). */
 @Composable
 fun NetImage(url: String?, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop, alignment: Alignment = Alignment.Center,
-             onLoaded: (() -> Unit)? = null) {
+             onLoaded: (() -> Unit)? = null, colorFilter: androidx.compose.ui.graphics.ColorFilter? = null) {
     if (url == null) return
     val ctx = LocalContext.current
     val motion = Nettle.motion
     val req = remember(url, motion) { ImageRequest.Builder(ctx).data(url).crossfade(if (motion) 150 else 0).build() }
-    AsyncImage(req, null, AppServices.images, modifier, contentScale = contentScale, alignment = alignment,
+    AsyncImage(req, null, AppServices.images, modifier, contentScale = contentScale, alignment = alignment, colorFilter = colorFilter,
         onSuccess = if (onLoaded == null) null else { _ -> onLoaded() })
+}
+
+/**
+ * Title logos are nearly always white, made for dark artwork: on a light theme's pale fade they vanish.
+ * There, draw the logo's shape in the theme's text colour instead.
+ */
+@Composable
+fun logoTint(): androidx.compose.ui.graphics.ColorFilter? {
+    val p = Nettle.colors
+    return if (p.isLight) androidx.compose.ui.graphics.ColorFilter.tint(p.text, androidx.compose.ui.graphics.BlendMode.SrcIn) else null
 }
 
 /** ThinProgress (4 tall, radius 2, #40FFFFFF track, accent fill) painted directly, for flattened cards. */
