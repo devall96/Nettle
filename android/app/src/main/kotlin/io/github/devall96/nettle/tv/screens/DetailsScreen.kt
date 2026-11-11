@@ -1,5 +1,6 @@
 package io.github.devall96.nettle.tv.screens
 
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -61,7 +62,7 @@ fun DetailsScreen(vm: DetailsModel) {
                 if (vm.isSeries) {
                     item(key = "seasons") {
                         KeepClear(before = 24.dp, after = 24.dp) {
-                            LazyRow(Modifier.padding(top = 18.dp), state = vm.seasonState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LazyRow(Modifier.focusRestorer().padding(top = 18.dp), state = vm.seasonState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(vm.seasons, key = { it.season.id }) { s ->
                                     TextButton(s.name, { vm.selectSeason(s) }, Modifier.rememberFocus(vm, "season:" + s.season.id), kind = ButtonKind.Chip, selected = vm.selectedSeason === s)
                                 }
@@ -74,7 +75,7 @@ fun DetailsScreen(vm: DetailsModel) {
                     Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         T("Cast & Crew", style = Nettle.type.h3)
                         KeepClear(before = 24.dp, after = 80.dp) {
-                            LazyRow(state = vm.castState, contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                            LazyRow(Modifier.focusRestorer(), state = vm.castState, contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                                 items(vm.cast, key = { (it.p.id ?: "") + it.role + it.name }) { PersonView(vm, it) }
                             }
                         }
@@ -210,7 +211,7 @@ private fun CardRowSection(title: String, cards: List<MediaCard>, vm: DetailsMod
     Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         T(title, style = Nettle.type.h3)
         KeepClear(before = 24.dp, after = 80.dp) {
-            LazyRow(state = state, contentPadding = PaddingValues(top = 10.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            LazyRow(Modifier.focusRestorer(), state = state, contentPadding = PaddingValues(top = 10.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 items(cards, key = { it.item.id }) { MediaCardView(it, page = vm) }
             }
         }

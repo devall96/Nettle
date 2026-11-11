@@ -1,5 +1,6 @@
 package io.github.devall96.nettle.tv.ui
 
+import androidx.compose.ui.focus.focusRestorer
 import android.view.KeyEvent as AndroidKey
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -227,7 +228,7 @@ fun CardRowView(row: CardRow, state: LazyListState = remember { io.github.devall
     Column(Modifier.padding(bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         T(row.title, Modifier.padding(start = startPadding), style = Nettle.type.h3)
         KeepClear(before = startPadding + 24.dp, after = 80.dp) {
-            LazyRow(state = state, contentPadding = PaddingValues(start = startPadding, top = 10.dp, end = 56.dp, bottom = 26.dp),
+            LazyRow(Modifier.focusRestorer(), state = state, contentPadding = PaddingValues(start = startPadding, top = 10.dp, end = 56.dp, bottom = 26.dp),
                 horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 items(row.items, key = { it.item.id }) { MediaCardView(it, page = page) }
             }
