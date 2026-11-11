@@ -38,6 +38,10 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > **1.0.2 fixes a second Android TV crash,** where Nettle could close when a list became empty (for
 > example, clearing the search box).
 > [What's in 1.0.2](https://github.com/devall96/Nettle/releases/tag/v1.0.2)
+>
+> **1.0.3 makes the Android TV player easier with a remote** (OK pauses, every button in one row,
+> chapter buttons, a working scrub preview) and fixes two more crashes when the server is busy or down.
+> [What's in 1.0.3](https://github.com/devall96/Nettle/releases/tag/v1.0.3)
 
 > [!IMPORTANT]
 > ### 🪟 Coming to the Microsoft Store (pending certification)
