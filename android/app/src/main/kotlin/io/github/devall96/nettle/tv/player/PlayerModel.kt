@@ -248,7 +248,13 @@ class PlayerModel private constructor() {
             if (engine.frameRate <= 0f && testClipFps > 0f) engine.onFrameRate?.invoke(testClipFps)
             loadTracks()
             if (!isLipSyncCheck) scope.launch { showFormatBadges(tuneVersion, mediaGeneration) }
-            if (engine.audioUnsupported) flash("This audio can't be decoded on this TV. Turn on audio passthrough in Settings, or pick another track.", 6000)
+            if (engine.videoUnsupported) {
+                // Nettle never asks the server to convert it, so say why the picture is black instead of leaving it blank.
+                val what = engine.unsupportedVideoName ?: "this video format"
+                Log.warn("video track not decodable here: $what")
+                val result = if (engine.audioUnsupported) "or its audio, so nothing can play" else "so there's sound but no picture"
+                flash("This TV can't decode $what $result. Nettle plays files as they are and never converts them.", 9000)
+            } else if (engine.audioUnsupported) flash("This audio can't be decoded on this TV. Turn on audio passthrough in Settings, or pick another track.", 6000)
         }
         scope.launch { while (isActive) { onTick(); delay(250) } }
     }
