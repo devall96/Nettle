@@ -11,7 +11,10 @@
 > Already using Nettle? **Settings → Updates → Check now** installs this for you, on Windows, Linux and Android TV.
 > Everything else under *Assets* (`.nupkg`, `.json`, `RELEASES`) is read by the built-in updater: you can ignore it.
 
-**A big Android TV update: a player that's easier to drive with a remote, chapter buttons, two more crash fixes, and a long list of smaller fixes** from an overnight test run on every Android TV version from 9 to 16. Most of the player changes come straight from a Reddit user's feedback; thank you, Wuuden. Nothing changes on Windows or Linux; they get the new number so every platform keeps sharing one version.
+**A big Android TV update: a player that's easier to drive with a remote, chapter buttons, two more crash fixes, and a long list of smaller fixes** from an overnight test run on every Android TV version from 9 to 16. Nothing changes on Windows or Linux; they get the new number so every platform keeps sharing one version.
+
+> [!NOTE]
+> 🙏 **A big thank you to Wuuden** on Reddit. He tested Nettle on his Hisense TV, reported both Android TV crashes fixed in 1.0.1 and 1.0.2 with photos of the crash screen, and sent the detailed player feedback, with marked-up screenshots, that most of this release is built on.
 
 ### 📺 The player, easier with a remote
 - **OK pauses on the first press.** Before, the first press only showed the controls.
