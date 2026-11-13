@@ -28,7 +28,7 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > **Nettle is now 1.0.** It has been used every day on several devices and has been stable, so the
 > "0." comes off, and it's ready for more people to try and report back. The app is the same as
 > 0.6.0 (**watch together**, **HDR that follows the video** on Windows, the calmer player), plus
-> support for a **Microsoft Store** version, which is in Microsoft's review now.
+> a **Microsoft Store** version.
 > [Why the jump from 0.6 to 1.0](https://github.com/devall96/Nettle/releases/tag/v1.0.0)
 >
 > **1.0.1 fixes Android TV on Android 9 to 12,** where Nettle closed right after signing in. If that
@@ -44,11 +44,12 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > [What's in 1.0.3](https://github.com/devall96/Nettle/releases/tag/v1.0.3)
 
 > [!IMPORTANT]
-> ### 🪟 Coming to the Microsoft Store (pending certification)
-> Nettle has been submitted to the **Microsoft Store** and is waiting for Microsoft's certification,
-> so it isn't available there yet. Once it passes, Windows users can install it from the Store with
-> no "Windows protected your PC" warning, and Windows keeps it up to date. Until then, use the
-> [installer](https://devall96.github.io/Nettle/).
+> ### 🪟 Nettle is on the Microsoft Store
+> **[Get Nettle from the Microsoft Store](https://apps.microsoft.com/detail/9P8RBDLZBJK0).** It passed
+> Microsoft's certification, so it installs with no "Windows protected your PC" warning, and Windows
+> keeps it up to date. It's the same app as the [installer](https://devall96.github.io/Nettle/), and it
+> finds your settings and sign-ins if you already use that one. Microsoft reviews each update, so the
+> Store copy can be a few days behind the installer.
 
 > [!IMPORTANT]
 > ### 📺 Nettle for Android TV
@@ -223,7 +224,7 @@ Everything above and below works on the TV too, with these differences:
 
 Prefer not to install? Download **`Nettle-win-Portable.zip`**, extract it, and run `Nettle.exe`.
 
-**Microsoft Store:** a Store version is pending Microsoft's certification and isn't available yet.
+**Microsoft Store:** or [get Nettle from the Microsoft Store](https://apps.microsoft.com/detail/9P8RBDLZBJK0): no warning from Windows, and Windows updates it for you. It can be a few days behind the installer, because Microsoft reviews each update.
 
 **Requirements**
 - Windows 10 or 11 (64-bit).

@@ -20,7 +20,7 @@
 - **What 1.0 doesn't mean:** that Nettle is finished, or tested everywhere. It is still written by an AI coding assistant and directed and tested by one person. The [known limitations](https://github.com/devall96/Nettle#known-limitations-100) still apply.
 
 ### 🪟 Microsoft Store
-- **A Microsoft Store version of Nettle has been submitted and is in Microsoft's review.** If it passes, you'll be able to install Nettle from the Store with no "Windows protected your PC" warning, and Windows will keep it up to date.
+- **Nettle is on the Microsoft Store: [get it there](https://apps.microsoft.com/detail/9P8RBDLZBJK0).** *(Updated 13 November 2026: it passed Microsoft's certification.)* It installs with no "Windows protected your PC" warning, and Windows keeps it up to date.
 - The Store copy is the same app. Its own updater is switched off, because the Store does the updating; **Settings → Updates** says so there.
 - If you already use the installer version, a Store copy finds your settings and saved sign-ins.
 - Nothing changes for the installer, the portable copy, Linux or Android TV.
