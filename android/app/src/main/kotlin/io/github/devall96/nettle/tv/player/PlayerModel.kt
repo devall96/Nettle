@@ -28,7 +28,10 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-data class FormatBadge(val label: String, val detail: String, val verified: Boolean)
+data class FormatBadge(val label: String, val detail: String, val verified: Boolean, val kind: MediaTagKind = MediaTagKind.Range)
+
+/** What a media tag is about (each kind can be switched off in Settings). */
+enum class MediaTagKind { Resolution, Range, Codec, Audio }
 data class TrackOption(val id: Int, val name: String, val audio: Boolean, val streamIndex: Int?, val selected: Boolean)
 data class Chapter(val ms: Long, val title: String?)
 class RemoteSub(val info: RemoteSubtitleInfo) {
@@ -148,6 +151,8 @@ class PlayerModel private constructor() {
     val subtitleTracks = mutableStateListOf<TrackOption>()
     val formatBadges = mutableStateListOf<FormatBadge>()
     var isFormatBadgesVisible by mutableStateOf(false)
+    /** One line under the tags when a format of the file isn't what the TV is getting (else null). */
+    var formatNote by mutableStateOf<String?>(null)
     var isStillWatchingVisible by mutableStateOf(false)
     var stillWatchingDetail by mutableStateOf<String?>(null)
     var osdMessage by mutableStateOf<String?>(null)
@@ -376,8 +381,14 @@ class PlayerModel private constructor() {
         logoUrl = it.tag("Logo")?.let { t -> Img.of(it.id, "Logo", t, 500) } ?: it.parentLogoImageTag?.let { t -> Img.of(it.parentLogoItemId, "Logo", t, 500) }
         val jf = AppServices.jellyfin
         // Skip segments are fetched alongside, so an intro right at the start is known before the video is.
-        val segmentsJob = scope.async {
-            try { AppServices.segments.getSegments(it.id, legacyFallback = it.isEpisode) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+        // On their own: nothing else waits for them, and a failed request is asked again.
+        scope.launch {
+            val found = try { AppServices.segments.getSegmentsReliably(it.id, legacyFallback = it.isEpisode) }
+                catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+            if (item !== it || disposed) return@launch // a quick switch: these belong to the previous item
+            segments = found
+            Log.info(if (found.isEmpty()) "skip segments: none for this item"
+                else "skip segments: " + found.joinToString { s -> "${s.kind} ${Format.clock(s.startMs)}-${Format.clock(s.endMs)}" })
         }
         try {
             // Ask the server for media sources with transcoding explicitly disabled.
@@ -400,12 +411,12 @@ class PlayerModel private constructor() {
             lastReport = System.currentTimeMillis()
             scope.launch { loadTrickplay(it.id, source.id!!) }
             scope.launch { loadChapters(it.id) }
-            val found = segmentsJob.await()
-            if (item !== it || disposed) return // a quick switch: these belong to the previous item
-            segments = found
-            if (queue == null && syncEntry == null && it.isEpisode && settings.autoPlayNextEpisode) findNextEpisode(it)
+            if (item !== it || disposed) return // a quick switch
+            // Looked up even with auto-play off: the Next button needs it. Only the Up Next card and the
+            // automatic start follow the setting.
+            if (queue == null && syncEntry == null && it.isEpisode) findNextEpisode(it)
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            error = e.message
+            error = e.message ?: "Playback couldn't start."
             isBuffering = false
         }
     }
@@ -570,8 +581,9 @@ class PlayerModel private constructor() {
         val version = tuneVersion
         try {
             val now = System.currentTimeMillis()
-            val next = liveSchedule.firstOrNull { it.startTimeMs <= now + 1000 && it.endTimeMs > now }
-                ?: liveSchedule.firstOrNull { it.startTimeMs >= cur.endTimeMs - 1000 }
+            // Not the slot that is ending: the rollover fires 250 ms early, when that one still covers "now",
+            // and picking it reloaded the old programme at its very end before the real switch.
+            val next = liveSchedule.firstOrNull { it !== cur && it.startTimeMs >= cur.endTimeMs - 1000 && it.endTimeMs > now }
             if (next == null || next.endTimeMs <= now || !canDirectPlay(next)) { tuneTo(channelIndex); return }
             playSlot(next, version)
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
@@ -612,6 +624,7 @@ class PlayerModel private constructor() {
         if (disposed) return
         currentUrl = load.url
         lastLoad = load
+        lastSeekAt = 0 // a seek target from the previous file means nothing in this one
         mediaGeneration++
         audioTracks.clear(); subtitleTracks.clear()
         isFormatBadgesVisible = false
@@ -673,7 +686,7 @@ class PlayerModel private constructor() {
     private val UP_NEXT_LEAD_MS = 25_000L
 
     private fun updateSegments(posMs: Long, lenMs: Long) {
-        var active = segments.firstOrNull { posMs >= it.startMs && posMs < it.endMs - 500 }
+        var active = SegmentService.activeAt(segments, posMs, settings, dismissedSegment)
         if (active != null) {
             val action = SegmentService.actionFor(active.kind, settings)
             if (action == SegmentAction.AutoSkip && autoSkipped.add(active)) {
@@ -688,7 +701,7 @@ class PlayerModel private constructor() {
         val remainingMs = lenMs - posMs
         val nearEndNoMarker = segments.none { it.kind == SegmentKind.Credits } && lenMs > 0 && remainingMs < UP_NEXT_LEAD_MS && posMs > 60_000
         val creditsNow = active?.kind == SegmentKind.Credits || nearEndNoMarker
-        if (nextEpisode != null && creditsNow && !upNextDismissed) {
+        if (nextEpisode != null && creditsNow && !upNextDismissed && !isStillWatchingVisible && (settings.autoPlayNextEpisode || queue != null)) {
             if (!isUpNextVisible) { isUpNextVisible = true; upNextShownAt = System.currentTimeMillis() }
             if (active?.kind != SegmentKind.Credits) upNextCountdown = ((remainingMs.coerceAtLeast(0) + 999) / 1000).toInt()
             else {
@@ -799,6 +812,8 @@ class PlayerModel private constructor() {
      */
     private suspend fun onPlaybackError(tuneAtError: Int, reason: String) {
         Log.warn("playback error: $reason")
+        // Where it stopped, for the reconnect below (otherwise it resumes from the last report, up to 10 s back).
+        engine.timeMs.let { if (it > 0 && !engine.ended && !isLive) lastPositionMs = it }
         delay(1200)
         if (disposed || tuneAtError != tuneVersion) return
         if (engine.isPlaying || (engine.isBuffering && !engine.ended && engine.exo.playerError == null)) {
@@ -867,6 +882,9 @@ class PlayerModel private constructor() {
             error = "The channel stream ended."
             return
         }
+        // The next item is already being fetched and this is the OLD file running out underneath it:
+        // acting on it would close the player, or skip an item of the queue.
+        if (sourcePending) return
         if (isStillWatchingVisible) return
         if (isSyncPlay) {
             // The group's queue moves on (every player asks; the server takes the first), or this was the last item.
@@ -906,6 +924,9 @@ class PlayerModel private constructor() {
 
     fun seekBy(seconds: Int) {
         if (isLive) return
+        // Still opening (no length yet): the clamp below would turn any step into "seek to 0", and the
+        // resume position on the server would be overwritten with the start.
+        if (engine.lengthMs <= 0) return
         showOsd()
         // Presses in quick succession build on the last target rather than the (stale) reported time.
         val from = if (System.currentTimeMillis() - lastSeekAt < 1500) lastSeekTargetMs else maxOf(0, engine.timeMs)
@@ -1132,6 +1153,8 @@ class PlayerModel private constructor() {
      *  • premium audio only once that audio is really playing (stated as passed through or decoded).
      */
     suspend fun showFormatBadges(version: Int = tuneVersion, generation: Int = mediaGeneration, delayMs: Long = 1500) {
+        // Switched off in Settings: nothing pops up by itself (the Info key, delay 0, still shows them).
+        if (!settings.mediaTags && delayMs > 0) return
         if (delayMs > 0) delay(delayMs)
         var w = 0
         var h = 0
@@ -1144,8 +1167,8 @@ class PlayerModel private constructor() {
         if (w == 0) return // no picture yet: claim nothing
         val badges = ArrayList<FormatBadge>()
         val video = sourceStreams?.firstOrNull { it.type == "Video" }
-        val res = VideoFormat.resolution(w)
-        if (res == "4K" || res == "1440p" || res == "1080p") badges += FormatBadge(res, "${w}×$h decoded", true)
+        val res = VideoFormat.resolution(w, h)
+        if (res != null) badges += FormatBadge(res, "${w}×$h decoded", true, MediaTagKind.Resolution)
 
         val caps = AppServices.hdrTypes
         val (hdr, _) = VideoFormat.hdrLabel(video?.videoRangeType)
@@ -1168,20 +1191,35 @@ class PlayerModel private constructor() {
                 else -> badges += FormatBadge(label, "Your TV doesn't report support for this HDR type, so it may be shown in SDR", false)
             }
         }
+        // Not HDR: say so, when the file says it is SDR (or it is NostalgiaTV's own feed, which always is).
+        else if ((video != null && video.videoRangeType.let { it.isNullOrEmpty() || it == "SDR" }) || (isLive && !isLiveDirect))
+            badges += FormatBadge("SDR", "Standard dynamic range", true)
+
+        VideoFormat.codecTag(video?.codec)?.let { badges += FormatBadge(it, "Video format of the file", true, MediaTagKind.Codec) }
 
         // Audio: only once audio is really playing.
         val audio = pickAudioStream()
         val audioLabel = VideoFormat.audioLabel(audio)
-        if (engine.audioActive && audioLabel != null) {
+        val audioTag = VideoFormat.audioTag(audio)
+        if (engine.audioActive && audioTag != null) {
             val layout = VideoFormat.channelLayout(audio!!.channels)
             val detail = if (engine.audioBitstream) "Passed through untouched: your TV or receiver decodes it"
             else if (audioLabel == "Dolby Atmos" || audioLabel == "DTS:X") "Decoded by Nettle to $layout (turn on audio passthrough in Settings to send height channels to a receiver)"
             else "Decoded by Nettle · $layout"
-            badges += FormatBadge(audioLabel.uppercase(), detail, true)
+            badges += FormatBadge(audioTag, detail, true, MediaTagKind.Audio)
         }
+        // Only the kinds chosen in Settings.
+        badges.removeAll { when (it.kind) {
+            MediaTagKind.Resolution -> !settings.tagResolution
+            MediaTagKind.Range -> !settings.tagRange
+            MediaTagKind.Codec -> !settings.tagCodec
+            MediaTagKind.Audio -> !settings.tagAudio
+        } }
         if (generation != mediaGeneration || disposed) return
         formatBadges.clear()
         formatBadges.addAll(badges)
+        // The tags are just names; the one thing worth a sentence is a format that isn't reaching the screen.
+        formatNote = badges.firstOrNull { !it.verified }?.detail
         Log.info("format badges: " + if (badges.isEmpty()) "(none)" else badges.joinToString(" | ") { "${it.label} [${it.detail}]" })
         if (badges.isEmpty()) return
         isFormatBadgesVisible = true
@@ -1359,7 +1397,7 @@ class PlayerModel private constructor() {
         val rows = (inSheet + info.tileWidth - 1) / info.tileWidth
         val tight = bmp.width / cols to bmp.height / rows
         val want = trickTileAspect.takeIf { it > 0f }
-            ?: (engine.videoWidth.toFloat() / engine.videoHeight).takeIf { engine.videoHeight > 0 }
+            ?: engine.videoAspect.takeIf { it > 0f }
             ?: (info.width.toFloat() / maxOf(1, info.height))
         fun off(t: Pair<Int, Int>) = if (t.second <= 0) Float.MAX_VALUE else kotlin.math.abs(t.first.toFloat() / t.second - want)
         return if (off(full) <= off(tight)) full else tight
@@ -1597,7 +1635,8 @@ class PlayerModel private constructor() {
         syncUnpauseJob?.cancel()
         runCatching { displays?.unregisterDisplayListener(displayListener) }
         val stop = reportStopped()
-        scope.launch { AppServices.settings.save() }
+        // On the app's scope: this player's own scope is cancelled a few lines down.
+        AppServices.scope.launch { AppServices.settings.save() }
         Log.info("player closed")
         engine.release()
         scope.cancel()

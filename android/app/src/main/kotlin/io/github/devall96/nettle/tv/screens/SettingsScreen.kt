@@ -91,6 +91,14 @@ fun SettingsScreen(vm: SettingsModel) {
                     DropdownRow("Match frame rate", "Switches the TV to the video's frame rate (24p films without judder), and optionally its resolution",
                         vm.frameRateChoices, vm.frameRateChoices.first { it.value == vm.frameRate }, { vm.changeFrameRate(it.value) }, { it.label })
                     ToggleRow("Auto-play next episode", vm.autoPlayNext, { vm.changeAutoPlayNext(it) }, hint = "Shows an Up Next card during the credits")
+                    ToggleRow("Media tags", vm.mediaTags, { vm.changeMediaTags(it) },
+                        hint = "Small tags that pop up when a video starts, saying what is really playing (4K, HDR10 or SDR, ATMOS 7.1). The Info button shows them again.")
+                    if (vm.mediaTags) {
+                        ToggleRow("Tag: resolution", vm.tagResolution, { vm.changeTagResolution(it) }, hint = "4K, 1080p, 720p, SD")
+                        ToggleRow("Tag: HDR or SDR", vm.tagRange, { vm.changeTagRange(it) }, hint = "Dolby Vision, HDR10+, HDR10, HLG, or SDR")
+                        ToggleRow("Tag: video format", vm.tagCodec, { vm.changeTagCodec(it) }, hint = "HEVC, H.264, AV1")
+                        ToggleRow("Tag: audio", vm.tagAudio, { vm.changeTagAudio(it) }, hint = "Format and channels: ATMOS 7.1, DD+ 5.1, AAC 2.0")
+                    }
                     ToggleRow("Ask \"Are you still watching?\"", vm.stillWatching, { vm.changeStillWatching(it) },
                         hint = "Pauses before the next episode after several in a row with no input, and pauses Live TV after 4 hours with no input. Turn off to never be asked.")
                     if (vm.stillWatching) StepperRow("Episodes before asking", "Auto-played episodes in a row before the question appears",

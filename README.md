@@ -42,6 +42,11 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > **1.0.3 makes the Android TV player easier with a remote** (OK pauses, every button in one row,
 > chapter buttons, a working scrub preview) and fixes two more crashes when the server is busy or down.
 > [What's in 1.0.3](https://github.com/devall96/Nettle/releases/tag/v1.0.3)
+>
+> **1.1.0 brings simpler media tags** (with SDR, every resolution and audio track, and a choice of which
+> to show), **Skip Intro that shows up reliably**, Live TV that finds NostalgiaTV on its own, and about
+> fifty fixes from a full review of the code.
+> [What's in 1.1.0](https://github.com/devall96/Nettle/releases/tag/v1.1.0)
 
 > [!IMPORTANT]
 > ### 🪟 Nettle is on the Microsoft Store

@@ -27,22 +27,29 @@ public static class IntegrationAutoSetup
             var done = new List<string>();
             bool changed = false;
 
-            if (!AppServices.Ntv.IsConfigured && string.IsNullOrWhiteSpace(s.NtvUrl))
+            // True once NostalgiaTV is set up (now, or already). Asked again further down when it doesn't answer.
+            async Task<bool> TryNtvAsync(TimeSpan timeout)
             {
+                if (AppServices.Ntv.IsConfigured || !string.IsNullOrWhiteSpace(s.NtvUrl)) return true;
                 foreach (var scheme in schemes)
                 {
                     var url = $"{scheme}://{host}:{NtvPort}";
-                    if (!await AppServices.Ntv.ProbeAsync(url, ProbeTimeout)) continue;
+                    if (!await AppServices.Ntv.ProbeAsync(url, timeout)) continue;
                     s.NtvUrl = url;
                     AppServices.Ntv.Configure(url, null);
-                    changed = true;
-                    done.Add("Live TV");
                     Log.Info("auto-setup: NostalgiaTV found on the Jellyfin host");
-                    break;
+                    return true;
                 }
+                Log.Info("auto-setup: NostalgiaTV didn't answer on the Jellyfin host");
+                return false;
             }
 
+            bool ntvWasSet = AppServices.Ntv.IsConfigured || !string.IsNullOrWhiteSpace(s.NtvUrl);
+            bool ntvFound = await TryNtvAsync(ProbeTimeout);
+            if (ntvFound && !ntvWasSet) { changed = true; done.Add("Live TV"); }
+
             await AppServices.SeerrReady; // this profile's own Seerr sign-in, if it has one
+            var owner = AppServices.Session.Current?.Id;
             if (!AppServices.Seerr.IsConfigured)
             {
                 foreach (var scheme in schemes)
@@ -63,9 +70,19 @@ public static class IntegrationAutoSetup
                         {
                             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
                             await AppServices.Seerr.SignInWithJellyfinAsync(url, username, password, cts.Token);
-                            await AppServices.SaveSeerrSecretsAsync(null, AppServices.Seerr.SessionCookie);
-                            done.Add("Requests");
-                            Log.Info("auto-setup: signed in to Seerr on the Jellyfin host");
+                            if (AppServices.Session.Current?.Id != owner)
+                            {
+                                // Another profile took over meanwhile: this sign-in is not theirs to inherit.
+                                AppServices.Seerr.Configure(null, null, null);
+                                await AppServices.LoadSeerrForAsync(AppServices.Session.Current?.Id);
+                                Log.Info("auto-setup: profile changed during Seerr sign-in; not kept");
+                            }
+                            else
+                            {
+                                await AppServices.SaveSeerrSecretsAsync(null, AppServices.Seerr.SessionCookie);
+                                done.Add("Requests");
+                                Log.Info("auto-setup: signed in to Seerr on the Jellyfin host");
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -81,6 +98,19 @@ public static class IntegrationAutoSetup
             if (changed) await AppServices.Settings.SaveAsync();
             if (done.Count > 0)
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => AppServices.Main?.Toast($"Set up {string.Join(" and ", done)} automatically", 4000));
+
+            // One quick look right after sign-in isn't always enough: over a VPN or Tailscale the first
+            // connection to a new port can take longer than the probe waits. Two more tries, spaced out.
+            foreach (var wait in new[] { 6, 20 })
+            {
+                if (ntvFound) break;
+                await Task.Delay(TimeSpan.FromSeconds(wait));
+                if (AppServices.Session.Current == null) return; // signed out meanwhile
+                ntvFound = await TryNtvAsync(TimeSpan.FromSeconds(10));
+                if (!ntvFound || ntvWasSet) continue;
+                await AppServices.Settings.SaveAsync();
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => AppServices.Main?.Toast("Set up Live TV automatically", 4000));
+            }
         }
         catch (Exception ex) { Log.Warn("auto-setup failed: " + ex.Message); }
     }

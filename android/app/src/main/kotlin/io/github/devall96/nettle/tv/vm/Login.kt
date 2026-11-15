@@ -193,19 +193,22 @@ class LoginModel(private val serverUrl: String, private var info: PublicSystemIn
         qcJob = launch(showBusy = false) {
             val start = AppServices.jellyfin.quickConnectInitiate()
             quickConnectCode = start.code
-            val secret = start.secret ?: return@launch
-            val deadline = System.currentTimeMillis() + 10 * 60_000
-            while (System.currentTimeMillis() < deadline) {
-                delay(2500)
-                val state = AppServices.jellyfin.quickConnectState(secret)
-                if (state.authenticated) {
-                    val auth = AppServices.jellyfin.quickConnectAuthenticate(secret)
-                    quickConnectCode = null
-                    finish(auth)
-                    return@launch
+            // Whatever ends the wait (signed in, timed out, a failed check), the code leaves the screen with it:
+            // a code that is no longer being checked must not stay up as if it still worked.
+            try {
+                val secret = start.secret ?: return@launch
+                val deadline = System.currentTimeMillis() + 10 * 60_000
+                while (System.currentTimeMillis() < deadline) {
+                    delay(2500)
+                    val state = AppServices.jellyfin.quickConnectState(secret)
+                    if (state.authenticated) {
+                        val auth = AppServices.jellyfin.quickConnectAuthenticate(secret)
+                        quickConnectCode = null
+                        finish(auth)
+                        return@launch
+                    }
                 }
-            }
-            quickConnectCode = null
+            } finally { quickConnectCode = null }
         }
     }
 
@@ -250,20 +253,27 @@ object IntegrationAutoSetup {
             val done = ArrayList<String>()
             var changed = false
 
-            if (!AppServices.ntv.isConfigured && s.ntvUrl.isNullOrBlank()) {
+            // True once NostalgiaTV is set up (now, or already). Asked again further down when it doesn't answer.
+            suspend fun tryNtv(timeoutMs: Long): Boolean {
+                if (AppServices.ntv.isConfigured || !s.ntvUrl.isNullOrBlank()) return true
                 for (scheme in schemes) {
                     val url = "$scheme://$host:$NTV_PORT"
-                    if (!AppServices.ntv.probe(url, 8000)) continue
+                    if (!AppServices.ntv.probe(url, timeoutMs)) continue
                     s.ntvUrl = url
                     AppServices.ntv.configure(url, null)
-                    changed = true
-                    done += "Live TV"
                     Log.info("auto-setup: NostalgiaTV found on the Jellyfin host")
-                    break
+                    return true
                 }
+                Log.info("auto-setup: NostalgiaTV didn't answer on the Jellyfin host")
+                return false
             }
 
+            val ntvWasSet = AppServices.ntv.isConfigured || !s.ntvUrl.isNullOrBlank()
+            var ntvFound = tryNtv(8000)
+            if (ntvFound && !ntvWasSet) { changed = true; done += "Live TV" }
+
             AppServices.seerrReady.join() // this profile's own Seerr sign-in, if it has one
+            val owner = AppServices.session.current?.id
             if (!AppServices.seerr.isConfigured) {
                 for (scheme in schemes) {
                     val url = "$scheme://$host:$SEERR_PORT"
@@ -277,9 +287,15 @@ object IntegrationAutoSetup {
                     else if (!username.isNullOrEmpty() && password != null) {
                         try {
                             withTimeout(15_000) { AppServices.seerr.signInWithJellyfin(url, username, password) }
-                            AppServices.saveSeerrSecrets(null, AppServices.seerr.sessionCookie)
-                            done += "Requests"
-                            Log.info("auto-setup: signed in to Seerr on the Jellyfin host")
+                            if (AppServices.session.current?.id != owner) {
+                                // Another profile took over meanwhile: this sign-in is not theirs to inherit.
+                                AppServices.reloadSeerr()
+                                Log.info("auto-setup: profile changed during Seerr sign-in; not kept")
+                            } else {
+                                AppServices.saveSeerrSecrets(null, AppServices.seerr.sessionCookie)
+                                done += "Requests"
+                                Log.info("auto-setup: signed in to Seerr on the Jellyfin host")
+                            }
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -292,6 +308,18 @@ object IntegrationAutoSetup {
             }
             if (changed) AppServices.settings.save()
             if (done.isNotEmpty()) Main.toast("Set up ${done.joinToString(" and ")} automatically", 4000)
+
+            // One quick look right after sign-in isn't always enough: over a VPN or Tailscale the first
+            // connection to a new port can take longer than the probe waits. Two more tries, spaced out.
+            for (wait in longArrayOf(6_000, 20_000)) {
+                if (ntvFound) break
+                kotlinx.coroutines.delay(wait)
+                if (AppServices.session.current == null) return // signed out meanwhile
+                ntvFound = tryNtv(10_000)
+                if (!ntvFound || ntvWasSet) continue
+                AppServices.settings.save()
+                Main.toast("Set up Live TV automatically", 4000)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

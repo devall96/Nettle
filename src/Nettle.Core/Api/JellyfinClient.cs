@@ -30,6 +30,12 @@ public sealed class JellyfinClient
     /// </summary>
     public event Action? SessionRejected;
 
+    /// <summary>
+    /// Set while another saved profile's token is being tried out: a 401 then means THAT profile needs to
+    /// sign in again, not that the session on screen has expired.
+    /// </summary>
+    public volatile bool SuppressSessionRejected;
+
     private readonly HttpClient _http;
     private readonly string _deviceName;
     private readonly string _version;
@@ -125,20 +131,34 @@ public sealed class JellyfinClient
     {
         using (req)
         {
-            HttpResponseMessage resp;
-            try { resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false); }
-            catch (HttpRequestException ex) { throw new ApiException("Can't reach the server. " + ex.Message, null, ex); }
-            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested) { throw new ApiException("The server took too long to respond.", null, ex); }
-
-            using (resp)
+            // One deadline for the whole exchange. With ResponseHeadersRead, HttpClient.Timeout stops
+            // counting once the headers are in, so a connection that dies mid-body would hang forever.
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadline.CancelAfter(_http.Timeout);
+            try
             {
+                using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, deadline.Token).ConfigureAwait(false);
                 CheckRejected(req, resp);
                 await EnsureOk(resp).ConfigureAwait(false);
-                await using var s = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                return (await JsonSerializer.DeserializeAsync(s, type, ct).ConfigureAwait(false))!;
+                await using var s = await resp.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
+                return await JsonSerializer.DeserializeAsync(s, type, deadline.Token).ConfigureAwait(false)
+                       ?? throw new ApiException("The server sent an empty reply.");
             }
+            catch (Exception ex) when (Translate(ex, ct) is { } api) { throw api; }
         }
     }
+
+    /// <summary>
+    /// Network and body failures as an <see cref="ApiException"/> with a readable message (null = not ours to
+    /// translate: an ApiException already, or the caller's own cancellation).
+    /// </summary>
+    private static ApiException? Translate(Exception ex, CancellationToken ct) => ex switch
+    {
+        HttpRequestException or IOException => new ApiException("Can't reach the server. " + ex.Message, null, ex),
+        OperationCanceledException when !ct.IsCancellationRequested => new ApiException("The server took too long to respond.", null, ex),
+        JsonException => new ApiException("The server sent a reply Nettle couldn't read. Is this address a Jellyfin server?", null, ex),
+        _ => null,
+    };
 
     private async Task SendAsync(HttpRequestMessage req, CancellationToken ct)
     {
@@ -159,7 +179,7 @@ public sealed class JellyfinClient
     /// <summary>A 401 on a request made with our token means the session is gone (not a wrong password).</summary>
     private void CheckRejected(HttpRequestMessage req, HttpResponseMessage resp)
     {
-        if (resp.StatusCode != HttpStatusCode.Unauthorized || string.IsNullOrEmpty(Token)) return;
+        if (resp.StatusCode != HttpStatusCode.Unauthorized || string.IsNullOrEmpty(Token) || SuppressSessionRejected) return;
         var path = req.RequestUri?.AbsolutePath ?? "";
         if (path.Contains("/Authenticate", StringComparison.OrdinalIgnoreCase) || path.EndsWith("/Sessions/Logout", StringComparison.OrdinalIgnoreCase)) return;
         try { SessionRejected?.Invoke(); } catch { }
@@ -252,6 +272,7 @@ public sealed class JellyfinClient
             var info = await SendAsync(req, JellyfinJson.Default.PublicSystemInfo, cts.Token).ConfigureAwait(false);
             return !string.IsNullOrEmpty(info.Id) ? (c, info, null) : (c, null, new ApiException(c + " doesn't look like a Jellyfin server."));
         }
+        catch (ApiException ex) when (ex.InnerException is JsonException) { return (c, null, new ApiException(c + " doesn't look like a Jellyfin server.")); }
         catch (ApiException ex) { return (c, null, ex); }
         catch (OperationCanceledException) { return (c, null, ct.IsCancellationRequested ? null : new ApiException("Timed out connecting to " + c)); }
         catch (JsonException) { return (c, null, new ApiException(c + " doesn't look like a Jellyfin server.")); }
@@ -602,17 +623,17 @@ public sealed class JellyfinClient
     private async Task<JsonDocument> GetDocAsync(string path, CancellationToken ct)
     {
         using var req = Req(HttpMethod.Get, path);
-        HttpResponseMessage resp;
-        try { resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false); }
-        catch (HttpRequestException ex) { throw new ApiException("Can't reach the server. " + ex.Message, null, ex); }
-        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested) { throw new ApiException("The server took too long to respond.", null, ex); }
-        using (resp)
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(_http.Timeout);
+        try
         {
+            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, deadline.Token).ConfigureAwait(false);
             CheckRejected(req, resp);
             await EnsureOk(resp).ConfigureAwait(false);
-            await using var s = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-            return await JsonDocument.ParseAsync(s, cancellationToken: ct).ConfigureAwait(false);
+            await using var s = await resp.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
+            return await JsonDocument.ParseAsync(s, cancellationToken: deadline.Token).ConfigureAwait(false);
         }
+        catch (Exception ex) when (Translate(ex, ct) is { } api) { throw api; }
     }
 
     private Task PostSyncPlay(string action, System.Text.Json.Nodes.JsonObject? body = null, CancellationToken ct = default)
@@ -682,8 +703,10 @@ public sealed class JellyfinClient
             var r = await SendAsync(Req(HttpMethod.Get, $"/MediaSegments/{itemId}"), JellyfinJson.Default.QueryResultMediaSegmentDto, ct).ConfigureAwait(false);
             return r.Items;
         }
-        catch (ApiException) { return new(); }
-        catch (JsonException) { return new(); }
+        // "No such endpoint / not allowed" (a server before 10.10) is an answer: no segments. A busy or
+        // unreachable server is not, and is passed on so the caller can ask again instead of showing no
+        // Skip button for the whole episode.
+        catch (ApiException ex) when (ex.StatusCode is { } code && (int)code < 500) { return new(); }
     }
 
     /// <summary>Intro Skipper plugin's own endpoint (works on servers before 10.10 too).</summary>

@@ -26,7 +26,7 @@ public sealed class SeerrClient
         get
         {
             if (BaseUrl == null) return null;
-            return _cookies.GetCookies(new Uri(BaseUrl))["connect.sid"]?.Value;
+            return Uri.TryCreate(BaseUrl, UriKind.Absolute, out var u) ? _cookies.GetCookies(u)["connect.sid"]?.Value : null;
         }
     }
 
@@ -53,14 +53,14 @@ public sealed class SeerrClient
         ClearCookies();
         BaseUrl = string.IsNullOrWhiteSpace(baseUrl) ? null : NormalizeUrl(baseUrl);
         ApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
-        if (BaseUrl != null && !string.IsNullOrEmpty(sessionCookie))
-            _cookies.Add(new Uri(BaseUrl), new Cookie("connect.sid", sessionCookie));
+        if (BaseUrl != null && !string.IsNullOrEmpty(sessionCookie) && Uri.TryCreate(BaseUrl, UriKind.Absolute, out var u))
+            _cookies.Add(u, new Cookie("connect.sid", sessionCookie));
     }
 
     public static string NormalizeUrl(string url)
     {
         url = url.Trim().TrimEnd('/');
-        if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) url = "http://" + url;
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) url = "http://" + url;
         return url;
     }
 
@@ -84,12 +84,42 @@ public sealed class SeerrClient
             using (resp)
             {
                 if (!resp.IsSuccessStatusCode)
-                    throw new ApiException(resp.StatusCode == HttpStatusCode.Unauthorized || resp.StatusCode == HttpStatusCode.Forbidden
-                        ? "Seerr rejected the credentials." : $"Seerr returned {(int)resp.StatusCode}.", resp.StatusCode);
-                await using var s = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                return (await JsonSerializer.DeserializeAsync(s, type, ct).ConfigureAwait(false))!;
+                {
+                    // 401 is a bad sign-in; 403 is a signed-in user who may not do this (no request permission, quota).
+                    string msg = resp.StatusCode switch
+                    {
+                        HttpStatusCode.Unauthorized => "Seerr rejected the credentials.",
+                        HttpStatusCode.Forbidden => "Seerr didn't allow that.",
+                        _ => $"Seerr returned {(int)resp.StatusCode}.",
+                    };
+                    var detail = await ErrorMessageAsync(resp, ct).ConfigureAwait(false);
+                    if (detail != null) msg += " " + detail;
+                    throw new ApiException(msg, resp.StatusCode);
+                }
+                try
+                {
+                    await using var s = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                    return await JsonSerializer.DeserializeAsync(s, type, ct).ConfigureAwait(false)
+                           ?? throw new ApiException("Seerr sent an empty reply.");
+                }
+                catch (JsonException ex) { throw new ApiException("Seerr sent a reply Nettle couldn't read. Is this address a Seerr server?", null, ex); }
+                catch (IOException ex) { throw new ApiException("Can't reach Seerr. " + ex.Message, null, ex); }
             }
         }
+    }
+
+    /// <summary>The short "message" Seerr puts in an error body ("Request quota exceeded."), if there is one.</summary>
+    private static async Task<string?> ErrorMessageAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        try
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            if (body.Length is 0 or > 2000) return null;
+            using var doc = JsonDocument.Parse(body);
+            var m = doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("message", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            return string.IsNullOrWhiteSpace(m) || m.Length > 200 ? null : m.Trim();
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return null; }
     }
 
     /// <summary>True if a Seerr server answers at <paramref name="url"/> (its public status endpoint).</summary>
@@ -110,13 +140,23 @@ public sealed class SeerrClient
 
     public async Task<SeerrUser> SignInWithJellyfinAsync(string url, string username, string password, CancellationToken ct = default)
     {
+        // A failed attempt (a mistyped password) must leave the sign-in that was working as it was.
+        var (oldUrl, oldKey, oldCookie) = (BaseUrl, ApiKey, SessionCookie);
         ClearCookies();
         BaseUrl = NormalizeUrl(url);
         ApiKey = null;
-        var req = Req(HttpMethod.Post, "/auth/jellyfin");
-        req.Content = new StringContent(JsonSerializer.Serialize(new SeerrJellyfinLogin { Username = username, Password = password }, SeerrJson.Default.SeerrJellyfinLogin),
-            Encoding.UTF8, "application/json");
-        return await SendAsync(req, SeerrJson.Default.SeerrUser, ct).ConfigureAwait(false);
+        try
+        {
+            var req = Req(HttpMethod.Post, "/auth/jellyfin");
+            req.Content = new StringContent(JsonSerializer.Serialize(new SeerrJellyfinLogin { Username = username, Password = password }, SeerrJson.Default.SeerrJellyfinLogin),
+                Encoding.UTF8, "application/json");
+            return await SendAsync(req, SeerrJson.Default.SeerrUser, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            Configure(oldUrl, oldKey, oldCookie);
+            throw;
+        }
     }
 
     private SeerrUser? _me;

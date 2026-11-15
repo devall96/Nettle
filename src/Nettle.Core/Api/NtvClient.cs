@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Xml;
 using Nettle.Core.Models;
+using Nettle.Core.Services;
 
 namespace Nettle.Core.Api;
 
@@ -23,14 +24,18 @@ public sealed partial class NtvClient
 
     public void Configure(string? baseUrl, string? apiKey)
     {
+        // Whatever changes (server, key, or NostalgiaTV removed), the cached guide belongs to the old setup.
+        // The generation also stops a download that's still in flight from being stored afterwards.
+        Interlocked.Increment(ref _generation);
+        _guide = null;
+        ApiKey = null;
         if (string.IsNullOrWhiteSpace(baseUrl)) { BaseUrl = null; return; }
         var u = baseUrl.Trim().TrimEnd('/');
-        if (!u.StartsWith("http", StringComparison.OrdinalIgnoreCase)) u = "http://" + u;
+        if (!u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !u.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) u = "http://" + u;
         if (Uri.TryCreate(u, UriKind.Absolute, out var parsed) && parsed.IsDefaultPort && parsed.Scheme == "http" && u.IndexOf(':', 7) < 0)
             u += ":19850";
         BaseUrl = u;
         ApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
-        _guide = null; // different server or key: forget the cached guide
     }
 
     /// <summary>True if a NostalgiaTV server answers at <paramref name="baseUrl"/> (its channel list is reachable).</summary>
@@ -45,8 +50,10 @@ public sealed partial class NtvClient
             if (!resp.IsSuccessStatusCode) return false;
             await using var s = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
             var buf = new byte[16];
-            int n = await s.ReadAtLeastAsync(buf, 7, throwOnEndOfStream: false, cts.Token).ConfigureAwait(false);
-            return System.Text.Encoding.ASCII.GetString(buf, 0, n).TrimStart('﻿').StartsWith("#EXTM3U", StringComparison.Ordinal);
+            int n = await s.ReadAtLeastAsync(buf, 10, throwOnEndOfStream: false, cts.Token).ConfigureAwait(false);
+            // A UTF-8 byte order mark may come first; it has to be skipped as bytes (ASCII decoding turns it into "???").
+            int skip = n >= 3 && buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF ? 3 : 0;
+            return System.Text.Encoding.ASCII.GetString(buf, skip, n - skip).StartsWith("#EXTM3U", StringComparison.Ordinal);
         }
         catch (Exception) when (!ct.IsCancellationRequested) { return false; }
     }
@@ -55,7 +62,10 @@ public sealed partial class NtvClient
     // every visit to the Live TV page was the slowest part of opening it.
     private static readonly TimeSpan GuideMaxAge = TimeSpan.FromMinutes(10);
     private readonly SemaphoreSlim _guideGate = new(1, 1);
-    private List<NtvChannel>? _guide;
+    private volatile List<NtvChannel>? _guide;
+    private int _generation;
+    /// <summary>Longest the two guide downloads and the parse may take together before giving up.</summary>
+    private static readonly TimeSpan GuideDeadline = TimeSpan.FromSeconds(90);
     private DateTimeOffset _guideAt;
     private int _guideDays;
 
@@ -72,10 +82,26 @@ public sealed partial class NtvClient
         try
         {
             if (!force && _guide != null && _guideDays >= days && DateTimeOffset.Now - _guideAt < GuideMaxAge) return _guide;
-            var g = await LoadGuideCoreAsync(days, ct).ConfigureAwait(false);
-            _guide = g;
-            _guideAt = DateTimeOffset.Now;
-            _guideDays = days;
+            int generation = Volatile.Read(ref _generation);
+            // HttpClient's timeout only covers the wait for headers, so the bodies get a deadline of their own;
+            // without it a connection that died mid-download held this gate (and Live TV) until restart.
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadline.CancelAfter(GuideDeadline);
+            List<NtvChannel> g;
+            bool complete;
+            try { (g, complete) = await LoadGuideCoreAsync(days, deadline.Token).ConfigureAwait(false); }
+            catch (Exception ex) when (ex is not OperationCanceledException && ct.IsCancellationRequested) { throw new OperationCanceledException(null, ex, ct); }
+            catch (Exception ex) when (ex is not ApiException && !ct.IsCancellationRequested)
+            {
+                throw new ApiException(deadline.IsCancellationRequested ? "NostalgiaTV took too long to send the guide." : "Couldn't read the NostalgiaTV guide. " + ex.Message, null, ex);
+            }
+            // Kept only when it is whole and still belongs to the configured server.
+            if (complete && generation == Volatile.Read(ref _generation))
+            {
+                _guideAt = DateTimeOffset.Now;
+                _guideDays = days;
+                _guide = g;
+            }
             return g;
         }
         finally { _guideGate.Release(); }
@@ -97,7 +123,8 @@ public sealed partial class NtvClient
         return await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task<List<NtvChannel>> LoadGuideCoreAsync(int days, CancellationToken ct)
+    /// <summary>Channels with their programmes. "Complete" is false when the channel list loaded but the guide didn't.</summary>
+    private async Task<(List<NtvChannel> Channels, bool Complete)> LoadGuideCoreAsync(int days, CancellationToken ct)
     {
         if (BaseUrl == null) throw new ApiException("NostalgiaTV isn't set up yet. Add its address in Settings.");
         var m3uTask = GetStreamAsync("/channels.m3u", ct);
@@ -107,7 +134,7 @@ public sealed partial class NtvClient
         try
         {
             await using (var m3u = await m3uTask.ConfigureAwait(false))
-                channels = await ParseM3uAsync(m3u).ConfigureAwait(false);
+                channels = await ParseM3uAsync(m3u, ct).ConfigureAwait(false);
         }
         catch
         {
@@ -116,12 +143,26 @@ public sealed partial class NtvClient
             throw;
         }
 
+        // The channels are still worth showing (and tuning) when the guide itself is missing or damaged.
         var now = DateTimeOffset.Now;
-        await using (var xml = await xmlTask.ConfigureAwait(false))
+        bool complete = true;
+        try
+        {
+            await using var xml = await xmlTask.ConfigureAwait(false);
+            // The parser reads synchronously, so cancellation has to close the stream under it.
+            await using var abort = ct.Register(static s => ((Stream)s!).Dispose(), xml);
             await Task.Run(() => ParseXmltv(xml, channels, now.AddHours(-3), now.AddDays(days)), ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is ApiException or XmlException or IOException)
+        {
+            Log.Warn("NostalgiaTV guide unavailable, showing channels without programmes: " + ex.Message);
+            foreach (var c in channels) c.Programs.Clear(); // a half-read guide would end mid-day
+            complete = false;
+        }
+        ct.ThrowIfCancellationRequested();
 
         foreach (var c in channels) c.Programs.Sort((a, b) => a.Start.CompareTo(b.Start));
-        return channels;
+        return (channels, complete);
     }
 
     /// <summary>
@@ -133,8 +174,11 @@ public sealed partial class NtvClient
         if (BaseUrl == null) return new();
         await using var s = await GetStreamAsync($"/api/schedule?hours={hours}&channelId={Uri.EscapeDataString(stableId)}", ct).ConfigureAwait(false);
         var resp = await System.Text.Json.JsonSerializer.DeserializeAsync(s, Json.NtvJson.Default.NtvScheduleResponse, ct).ConfigureAwait(false);
-        var ch = resp?.Channels.FirstOrDefault(c => string.Equals(c.StableId, stableId, StringComparison.OrdinalIgnoreCase))
-                 ?? resp?.Channels.FirstOrDefault();
+        // Without an id match, a lone channel is taken to be the one asked for; several means the server
+        // ignored the filter, and guessing would play another channel's programme under this one's name.
+        var all = resp?.Channels ?? new();
+        var ch = all.FirstOrDefault(c => string.Equals(c.StableId, stableId, StringComparison.OrdinalIgnoreCase))
+                 ?? (all.Count == 1 ? all[0] : null);
         var list = ch?.Programs ?? new();
         list.Sort((a, b) => a.StartTimeMs.CompareTo(b.StartTimeMs));
         return list;
@@ -158,14 +202,14 @@ public sealed partial class NtvClient
         return null;
     }
 
-    private async Task<List<NtvChannel>> ParseM3uAsync(Stream s)
+    private async Task<List<NtvChannel>> ParseM3uAsync(Stream s, CancellationToken ct)
     {
         var list = new List<NtvChannel>();
         using var reader = new StreamReader(s);
         string? line;
         Dictionary<string, string>? attrs = null;
         string? title = null;
-        while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) != null)
+        while ((line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) != null)
         {
             line = line.Trim();
             if (line.Length == 0) continue;
@@ -317,6 +361,7 @@ public sealed partial class NtvClient
             int.TryParse(rest.AsSpan(1, 2), out var hh) && int.TryParse(rest.AsSpan(3, 2), out var mm))
         {
             offset = new TimeSpan(hh, mm, 0);
+            if (offset > TimeSpan.FromHours(14)) return null; // not a real UTC offset (DateTimeOffset would throw)
             if (rest[0] == '-') offset = -offset;
         }
         return new DateTimeOffset(dt, offset);

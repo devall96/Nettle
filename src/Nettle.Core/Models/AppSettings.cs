@@ -27,6 +27,13 @@ public sealed class PlaybackSettings
     public SegmentAction PreviewAction { get; set; } = SegmentAction.ShowButton;
     public SegmentAction CommercialAction { get; set; } = SegmentAction.AutoSkip;
     public bool AutoPlayNextEpisode { get; set; } = true;
+    /// <summary>The small format tags (4K, HDR10, ATMOS 7.1…) that pop up when a video starts.</summary>
+    public bool MediaTags { get; set; } = true;
+    public bool TagResolution { get; set; } = true;
+    /// <summary>HDR10 / Dolby Vision / HLG, or SDR.</summary>
+    public bool TagRange { get; set; } = true;
+    public bool TagCodec { get; set; }
+    public bool TagAudio { get; set; } = true;
     public int UpNextCountdownSeconds { get; set; } = 10;
     public string PreferredAudioLanguage { get; set; } = "";
     public string PreferredSubtitleLanguage { get; set; } = "";

@@ -183,7 +183,10 @@ class SessionService(private val client: JellyfinClient, private val accountStor
         val before = client.snapshot()
         val userConfigBefore = userConfig
         client.configure(account.serverUrl, account.deviceId, account.accessToken, account.userId)
+        // A 401 here is about the profile being tried, not the one on screen (which stays signed in below).
+        client.suppressSessionRejected = true
         val c = try { check(account) } catch (e: Throwable) { restoreAfterFailedSwitch(before, userConfigBefore); throw e }
+            finally { client.suppressSessionRejected = false }
         if (c != SessionCheck.Valid) restoreAfterFailedSwitch(before, userConfigBefore)
         when (c) {
             SessionCheck.Unreachable -> throw ApiException("Can't reach the server.")

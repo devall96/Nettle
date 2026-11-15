@@ -50,14 +50,16 @@ class NtvClient(base: OkHttpClient) {
     val isConfigured: Boolean get() = baseUrl != null
 
     fun configure(baseUrl: String?, apiKey: String?) {
+        // Whatever changes (server, key, or NostalgiaTV removed), the cached guide belongs to the old setup.
+        guide = null
+        this.apiKey = null
         if (baseUrl.isNullOrBlank()) { this.baseUrl = null; return }
         var u = baseUrl.trim().trimEnd('/')
-        if (!u.startsWith("http", ignoreCase = true)) u = "http://$u"
+        if (!u.startsWith("http://", ignoreCase = true) && !u.startsWith("https://", ignoreCase = true)) u = "http://$u"
         val parsed = runCatching { URI(u) }.getOrNull()
         if (parsed != null && parsed.port == -1 && parsed.scheme == "http" && u.indexOf(':', 7) < 0) u += ":19850"
         this.baseUrl = u
         this.apiKey = apiKey?.trim()?.takeIf { it.isNotEmpty() }
-        guide = null // different server or key: forget the cached guide
     }
 
     /** True if a NostalgiaTV server answers at [baseUrl] (its channel list is reachable). */
@@ -135,7 +137,9 @@ class NtvClient(base: OkHttpClient) {
         if (baseUrl == null) return emptyList()
         val text = get("/api/schedule?hours=$hours&channelId=${Query.escape(stableId)}").use { withContext(Dispatchers.IO) { it.body.string() } }
         val resp = runCatching { NettleJson.camel.decodeFromString(NtvScheduleResponse.serializer(), text) }.getOrNull()
-        val ch = resp?.channels?.firstOrNull { it.stableId.equals(stableId, ignoreCase = true) } ?: resp?.channels?.firstOrNull()
+        // Without an id match, a lone channel is taken to be the one asked for; several means the server
+        // ignored the filter, and guessing would play another channel's programme under this one's name.
+        val ch = resp?.channels?.firstOrNull { it.stableId.equals(stableId, ignoreCase = true) } ?: resp?.channels?.singleOrNull()
         return (ch?.programs ?: emptyList()).sortedBy { it.startTimeMs }
     }
 

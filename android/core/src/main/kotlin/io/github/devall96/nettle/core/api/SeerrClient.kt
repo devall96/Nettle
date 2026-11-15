@@ -94,8 +94,12 @@ class SeerrClient(base: OkHttpClient) {
         return resp.use {
             if (!it.isSuccessful) throw ApiException(
                 if (it.code == 401 || it.code == 403) "Seerr rejected the credentials." else "Seerr returned ${it.code}.", it.code)
-            val text = withContext(Dispatchers.IO) { it.body.string() }
-            try { NettleJson.camel.decodeFromString(s, text) } catch (e: Exception) { throw ApiException("Seerr sent something unexpected.", null, e) }
+            val text = try { withContext(Dispatchers.IO) { it.body.string() } } catch (e: CancellationException) { throw e } catch (e: IOException) {
+                throw ApiException("Can't reach Seerr. ${e.message ?: ""}".trim(), null, e)
+            }
+            withContext(Dispatchers.Default) {
+                try { NettleJson.camel.decodeFromString(s, text) } catch (e: Exception) { throw ApiException("Seerr sent something unexpected.", null, e) }
+            }
         }
     }
 
@@ -109,12 +113,17 @@ class SeerrClient(base: OkHttpClient) {
     } ?: false
 
     suspend fun signInWithJellyfin(url: String, username: String, password: String): SeerrUser {
+        // A failed attempt (a mistyped password) must leave the sign-in that was working as it was.
+        val oldUrl = baseUrl; val oldKey = apiKey; val oldCookie = jar.cookie
         baseUrl = normalizeUrl(url)
         apiKey = null
         jar.cookie = null
         me = null
         val body = NettleJson.camel.encodeToString(SeerrJellyfinLogin.serializer(), SeerrJellyfinLogin(username, password))
-        return send(req("POST", "/auth/jellyfin", body), SeerrUser.serializer())
+        return try { send(req("POST", "/auth/jellyfin", body), SeerrUser.serializer()) } catch (e: Throwable) {
+            configure(oldUrl, oldKey, oldCookie)
+            throw e
+        }
     }
 
     private var me: SeerrUser? = null

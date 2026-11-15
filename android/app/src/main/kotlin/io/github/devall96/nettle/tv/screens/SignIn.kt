@@ -1,6 +1,8 @@
 package io.github.devall96.nettle.tv.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -75,7 +77,8 @@ fun AccountPickerScreen(vm: AccountPickerModel) {
         Column(Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             T("Who's watching?", style = Nettle.type.h1)
             Spacer(Modifier.height(36.dp))
-            Row(horizontalArrangement = Arrangement.Center) {
+            // Scrolls sideways: more profiles than fit used to be squeezed off the row, out of reach.
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.Center) {
                 vm.accounts.forEachIndexed { i, tile ->
                     Column(Modifier.padding(18.dp).width(150.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         AvatarButton(132.dp, tile.initial, 52f, tile.avatarUrl, { vm.signIn(tile) }, if (i == 0) first else null, tile.isSigningIn)
@@ -193,7 +196,7 @@ fun LoginScreen(vm: LoginModel) {
 
             if (!vm.showManualForm) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    Row {
+                    Row(Modifier.horizontalScroll(rememberScrollState())) {
                         vm.users.forEachIndexed { i, u ->
                             Column(Modifier.padding(14.dp).width(124.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 AvatarButton(108.dp, u.initial, 42f, u.avatarUrl, { vm.selectUser(u) }, if (i == 0) firstUser else null)

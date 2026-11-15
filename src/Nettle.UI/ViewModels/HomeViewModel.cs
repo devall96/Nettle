@@ -90,7 +90,7 @@ public sealed partial class HomeViewModel : PageViewModel
     protected override Task RefreshAsync() => ReloadAsync(quiet: true);
     // Reduce motion: the banner doesn't rotate by itself (arrows still work).
     protected override void OnActivated() { if (!AppServices.Settings.Current.ReduceMotion) _heroTimer.Start(); }
-    public override void OnDeactivated() => _heroTimer.Stop();
+    protected override void OnDeactivated() => _heroTimer.Stop();
 
     /// <summary>Libraries that get a "Recently added" row: video ones the user hasn't hidden from it in Jellyfin.</summary>
     private static IEnumerable<BaseItemDto> LatestLibraries(IEnumerable<BaseItemDto> libs)

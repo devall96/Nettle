@@ -20,7 +20,8 @@ public sealed class NtvItemResolver
     /// <summary>Gets playback info for the slot, transparently fixing a stale item id.</summary>
     public async Task<(string itemId, PlaybackInfoResponse info)> GetPlaybackAsync(NtvSlot slot, CancellationToken ct = default)
     {
-        slot.TryGetJellyfinItem(out _, out var ntvId);
+        if (!slot.TryGetJellyfinItem(out _, out var ntvId))
+            throw new ApiException($"“{slot.DisplayTitle}” isn't linked to a Jellyfin item.", HttpStatusCode.NotFound);
         var id = _remap.TryGetValue(ntvId, out var mapped) ? mapped : ntvId;
         try
         {
@@ -45,7 +46,9 @@ public sealed class NtvItemResolver
         {
             var show = slot.ShowTitle ?? slot.Title;
             var series = await _jf.GetItemsAsync(new ItemQuery { SearchTerm = show, IncludeItemTypes = "Series", Limit = 20, SortBy = null, SortOrder = null }, ct).ConfigureAwait(false);
-            var match = series.Items.FirstOrDefault(s => Norm(s.Name) == Norm(show)) ?? series.Items.FirstOrDefault();
+            // The name has to match, unless the search found a single series: taking the first of several
+            // hits played an episode of a different show ("The Office (UK)" for "The Office (US)").
+            var match = series.Items.FirstOrDefault(s => Norm(s.Name) == Norm(show)) ?? (series.Items.Count == 1 ? series.Items[0] : null);
             if (match == null) return null;
             // Ask for just that episode instead of downloading the whole series.
             var ep = await _jf.FindEpisodeAsync(match.Id, slot.SeasonNumber.Value, slot.EpisodeNumber.Value, ct).ConfigureAwait(false);

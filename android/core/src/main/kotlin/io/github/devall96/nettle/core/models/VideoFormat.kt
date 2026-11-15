@@ -58,13 +58,48 @@ object VideoFormat {
         else -> "$ch ch"
     }
 
-    fun resolution(width: Int?): String? = when {
-        width == null -> null
-        width >= 3800 -> "4K"
-        width >= 2500 -> "1440p"
-        width >= 1900 -> "1080p"
-        width >= 1200 -> "720p"
-        width > 0 -> "SD"
-        else -> null
+    /** Short tag for the video format ("HEVC", "H.264", "AV1"), or null when unknown. */
+    fun codecTag(codec: String?): String? = when (val c = codec?.lowercase()) {
+        null, "" -> null
+        "hevc", "h265" -> "HEVC"
+        "h264", "avc" -> "H.264"
+        "av1" -> "AV1"
+        "vp9" -> "VP9"
+        "vp8" -> "VP8"
+        "mpeg2video" -> "MPEG-2"
+        "mpeg4" -> "MPEG-4"
+        "vc1" -> "VC-1"
+        else -> c.uppercase()
+    }
+
+    /** Short tag for the audio track: format plus channels ("ATMOS 7.1", "DD+ 5.1", "AAC 2.0"), or null when unknown. */
+    fun audioTag(a: MediaStream?): String? {
+        if (a == null) return null
+        val name = when (audioLabel(a)) {
+            "Dolby Atmos" -> "ATMOS"
+            "DTS:X" -> "DTS:X"
+            "Dolby TrueHD" -> "TRUEHD"
+            "Dolby Digital Plus" -> "DD+"
+            "Dolby Digital" -> "DD"
+            "DTS-HD MA" -> "DTS-HD MA"
+            "DTS-HD" -> "DTS-HD"
+            "DTS" -> "DTS"
+            else -> null
+        } ?: a.codec?.lowercase()?.takeIf { it.isNotEmpty() }?.let { if (it.startsWith("pcm")) "PCM" else it.uppercase() } ?: return null
+        val ch = a.channels ?: 0
+        val channels = when { ch >= 8 -> "7.1"; ch >= 6 -> "5.1"; ch == 2 -> "2.0"; ch == 1 -> "1.0"; else -> null }
+        return if (channels == null) name else "$name $channels"
+    }
+
+    /**
+     * Width decides for wide pictures (a 1920×800 film is 1080p); height, when known, rescues narrow ones
+     * (1440×1080 is 1080p too, not 720p).
+     */
+    fun resolution(width: Int?, height: Int? = null): String? {
+        val w = width ?: 0
+        val h = height ?: 0
+        val byWidth = when { w >= 3800 -> 4; w >= 2500 -> 3; w >= 1900 -> 2; w >= 1200 -> 1; w > 0 -> 0; else -> -1 }
+        val byHeight = when { h >= 2000 -> 4; h >= 1400 -> 3; h >= 1000 -> 2; h >= 700 -> 1; h > 0 -> 0; else -> -1 }
+        return when (maxOf(byWidth, byHeight)) { 4 -> "4K"; 3 -> "1440p"; 2 -> "1080p"; 1 -> "720p"; 0 -> "SD"; else -> null }
     }
 }

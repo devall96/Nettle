@@ -50,8 +50,11 @@ public partial class PlayerView : UserControl
         };
         AttachedToVisualTree += (_, _) =>
         {
-            TopLevel.GetTopLevel(this)?.AddHandler(KeyDownEvent, OnCheckKey, RoutingStrategies.Tunnel);
-            TopLevel.GetTopLevel(this)?.AddHandler(KeyUpEvent, OnKeyUp, RoutingStrategies.Tunnel, handledEventsToo: true);
+            // Remembered: by the time the view is detached it has no top level to look up any more, and the
+            // handlers would stay on the main window, keeping every closed player (and its video surface) alive.
+            _mainTop = TopLevel.GetTopLevel(this);
+            _mainTop?.AddHandler(KeyDownEvent, OnCheckKey, RoutingStrategies.Tunnel);
+            _mainTop?.AddHandler(KeyUpEvent, OnKeyUp, RoutingStrategies.Tunnel, handledEventsToo: true);
         };
 
         SeekBar.AddHandler(PointerPressedEvent, (_, _) => { if (Vm != null) Vm.IsSeeking = true; }, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -173,9 +176,12 @@ public partial class PlayerView : UserControl
     {
         base.OnDetachedFromVisualTree(e);
         _overlayTop?.RemoveHandler(KeyUpEvent, OnKeyUp);
-        TopLevel.GetTopLevel(this)?.RemoveHandler(KeyUpEvent, OnKeyUp);
+        _mainTop?.RemoveHandler(KeyUpEvent, OnKeyUp);
         _overlayTop?.RemoveHandler(KeyDownEvent, OnOverlayKey);
         _overlayTop?.RemoveHandler(KeyDownEvent, OnCheckKey);
-        TopLevel.GetTopLevel(this)?.RemoveHandler(KeyDownEvent, OnCheckKey);
+        _mainTop?.RemoveHandler(KeyDownEvent, OnCheckKey);
+        _mainTop = null;
     }
+
+    private TopLevel? _mainTop;
 }

@@ -120,7 +120,7 @@ public sealed partial class ShellViewModel : ViewModelBase
 
     partial void OnCurrentChanged(PageViewModel? oldValue, PageViewModel? newValue)
     {
-        oldValue?.OnDeactivated();
+        oldValue?.Deactivate();
         Nettle.UI.Controls.SpatialNavigation.PageChanged();
         var key = newValue?.NavKey ?? "";
         foreach (var n in NavTop.Concat(NavLibraries).Concat(NavBottom)) n.IsSelected = n.Key == key;

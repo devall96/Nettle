@@ -19,6 +19,9 @@ public sealed class RemoteControl
     private DateTime _lastRefresh = DateTime.MinValue;
     private bool _refreshQueued;
 
+    /// <summary>The page on screen was just refreshed by something else (the player closing).</summary>
+    public void MarkRefreshed() => _lastRefresh = DateTime.UtcNow;
+
     private static readonly string[] Commands =
     [
         "DisplayMessage", "SetVolume", "VolumeUp", "VolumeDown", "Mute", "Unmute", "ToggleMute",
@@ -71,9 +74,13 @@ public sealed class RemoteControl
     {
         if (_refreshQueued) return;
         _refreshQueued = true;
+        var asked = DateTime.UtcNow;
         try
         {
             await Task.Delay(settle);
+            // Already refreshed since this change came in (closing the player does it once the stop report
+            // is in, which is the very change the server is announcing here): don't load the page twice.
+            if (_lastRefresh > asked - TimeSpan.FromSeconds(1)) return;
             if (DateTime.UtcNow - _lastRefresh < TimeSpan.FromSeconds(5)) await Task.Delay(TimeSpan.FromSeconds(5));
         }
         finally { _refreshQueued = false; }

@@ -28,7 +28,7 @@ public static class Log
     public static void Error(string msg, Exception? ex = null) => Write("ERR", ex == null ? msg : $"{msg}: {ex}");
 
     private static readonly System.Text.RegularExpressions.Regex Secrets = new(
-        "(?i)(api_?key|token|x-emby-token|access_?token)([=:\"\\s]+)[A-Za-z0-9._-]{8,}",
+        "(?i)(api[-_]?key|token|x-emby-token|access_?token)([=:\"\\s]+)[A-Za-z0-9._+/=-]{8,}",
         System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>Masks access tokens / API keys anywhere in a message (including URLs from the player).</summary>

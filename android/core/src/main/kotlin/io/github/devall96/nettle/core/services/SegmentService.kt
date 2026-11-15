@@ -37,7 +37,10 @@ class SegmentService(private val client: JellyfinClient) {
             }
             if (kind != null && s.endTicks > s.startTicks) result += PlaybackSegment(kind, s.startTicks / 10_000, s.endTicks / 10_000)
         }
-        if (result.isEmpty() && legacyFallback) {
+        // The plugin's own endpoint is asked whenever the server's list has no intro: some setups publish
+        // only part of what Intro Skipper found (credits but no intro), which used to hide Skip Intro.
+        if (legacyFallback && result.none { it.kind == SegmentKind.Intro }) {
+            val have = result.map { it.kind }.toSet()
             for ((key, v) in client.getIntroSkipperSegments(itemId)) {
                 if (!v.valid) continue
                 val start = if (v.introEnd > 0) v.introStart else v.start
@@ -51,6 +54,7 @@ class SegmentService(private val client: JellyfinClient) {
                     "Commercial" -> SegmentKind.Commercial
                     else -> SegmentKind.Intro
                 }
+                if (kind in have) continue // the server's own entry wins
                 result += PlaybackSegment(kind, (start * 1000).toLong(), (end * 1000).toLong())
             }
         }
@@ -58,7 +62,30 @@ class SegmentService(private val client: JellyfinClient) {
         return result
     }
 
+    /**
+     * [getSegments], asked again (after 3 s, then 10 s) when the server couldn't answer. One failed
+     * request at the start of an episode used to mean no Skip buttons for all of it.
+     */
+    suspend fun getSegmentsReliably(itemId: String, legacyFallback: Boolean = true): List<PlaybackSegment> {
+        val waits = longArrayOf(3000, 10000)
+        var attempt = 0
+        while (true) {
+            try { return getSegments(itemId, legacyFallback) } catch (e: io.github.devall96.nettle.core.api.ApiException) {
+                if (attempt >= waits.size) { Log.warn("skip segments couldn't be loaded: ${e.message}"); return emptyList() }
+                Log.info("skip segments not loaded (${e.message}); asking again")
+                kotlinx.coroutines.delay(waits[attempt++])
+            }
+        }
+    }
+
     companion object {
+        /**
+         * The segment to act on at [posMs]: the first one covering it that isn't switched off or dismissed.
+         * (Taking simply the first one let a hidden recap mask the intro it overlaps.)
+         */
+        fun activeAt(segments: List<PlaybackSegment>, posMs: Long, settings: PlaybackSettings, dismissed: PlaybackSegment?): PlaybackSegment? =
+            segments.firstOrNull { posMs >= it.startMs && posMs < it.endMs - 500 && it != dismissed && actionFor(it.kind, settings) != SegmentAction.Off }
+
         fun actionFor(kind: SegmentKind, s: PlaybackSettings): SegmentAction = when (kind) {
             SegmentKind.Intro -> s.introAction
             SegmentKind.Recap -> s.recapAction

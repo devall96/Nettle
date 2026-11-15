@@ -59,6 +59,16 @@ class SettingsModel : Page() {
     var interfaceWidth by mutableStateOf(s.interfaceWidth); private set
     var audioPassthrough by mutableStateOf(p.audioPassthrough); private set
     var autoPlayNext by mutableStateOf(p.autoPlayNextEpisode); private set
+    var mediaTags by mutableStateOf(p.mediaTags); private set
+    var tagResolution by mutableStateOf(p.tagResolution); private set
+    var tagRange by mutableStateOf(p.tagRange); private set
+    var tagCodec by mutableStateOf(p.tagCodec); private set
+    var tagAudio by mutableStateOf(p.tagAudio); private set
+    fun changeMediaTags(v: Boolean) { mediaTags = v; p.mediaTags = v; save() }
+    fun changeTagResolution(v: Boolean) { tagResolution = v; p.tagResolution = v; save() }
+    fun changeTagRange(v: Boolean) { tagRange = v; p.tagRange = v; save() }
+    fun changeTagCodec(v: Boolean) { tagCodec = v; p.tagCodec = v; save() }
+    fun changeTagAudio(v: Boolean) { tagAudio = v; p.tagAudio = v; save() }
     var stillWatching by mutableStateOf(p.stillWatchingPrompt); private set
     var stillWatchingEpisodes by mutableStateOf(p.stillWatchingEpisodes); private set
     var introAction by mutableStateOf(p.introAction); private set

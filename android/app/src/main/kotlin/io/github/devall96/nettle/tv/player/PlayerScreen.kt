@@ -138,7 +138,8 @@ fun PlayerScreen(vm: PlayerModel) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             AndroidView(
                 factory = { ctx -> SurfaceView(ctx).also { it.isFocusable = false; it.isFocusableInTouchMode = false; vm.engine.exo.setVideoSurfaceView(it) } },
-                modifier = (if (w > 0 && h > 0) Modifier.aspectRatio(w.toFloat() / h, matchHeightConstraintsFirst = w.toFloat() / h < 16f / 9f) else Modifier.fillMaxSize())
+                modifier = (if (w > 0 && h > 0) (vm.engine.videoAspect.takeIf { it > 0f } ?: (w.toFloat() / h)).let { ar ->
+                    Modifier.aspectRatio(ar, matchHeightConstraintsFirst = ar < 16f / 9f) } else Modifier.fillMaxSize())
                     .focusProperties { canFocus = false },
                 onRelease = { sv -> runCatching { vm.engine.exo.clearVideoSurfaceView(sv) } },
             )
@@ -231,7 +232,11 @@ fun PlayerScreen(vm: PlayerModel) {
             Modifier.align(Alignment.BottomStart).padding(start = 44.dp, bottom = 150.dp).alpha(badgeAlpha), verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.Start,
         ) {
-            vm.formatBadges.forEach { Badge(it) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { vm.formatBadges.forEach { Badge(it) } }
+            vm.formatNote?.let {
+                T(it, Modifier.widthIn(max = 460.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xD90A0A0F)).padding(10.dp, 5.dp).alpha(0.8f),
+                    size = 12.sp, color = White)
+            }
         }
         // ---- Error ----
         vm.error?.let { err ->
@@ -372,7 +377,9 @@ private fun handleKey(vm: PlayerModel, e: KeyEvent): Boolean {
                 return true
             }
             AKey.KEYCODE_DPAD_UP, AKey.KEYCODE_DPAD_DOWN -> {
-                if (vm.isLive) { if (down) { if (code == AKey.KEYCODE_DPAD_UP) vm.channelUp() else vm.channelDown() } }
+                // As the guide lists them: Up is the channel above (the previous one), Down the one below.
+                // The remote's own Channel + / - keys keep their meaning.
+                if (vm.isLive) { if (down) { if (code == AKey.KEYCODE_DPAD_DOWN) vm.channelUp() else vm.channelDown() } }
                 else if (up) vm.showOsd()
                 return true
             }
@@ -550,14 +557,13 @@ private fun UpNext(vm: PlayerModel, play: FocusRequester, modifier: Modifier) {
 
 @Composable
 private fun Badge(b: FormatBadge) {
-    Column(
-        Modifier.alpha(if (b.verified) 1f else 0.8f).widthIn(max = 420.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xD90A0A0F))
-            // A plain toast border: the accent colour is the focus ring everywhere else, so it made the badge look selectable.
-            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp)).padding(16.dp, 10.dp),
-        horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(2.dp),
+    // One small tag per fact, drawn here (no logos): "4K", "HDR10", "ATMOS 7.1". A plain border: the accent
+    // colour is the focus ring everywhere else, so it made the tag look selectable.
+    Box(
+        Modifier.alpha(if (b.verified) 1f else 0.6f).clip(RoundedCornerShape(6.dp)).background(Color(0xD90A0A0F))
+            .border(1.5.dp, Color(if (b.verified) 0x73FFFFFF else 0x40FFFFFF), RoundedCornerShape(6.dp)).padding(10.dp, 4.dp),
     ) {
-        T(b.label, size = 20.sp, weight = FontWeight.ExtraBold, color = White, style = Nettle.type.body.copy(letterSpacing = 1.5.sp))
-        T(b.detail, Modifier.alpha(0.75f), size = 12.sp, color = White)
+        T(b.label, size = 15.sp, weight = FontWeight.ExtraBold, color = White, style = Nettle.type.body.copy(letterSpacing = 1.sp))
     }
 }
 

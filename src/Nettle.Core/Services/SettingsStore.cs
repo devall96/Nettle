@@ -54,11 +54,14 @@ public sealed class SettingsStore
 
     public async Task SaveAsync()
     {
+        // Serialized here, on the caller's thread, before the first await: the settings object is live and the
+        // UI keeps changing its lists, so serializing it later on a pool thread could meet a list mid-change.
+        var json = JsonSerializer.Serialize(Current, LocalJson.Default.AppSettings);
         await _gate.WaitAsync();
         try
         {
             var tmp = _path + ".tmp";
-            await File.WriteAllTextAsync(tmp, JsonSerializer.Serialize(Current, LocalJson.Default.AppSettings));
+            await File.WriteAllTextAsync(tmp, json);
             File.Move(tmp, _path, overwrite: true);
         }
         finally { _gate.Release(); }

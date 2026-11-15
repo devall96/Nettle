@@ -103,7 +103,8 @@ class MainActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // Gamepad B behaves like Back, as on other TV apps.
         if (event.keyCode == KeyEvent.KEYCODE_BUTTON_B) {
-            if (event.action == KeyEvent.ACTION_UP) goBack()
+            // Through the dispatcher, so an open picker or the keyboard closes first, as with the remote's Back.
+            if (event.action == KeyEvent.ACTION_UP) onBackPressedDispatcher.onBackPressed()
             return true
         }
         return super.dispatchKeyEvent(event)

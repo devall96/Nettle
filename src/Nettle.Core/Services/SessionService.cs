@@ -67,8 +67,11 @@ public sealed class SessionService
         var userConfigBefore = UserConfig;
         _client.Configure(account.ServerUrl, account.DeviceId, account.AccessToken, account.UserId);
         SessionCheck check;
+        // A 401 here is about the profile being tried, not the one on screen (which stays signed in below).
+        _client.SuppressSessionRejected = true;
         try { check = await CheckAsync(account, ct).ConfigureAwait(false); }
         catch { RestoreAfterFailedSwitch(before, userConfigBefore); throw; }
+        finally { _client.SuppressSessionRejected = false; }
         if (check != SessionCheck.Valid) RestoreAfterFailedSwitch(before, userConfigBefore);
         if (check == SessionCheck.Unreachable) throw new ApiException("Can't reach the server.");
         if (check == SessionCheck.Rejected) return false;
@@ -120,7 +123,9 @@ public sealed class SessionService
             account.AvatarTag = me.PrimaryImageTag;
             account.IsAdmin = me.Policy?.IsAdministrator ?? account.IsAdmin;
             account.UserConfig = me.Configuration ?? account.UserConfig;
-            UserConfig = account.UserConfig;
+            // Only while this is still the account in use (or a switch to it is under way): after a switch to
+            // another profile mid-request, this one's languages and subtitle mode must not land on that person.
+            if (Current == account || _client.UserId == account.UserId) UserConfig = account.UserConfig;
             return SessionCheck.Valid;
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized) { return SessionCheck.Rejected; }

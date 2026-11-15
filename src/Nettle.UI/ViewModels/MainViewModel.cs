@@ -33,8 +33,17 @@ public sealed partial class MainViewModel : ViewModelBase
         AppServices.Jellyfin.SessionRejected += () => Dispatcher.UIThread.Post(() => SessionExpired(null));
     }
 
+    /// <summary>Leaving the signed-in shell (switch user, sign out, expired session): its page stops its timers.</summary>
+    partial void OnRootChanged(ViewModelBase? oldValue, ViewModelBase? newValue)
+    {
+        if (oldValue is ShellViewModel shell && !ReferenceEquals(oldValue, newValue)) shell.Current?.Deactivate();
+    }
+
     partial void OnPlayerChanged(PlayerViewModel? value)
     {
+        // The page under the player is only hidden: stop its hero rotation / guide refresh while a video plays.
+        // Closing the player refreshes the page, which activates it again.
+        if (value != null) Shell?.Current?.Deactivate();
         OnPropertyChanged(nameof(IsPlayerOpen));
         OnPropertyChanged(nameof(IsVideoBehindUi));
         OnPropertyChanged(nameof(ShowAppBackground));
@@ -393,6 +402,8 @@ public sealed partial class MainViewModel : ViewModelBase
     private async Task RefreshAfterAsync(Task stopped)
     {
         await Task.WhenAny(stopped, Task.Delay(2500));
+        if (Player != null) return; // another video started meanwhile: the page refreshes when that one closes
+        AppServices.Remote.MarkRefreshed();
         Shell?.RefreshCurrent();
     }
 

@@ -23,6 +23,8 @@ public sealed partial class EpisodeViewModel : ObservableObject
     public double Progress { get; }
     public bool HasProgress => Progress > 0.005 && Progress < 0.995;
     [ObservableProperty] private bool _isPlayed;
+    /// <summary>Everything the row shows; two rows with the same signature look the same.</summary>
+    public string Signature => $"{Item.Id}|{Title}|{Meta}|{ThumbUrl}|{Overview}|{Progress:0.000}|{IsPlayed}";
 
     public EpisodeViewModel(BaseItemDto e)
     {
@@ -277,7 +279,7 @@ public sealed partial class DetailsViewModel : PageViewModel
         var parts = new List<string>();
         if (v != null)
         {
-            var res = VideoFormat.Resolution(v.Width);
+            var res = VideoFormat.Resolution(v.Width, v.Height);
             if (res != null) parts.Add(res);
             if (v.Codec != null) parts.Add(v.Codec.ToUpperInvariant());
             HdrBadge = VideoFormat.HdrLabel(v.VideoRangeType, out var hdrWarning);
@@ -345,7 +347,13 @@ public sealed partial class DetailsViewModel : PageViewModel
             {
                 // Same episodes (a refresh): swap each row in place so the list keeps its height
                 // and the page keeps its scroll position.
-                for (int i = 0; i < eps.Items.Count; i++) Episodes[i] = new EpisodeViewModel(eps.Items[i]);
+                // Only rows whose content changed (progress, watched): replacing all of them rebuilt every
+                // row and reloaded every thumbnail each time the page was refreshed.
+                for (int i = 0; i < eps.Items.Count; i++)
+                {
+                    var fresh = new EpisodeViewModel(eps.Items[i]);
+                    if (Episodes[i].Signature != fresh.Signature) Episodes[i] = fresh;
+                }
             }
             else
             {

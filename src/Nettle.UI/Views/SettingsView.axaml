@@ -94,6 +94,23 @@
           </Grid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <StackPanel>
+              <TextBlock Text="Media tags" FontWeight="SemiBold" />
+              <TextBlock Classes="muted caption" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                         Text="Small tags that pop up when a video starts, saying what is really playing (4K, HDR10 or SDR, ATMOS 7.1). Press I in the player to see them again." />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding MediaTags}" OnContent="" OffContent="" VerticalAlignment="Center" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding MediaTags}">
+            <StackPanel><TextBlock Text="Tags to show" FontWeight="SemiBold" /><TextBlock Text="Resolution · HDR or SDR · video format · audio" Classes="muted caption" /></StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+              <CheckBox Content="Resolution" IsChecked="{Binding TagResolution}" />
+              <CheckBox Content="HDR / SDR" IsChecked="{Binding TagRange}" />
+              <CheckBox Content="Video format" IsChecked="{Binding TagCodec}" />
+              <CheckBox Content="Audio" IsChecked="{Binding TagAudio}" />
+            </StackPanel>
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <StackPanel>
               <TextBlock Text="Ask &quot;Are you still watching?&quot;" FontWeight="SemiBold" />
               <TextBlock Classes="muted caption" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
                          Text="Pauses before the next episode after several in a row with no input, and pauses Live TV after 4 hours with no input. Turn off to never be asked." />

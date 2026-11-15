@@ -160,7 +160,19 @@ public sealed class ImageCache
                 bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
             }
             finally { _downloads.Release(); }
-            try { await File.WriteAllBytesAsync(file, bytes, CancellationToken.None).ConfigureAwait(false); } catch { /* cache is best-effort */ }
+            // Written beside the real name and moved into place: a second request for the same picture (another
+            // size, or a crash mid-write) must never find half a file under the final name.
+            var tmp = file + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+            try
+            {
+                await File.WriteAllBytesAsync(tmp, bytes, CancellationToken.None).ConfigureAwait(false);
+                File.Move(tmp, file, overwrite: true);
+            }
+            catch
+            {
+                // The cache is best-effort.
+                try { File.Delete(tmp); } catch { }
+            }
             // Keep the folder within its budget while running, not only at startup.
             if (Interlocked.Increment(ref _writesSinceTrim) >= 300 && Interlocked.Exchange(ref _trimming, 1) == 0)
             {
@@ -235,8 +247,9 @@ public sealed class ImageCache
             // Oldest use first (every read refreshes a file's write time).
             foreach (var f in files.OrderBy(f => f.LastWriteTimeUtc))
             {
+                // One file that's open right now must not stop the rest from being trimmed.
+                try { f.Delete(); } catch { continue; }
                 total -= f.Length;
-                f.Delete();
                 if (total < DiskBudgetBytes * 0.7) break;
             }
         }

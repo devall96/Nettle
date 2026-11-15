@@ -108,6 +108,12 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
      */
     var onSessionRejected: (() -> Unit)? = null
 
+    /**
+     * Set while another saved profile's token is being tried out: a 401 then means THAT profile needs to sign
+     * in again, not that the session on screen has expired.
+     */
+    @Volatile var suppressSessionRejected = false
+
     var baseUrl: String? = null; private set
     var token: String? = null; private set
     var userId: String? = null; private set
@@ -181,8 +187,12 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
 
     private suspend fun <T> send(r: Request, s: KSerializer<T>): T {
         val body = sendRaw(r)
-        return try { NettleJson.jellyfin.decodeFromString(s, body) } catch (e: SerializationException) {
-            throw ApiException("The server sent something unexpected.", null, e)
+        // Off the main thread: callers are UI scopes, and a library page or a details item is a lot of JSON
+        // to parse between two frames.
+        return withContext(Dispatchers.Default) {
+            try { NettleJson.jellyfin.decodeFromString(s, body) } catch (e: SerializationException) {
+                throw ApiException("The server sent something unexpected.", null, e)
+            }
         }
     }
 
@@ -194,7 +204,11 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
         }
         return resp.use {
             checkRejected(r, it.code)
-            val text = withContext(Dispatchers.IO) { it.body.string() }
+            // The connection can still drop while the body is coming in: the same error as failing to connect,
+            // not a raw IOException (callers only expect ApiException, and the player has no net under it).
+            val text = try { withContext(Dispatchers.IO) { it.body.string() } } catch (e: CancellationException) { throw e } catch (e: IOException) {
+                throw ApiException("Can't reach the server. ${e.message ?: ""}".trim(), null, e)
+            }
             if (!it.isSuccessful) {
                 var msg = when (it.code) {
                     401 -> "Your session has expired or the credentials are wrong."
@@ -211,7 +225,7 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
 
     /** A 401 on a request made with our token means the session is gone (not a wrong password). */
     private fun checkRejected(r: Request, code: Int) {
-        if (code != 401 || token.isNullOrEmpty()) return
+        if (code != 401 || token.isNullOrEmpty() || suppressSessionRejected) return
         val path = r.url.encodedPath
         if (path.contains("/Authenticate", true) || path.endsWith("/Sessions/Logout", true)) return
         runCatching { onSessionRejected?.invoke() }
@@ -493,7 +507,12 @@ class JellyfinClient(private val http: OkHttpClient, private val deviceName: Str
     /** Jellyfin 10.10+ Media Segments API (populated by Intro Skipper and other segment plugins). */
     suspend fun getMediaSegments(itemId: String): List<MediaSegmentDto> = try {
         send(req("GET", "/MediaSegments/$itemId"), QueryResult.serializer(MediaSegmentDto.serializer())).items
-    } catch (e: ApiException) { emptyList() }
+    } catch (e: ApiException) {
+        // "No such endpoint / not allowed" (a server before 10.10) is an answer: no segments. A busy or
+        // unreachable server is not, and is passed on so the caller can ask again.
+        val code = e.statusCode
+        if (code != null && code < 500) emptyList() else throw e
+    }
 
     /** Intro Skipper plugin's own endpoint (works on servers before 10.10 too). */
     suspend fun getIntroSkipperSegments(itemId: String): Map<String, IntroSkipperSegment> = try {

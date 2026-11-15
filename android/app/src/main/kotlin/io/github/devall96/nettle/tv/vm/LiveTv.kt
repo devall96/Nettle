@@ -12,6 +12,7 @@ import io.github.devall96.nettle.core.models.NtvProgram
 import io.github.devall96.nettle.tv.AppServices
 import io.github.devall96.nettle.tv.player.PlayerModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.CancellationException
@@ -114,9 +115,11 @@ class LiveTvModel : Page() {
             channels = all.filter { it.programs.isNotEmpty() }
             channels.forEach { AppServices.allowHostOf(it.streamUrl) }
             val built = withContext(Dispatchers.Default) { layout(channels) }
+            // A refresh of a guide that's already on screen keeps its place; only the first load starts at "now".
+            val firstLoad = rows.isEmpty()
             rows.clear()
             rows.addAll(built)
-            scrollX = 0f
+            if (firstLoad) scrollX = 0f
             updateDay()
             if (infoTitle == null) rows.firstOrNull()?.let { r -> (r.cellsIn(nowMs, nowMs + 1).firstOrNull() ?: r.cells.firstOrNull())?.let { inspect(it) } }
         }
@@ -126,9 +129,12 @@ class LiveTvModel : Page() {
     }
 
     private fun alignDown(t: Long): Long {
-        val z = PlayerModel.local(t)
-        val aligned = z.withMinute(if (z.minute >= 30) 30 else 0).withSecond(0).withNano(0)
-        return aligned.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        // Done on the instant itself, not via local date-time: in the hour repeated when clocks go back, the
+        // local-time route picked the earlier of the two and put "now" an hour back. (Zones with :30 / :45
+        // offsets still line up, as the offset is added before rounding.)
+        val offsetMs = java.time.ZoneId.systemDefault().rules.getOffset(java.time.Instant.ofEpochMilli(t)).totalSeconds * 1000L
+        val half = 30 * 60_000L
+        return Math.floorDiv(t + offsetMs, half) * half - offsetMs
     }
 
     /** From the current half hour to the last program NostalgiaTV has scheduled. */
@@ -221,8 +227,15 @@ class LiveTvModel : Page() {
 
     private var lastFocusAt = System.currentTimeMillis()
 
+    private var ticker: Job? = null
+
+    override fun onDeactivated() { ticker?.cancel(); ticker = null }
+
     override fun onActivated() {
-        scope.launch {
+        // One ticker only: this runs again after every channel is closed and on every library change, and
+        // each extra loop used to download and parse the whole guide again.
+        ticker?.cancel()
+        ticker = scope.launch {
             while (isActive) {
                 nowMs = System.currentTimeMillis()
                 val at = AppServices.ntv.guideLoadedAt

@@ -63,7 +63,7 @@ public sealed partial class WatchTogetherViewModel : PageViewModel
         NoGroups = Groups.Count == 0;
     });
 
-    public override void OnDeactivated() => Sync.Changed -= OnSyncChanged;
+    protected override void OnDeactivated() => Sync.Changed -= OnSyncChanged;
 
     [RelayCommand]
     private Task Create() => RunAsync(async () =>

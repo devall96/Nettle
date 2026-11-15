@@ -71,7 +71,12 @@ public sealed class JellyfinSocket : IDisposable
                 failures++;
                 if (failures <= 3) Log.Info("server connection (WebSocket) dropped: " + ex.Message);
             }
-            finally { IsConnected = false; }
+            finally
+            {
+                // A loop that was stopped must not clear the flag of the one that replaced it.
+                var current = _cts;
+                if (current == null || current.Token == ct) IsConnected = false;
+            }
 
             if (ct.IsCancellationRequested) break;
             // 2 s, 5 s, 15 s, then every 30 s while the server is away.
@@ -113,7 +118,7 @@ public sealed class JellyfinSocket : IDisposable
                 if (type == "ForceKeepAlive")
                 {
                     // The server drops clients that go quiet: answer at half its timeout.
-                    int seconds = data.ValueKind == JsonValueKind.Number ? data.GetInt32() : 60;
+                    int seconds = data.ValueKind == JsonValueKind.Number && data.TryGetInt32(out var sec) ? sec : 60;
                     var period = TimeSpan.FromSeconds(Math.Max(5, seconds / 2.0));
                     keepAlive?.Dispose();
                     keepAlive = new Timer(_ => _ = SendAsync(ws, "{\"MessageType\":\"KeepAlive\"}"), null, TimeSpan.Zero, period);
@@ -126,13 +131,18 @@ public sealed class JellyfinSocket : IDisposable
         finally { keepAlive?.Dispose(); }
     }
 
-    private static readonly SemaphoreSlim SendGate = new(1, 1);
+    private readonly SemaphoreSlim SendGate = new(1, 1);
 
-    private static async Task SendAsync(ClientWebSocket ws, string json)
+    private async Task SendAsync(ClientWebSocket ws, string json)
     {
         if (ws.State != WebSocketState.Open) return;
-        await SendGate.WaitAsync().ConfigureAwait(false);
-        try { await ws.SendAsync(Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false); }
+        // A send still stuck on a half-dead connection: skip this beat rather than queue up behind it.
+        if (!await SendGate.WaitAsync(0).ConfigureAwait(false)) return;
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await ws.SendAsync(Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text, true, timeout.Token).ConfigureAwait(false);
+        }
         catch { /* the receive loop notices a dead connection */ }
         finally { SendGate.Release(); }
     }

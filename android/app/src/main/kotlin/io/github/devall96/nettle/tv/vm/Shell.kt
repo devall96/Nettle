@@ -60,14 +60,22 @@ class Shell : ViewModelBase() {
             showCached(withContext(Dispatchers.Default) { runCatching { AppServices.loadHome(id)?.let { HomeModel.prepare(it) } }.getOrNull() })
         }
         scope.launch {
-            try {
-                val views = AppServices.jellyfin.getViews()
-                fresh = true
-                setNavLibraries(views.items)
-                home.setLibraries(views.items)
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                home.error = home.error ?: e.message
+            // Asked again until the server answers (it may still be starting, or Wi-Fi not up yet): one failed
+            // try at launch used to leave Home empty, or the menu's libraries stale, until the app was restarted.
+            var wait = 3_000L
+            while (true) {
+                try {
+                    val views = AppServices.jellyfin.getViews()
+                    fresh = true
+                    setNavLibraries(views.items)
+                    home.setLibraries(views.items)
+                    break
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    home.error = home.error ?: e.message
+                }
+                kotlinx.coroutines.delay(wait)
+                wait = minOf(wait * 2, 30_000L)
             }
         }
     }
@@ -97,7 +105,7 @@ class Shell : ViewModelBase() {
     private fun show(page: Page) {
         val old = current
         if (old === page) return
-        old?.onDeactivated()
+        old?.deactivate()
         current = page
         canGoBack = back.isNotEmpty()
         page.activate()
@@ -110,7 +118,7 @@ class Shell : ViewModelBase() {
         if (cur is LibraryModel && page is LibraryModel && cur.viewId == page.viewId) return
         back.forEach { if (it !== home && it !== page) it.dispose() }
         back.clear()
-        if (cur != null && cur !== home && cur !== page) { cur.onDeactivated(); cur.dispose() }
+        if (cur != null && cur !== home && cur !== page) { cur.deactivate(); cur.dispose() }
         show(page)
     }
 
@@ -126,7 +134,7 @@ class Shell : ViewModelBase() {
         if (cur?.handleBack() == true) return true
         if (back.isNotEmpty()) {
             val prev = back.removeLast()
-            cur?.onDeactivated()
+            cur?.deactivate()
             if (cur !== home) cur?.dispose()
             current = prev
             canGoBack = back.isNotEmpty()

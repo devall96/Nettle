@@ -19,6 +19,13 @@ data class PlaybackSettings(
     var previewAction: SegmentAction = SegmentAction.ShowButton,
     var commercialAction: SegmentAction = SegmentAction.AutoSkip,
     var autoPlayNextEpisode: Boolean = true,
+    /** The small format tags (4K, HDR10, ATMOS 7.1…) that pop up when a video starts. */
+    var mediaTags: Boolean = true,
+    var tagResolution: Boolean = true,
+    /** HDR10 / Dolby Vision / HLG, or SDR. */
+    var tagRange: Boolean = true,
+    var tagCodec: Boolean = false,
+    var tagAudio: Boolean = true,
     var upNextCountdownSeconds: Int = 10,
     var preferredAudioLanguage: String = "",
     var preferredSubtitleLanguage: String = "",

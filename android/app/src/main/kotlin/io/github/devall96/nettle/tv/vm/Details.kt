@@ -20,8 +20,17 @@ class SeasonTab(val season: BaseItemDto) {
     val name = season.name ?: "Season ${season.indexNumber}"
 }
 
+/** "S1 • E3", "E3" or "S1" from whichever numbers the episode has; null when it has none (some specials). */
+fun episodeCode(e: BaseItemDto): String? = when {
+    e.parentIndexNumber != null && e.indexNumber != null -> "S${e.parentIndexNumber} • E${e.indexNumber}"
+    e.indexNumber != null -> "E${e.indexNumber}"
+    e.parentIndexNumber != null -> "S${e.parentIndexNumber}"
+    else -> null
+}
+
 class EpisodeRow(val item: BaseItemDto) {
-    val title = if (item.indexNumber != null) "${item.indexNumber}. ${item.name}" else item.name ?: ""
+    // Specials can lack a number or a name: never "3. null".
+    val title = if (item.indexNumber != null) "${item.indexNumber}. ${item.name ?: "Episode ${item.indexNumber}"}" else item.name ?: ""
     val overview = item.overview
     val meta: String = listOfNotNull(
         item.runTimeTicks?.let { Format.runtime(it) },
@@ -126,7 +135,8 @@ class DetailsModel(private val itemId: String, private val preferSeasonId: Strin
         else it.tag("Primary")?.let { t -> Img.of(it.id, "Primary", t, 400) }
 
         titleText = if (it.isEpisode) it.seriesName ?: it.name ?: "" else it.name ?: ""
-        subtitleText = if (it.isEpisode) "S${it.parentIndexNumber} • E${it.indexNumber}  ${it.name}" else if (it.originalTitle != it.name) it.originalTitle else null
+        subtitleText = if (it.isEpisode) listOfNotNull(episodeCode(it), it.name).joinToString("  ").ifEmpty { null }
+            else if (it.originalTitle != it.name) it.originalTitle else null
         tagline = it.taglines?.firstOrNull()
         overview = it.overview
         genres = it.genres?.takeIf { g -> g.isNotEmpty() }?.joinToString("  ·  ")
@@ -247,8 +257,12 @@ class DetailsModel(private val itemId: String, private val preferSeasonId: Strin
         playTarget = next ?: episodes.firstOrNull()?.item
         playTarget?.let { t ->
             val pos = t.userData?.playbackPositionTicks ?: 0
-            val label = "S${t.parentIndexNumber} E${t.indexNumber}"
-            playLabel = if (pos > 0) "Resume $label" else if (next != null) "Play $label" else "Play"
+            val label = episodeCode(t)
+            playLabel = when {
+                pos > 0 -> if (label != null) "Resume $label" else "Resume"
+                next != null && label != null -> "Play $label"
+                else -> "Play"
+            }
         }
     }
 

@@ -38,7 +38,9 @@ class NtvItemResolver(private val jf: JellyfinClient) {
         if (slot.type == "episode" && slot.seasonNumber != null && slot.episodeNumber != null) {
             val show = slot.showTitle ?: slot.title
             val series = jf.getItems(ItemQuery(searchTerm = show, includeItemTypes = "Series", limit = 20, sortBy = null, sortOrder = null))
-            val match = series.items.firstOrNull { norm(it.name) == norm(show) } ?: series.items.firstOrNull() ?: return null
+            // The name has to match, unless the search found a single series: taking the first of several
+            // hits played an episode of a different show ("The Office (UK)" for "The Office (US)").
+            val match = series.items.firstOrNull { norm(it.name) == norm(show) } ?: series.items.singleOrNull() ?: return null
             // Ask for just that episode instead of downloading the whole series.
             return jf.findEpisode(match.id, slot.seasonNumber, slot.episodeNumber)?.id
         }

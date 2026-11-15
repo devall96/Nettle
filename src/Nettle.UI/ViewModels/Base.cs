@@ -29,16 +29,27 @@ public abstract partial class PageViewModel : ViewModelBase
     /// <summary>Which rail entry is highlighted while this page is showing.</summary>
     public virtual string NavKey => "";
     private bool _loaded;
+    private bool _active;
 
     public async Task ActivateAsync()
     {
+        _active = true;
         if (!_loaded)
         {
             _loaded = true;
             await LoadAsync();
         }
         else await RefreshAsync();
-        OnActivated();
+        // Left while it was loading: starting its timers now would leave them running for good.
+        if (_active) OnActivated();
+    }
+
+    /// <summary>The page is no longer on screen (navigated away, covered by the player, signed out).</summary>
+    public void Deactivate()
+    {
+        if (!_active) return;
+        _active = false;
+        OnDeactivated();
     }
 
     /// <summary>Back / Escape pressed: return true if the page handled it itself (e.g. closed a dialog).</summary>
@@ -47,5 +58,5 @@ public abstract partial class PageViewModel : ViewModelBase
     protected virtual Task LoadAsync() => Task.CompletedTask;
     protected virtual Task RefreshAsync() => Task.CompletedTask;
     protected virtual void OnActivated() { }
-    public virtual void OnDeactivated() { }
+    protected virtual void OnDeactivated() { }
 }

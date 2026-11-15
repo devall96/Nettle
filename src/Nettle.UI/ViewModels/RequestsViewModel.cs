@@ -218,9 +218,12 @@ public sealed partial class RequestsViewModel : PageViewModel
         }
     }
 
+    private int _myRequestsLoad;
+
     private async Task LoadMyRequestsAsync()
     {
-        MyRequests.Clear();
+        // Two of these can overlap (a request made while the page is still loading): only the latest fills the list.
+        int load = ++_myRequestsLoad;
         try
         {
             var mine = await AppServices.Seerr.MyRequestsAsync(20);
@@ -245,9 +248,15 @@ public sealed partial class RequestsViewModel : PageViewModel
                     When = r.CreatedAt?.LocalDateTime.ToString("MMM d") ?? "",
                 };
             }).ToList();
-            foreach (var t in tasks) MyRequests.Add(await t);
+            var rows = await Task.WhenAll(tasks);
+            if (load != _myRequestsLoad) return;
+            MyRequests.Clear();
+            foreach (var row in rows) MyRequests.Add(row);
         }
-        catch { }
+        catch
+        {
+            if (load == _myRequestsLoad) MyRequests.Clear();
+        }
         OnPropertyChanged(nameof(HasMyRequests));
     }
 

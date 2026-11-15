@@ -160,6 +160,12 @@ object AppServices {
      * for this profile). A sign-in saved by an older version, shared by everyone, is handed to the first profile
      * that loads it (normally the one that set it up) and the shared copy is deleted.
      */
+    /** Puts the Seerr client back on the signed-in profile's own sign-in. */
+    suspend fun reloadSeerr() {
+        seerr.configure(null, null, null)
+        loadSeerrFor(session.current?.id)
+    }
+
     private suspend fun loadSeerrFor(accountId: String?) {
         try {
             var key: String? = null

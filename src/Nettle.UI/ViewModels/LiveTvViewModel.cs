@@ -135,7 +135,7 @@ public sealed partial class LiveTvViewModel : PageViewModel
     }
 
     protected override void OnActivated() => _clock.Start();
-    public override void OnDeactivated() => _clock.Stop();
+    protected override void OnDeactivated() => _clock.Stop();
 
     private static DateTimeOffset AlignDown(DateTimeOffset t) =>
         new DateTimeOffset(t.Year, t.Month, t.Day, t.Hour, t.Minute >= 30 ? 30 : 0, 0, t.Offset);

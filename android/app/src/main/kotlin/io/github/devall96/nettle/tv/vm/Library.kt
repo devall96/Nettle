@@ -10,6 +10,7 @@ import io.github.devall96.nettle.core.models.BaseItemDto
 import io.github.devall96.nettle.tv.AppServices
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import java.time.Year
 
 data class SortOption(val label: String, val sortBy: String, val order: String)
@@ -155,8 +156,14 @@ class LibraryModel(private val view: BaseItemDto, private val folderMode: Boolea
     }
 
     /** [upTo]: load at least this many items in one request (A–Z jump far down the list). */
-    private suspend fun loadPage(gen: Int, upTo: Int = 0) {
-        if (cards.size >= total) return
+    private val pageGate = kotlinx.coroutines.sync.Mutex()
+
+    // One page request at a time: infinite scroll and an A–Z jump both start from "how many are fetched",
+    // so two at once appended the same items twice and skipped the ones after.
+    private suspend fun loadPage(gen: Int, upTo: Int = 0) = pageGate.withLock { loadPageLocked(gen, upTo) }
+
+    private suspend fun loadPageLocked(gen: Int, upTo: Int) {
+        if (gen != generation || cards.size >= total) return
         // The server reshuffles on every request, so random is one larger batch with no further pages.
         val random = sort.sortBy == "Random"
         val first = cards.isEmpty() && fetched == 0

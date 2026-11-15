@@ -88,7 +88,9 @@
           <TextBlock Classes="h3" Text="{Binding NowTitle}" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" MaxLines="1" TextTrimming="CharacterEllipsis"
                      IsVisible="{Binding NowTitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" Margin="0,8,0,0">
-            <Arc Classes="spin" Width="22" Height="22" StrokeThickness="3" VerticalAlignment="Center" />
+            <!-- Hidden outright when not tuning: the panel is only faded out, and a spinner that is merely
+                 transparent keeps animating (and redrawing over the video) for the whole of playback. -->
+            <Arc Classes="spin" Width="22" Height="22" StrokeThickness="3" VerticalAlignment="Center" IsVisible="{Binding IsTuningScreenVisible}" />
             <TextBlock Text="Tuning…" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
           </StackPanel>
         </StackPanel>
@@ -311,26 +313,28 @@
         </StackPanel.Transitions>
       <ItemsControl ItemsSource="{Binding FormatBadges}">
         <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
+          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
+          <!-- One small tag per fact, drawn here (no logos): "4K", "HDR10", "ATMOS 7.1". -->
           <DataTemplate x:DataType="vm:FormatBadgeViewModel">
-            <Border CornerRadius="12" Padding="16,10" Background="#D90A0A0F" BorderThickness="1.5" HorizontalAlignment="Left" MaxWidth="420"
-                    BorderBrush="{DynamicResource AccentBrush}" Classes.dim="{Binding NotVerified}">
-              <StackPanel Spacing="2">
-                <TextBlock Text="{Binding Label}" FontSize="20" FontWeight="ExtraBold" LetterSpacing="1.5" />
-                <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
-              </StackPanel>
+            <Border CornerRadius="6" Padding="10,4" Background="#D90A0A0F" BorderThickness="1.5" BorderBrush="#73FFFFFF"
+                    Classes.dim="{Binding NotVerified}" ToolTip.Tip="{Binding Detail}">
+              <TextBlock Text="{Binding Label}" FontSize="15" FontWeight="ExtraBold" LetterSpacing="1" Foreground="White" />
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
         <ItemsControl.Styles>
           <Style Selector="Border.dim">
-            <Setter Property="BorderBrush" Value="#66FFFFFF" />
-            <Setter Property="Opacity" Value="0.8" />
+            <Setter Property="BorderBrush" Value="#40FFFFFF" />
+            <Setter Property="Opacity" Value="0.6" />
           </Style>
         </ItemsControl.Styles>
       </ItemsControl>
+      <Border CornerRadius="6" Padding="10,5" Background="#D90A0A0F" HorizontalAlignment="Left" MaxWidth="460"
+              IsVisible="{Binding FormatNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Text="{Binding FormatNote}" FontSize="12" Foreground="White" Opacity="0.8" TextWrapping="Wrap" />
+      </Border>
       </StackPanel>
 
       <!-- "Are you still watching?" (Settings → Playback can turn this off) -->

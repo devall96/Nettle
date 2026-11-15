@@ -10,8 +10,9 @@ using Nettle.UI.Playback;
 namespace Nettle.UI.ViewModels;
 
 /// <summary>One TV-style format badge. <see cref="Verified"/> = false means "source has it, but it isn't reaching you".</summary>
-public sealed class FormatBadgeViewModel(string label, string detail, bool verified)
+public sealed class FormatBadgeViewModel(string label, string detail, bool verified, MediaTagKind kind = MediaTagKind.Range)
 {
+    public MediaTagKind Kind => kind;
     public string Label => label;
     public string Detail => detail;
     public bool Verified => verified;
@@ -99,6 +100,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<FormatBadgeViewModel> FormatBadges { get; } = new();
     [ObservableProperty] private bool _isFormatBadgesVisible;
+    /// <summary>One line under the tags when a format of the file isn't what the screen is getting (else null).</summary>
+    [ObservableProperty] private string? _formatNote;
     private List<MediaStream>? _sourceStreams;
     private int _mediaGeneration;
     private CancellationTokenSource? _badgeHideCts;
@@ -112,6 +115,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     /// </summary>
     private async Task ShowFormatBadgesAsync(int tuneVersion, int generation, int delayMs = 1500)
     {
+        // Switched off in Settings: nothing pops up by itself (the I key, delay 0, still shows them).
+        if (!_settings.MediaTags && delayMs > 0) return;
         if (delayMs > 0) await Task.Delay(delayMs);
         int w = 0, h = 0;
         for (int i = 0; i < 6 && w == 0; i++)
@@ -125,9 +130,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         var badges = new List<FormatBadgeViewModel>();
         var video = _sourceStreams?.FirstOrDefault(s => s.Type == "Video");
 
-        var res = VideoFormat.Resolution(w);
-        if (res is "4K" or "1440p" or "1080p")
-            badges.Add(new FormatBadgeViewModel(res, $"{w}×{h} decoded", true));
+        var res = VideoFormat.Resolution(w, h);
+        if (res != null) badges.Add(new FormatBadgeViewModel(res, $"{w}×{h} decoded", true, MediaTagKind.Resolution));
 
         var hdr = VideoFormat.HdrLabel(video?.VideoRangeType, out var hdrWarning);
         if (hdr != null)
@@ -154,12 +158,19 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             else
                 badges.Add(new FormatBadgeViewModel(hdr.ToUpperInvariant(), "Couldn't confirm your display's HDR mode", false));
         }
+        // Not HDR: say so, when the file says it is SDR (or it is NostalgiaTV's own feed, which always is).
+        else if (video is { VideoRangeType: null or "" or "SDR" } || (IsLive && !IsLiveDirect))
+            badges.Add(new FormatBadgeViewModel("SDR", "Standard dynamic range", true));
+
+        if (VideoFormat.CodecTag(video?.Codec) is { } codecTag)
+            badges.Add(new FormatBadgeViewModel(codecTag, "Video format of the file", true, MediaTagKind.Codec));
 
         // Audio: only once mpv is decoding an audio track (or passing it through).
         bool audioPlaying = Player.HasActiveAudio;
         var audio = PickAudioStream();
         var audioLabel = VideoFormat.AudioLabel(audio);
-        if (audioPlaying && audioLabel != null)
+        var audioTag = VideoFormat.AudioTag(audio);
+        if (audioPlaying && audioTag != null)
         {
             bool passthrough = await Task.Run(() => Player.IsAudioPassthrough);
             var layout = VideoFormat.ChannelLayout(audio!.Channels);
@@ -167,12 +178,23 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 : audioLabel is "Dolby Atmos" or "DTS:X"
                 ? $"Decoded by Nettle to {layout} (turn on audio passthrough in Settings to send height channels to a receiver)"
                 : $"Decoded by Nettle · {layout}";
-            badges.Add(new FormatBadgeViewModel(audioLabel.ToUpperInvariant(), detail, true));
+            badges.Add(new FormatBadgeViewModel(audioTag, detail, true, MediaTagKind.Audio));
         }
+
+        // Only the kinds chosen in Settings.
+        badges.RemoveAll(b => b.Kind switch
+        {
+            MediaTagKind.Resolution => !_settings.TagResolution,
+            MediaTagKind.Range => !_settings.TagRange,
+            MediaTagKind.Codec => !_settings.TagCodec,
+            _ => !_settings.TagAudio,
+        });
 
         if (generation != _mediaGeneration || _disposed) return;
         FormatBadges.Clear();
         foreach (var b in badges) FormatBadges.Add(b);
+        // The tags are just names; the one thing worth a sentence is a format that isn't reaching the screen.
+        FormatNote = badges.FirstOrDefault(b => !b.Verified)?.Detail;
         Nettle.Core.Services.Log.Info("format badges: " + (badges.Count == 0 ? "(none)" : string.Join(" | ", badges.Select(b => $"{b.Label} [{b.Detail}]"))));
         if (badges.Count == 0) return;
 
@@ -212,7 +234,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         Player = PlaybackEngine.CreatePlayer(_settings.HardwareDecoding, _settings.AudioPassthrough);
         _volume = Math.Clamp(_settings.Volume, 0, MaxVolume);
         Player.SetVolume(_volume);
-        Player.EndReached += () => Dispatcher.UIThread.Post(OnEnded);
+        Player.EndReached += () => Dispatcher.UIThread.Post(() => { if (!_disposed) OnEnded(); });
         Player.Error += reason =>
         {
             var tuneAtError = _tuneVersion;
@@ -225,6 +247,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             Nettle.Core.Services.Log.Info($"playing: {w}x{h}, {Player.DescribeOutput()}");
             Dispatcher.UIThread.Post(() =>
             {
+                if (_disposed) return; // queued before the player closed: the screen's refresh rate is already restored
                 IsBuffering = false;
                 IsTuning = false;
                 _reconnects = 0; // playing again: a later drop gets its own tries
@@ -394,7 +417,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             : item.ParentLogoImageTag != null ? jf.ImageUrl(item.ParentLogoItemId, "Logo", item.ParentLogoImageTag, 500) : null;
 
         // Skip segments are fetched alongside, so an intro right at the start is known before the video is.
-        var segmentsTask = AppServices.Segments.GetSegmentsAsync(item.Id, legacyFallback: item.IsEpisode);
+        _ = LoadSegmentsAsync(item);
         try
         {
             // Ask the server for media sources with transcoding explicitly disabled.
@@ -405,7 +428,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             _mediaSourceId = source.Id;
             var vs = source.MediaStreams.FirstOrDefault(s => s.Type == "Video");
             _sourceStreams = source.MediaStreams;
-            SourceLabel = string.Join(" · ", new[] { VideoFormat.Resolution(vs?.Width), vs?.Codec?.ToUpperInvariant(), VideoFormat.HdrLabel(vs?.VideoRangeType, out _), "Direct play" }
+            SourceLabel = string.Join(" · ", new[] { VideoFormat.Resolution(vs?.Width, vs?.Height), vs?.Codec?.ToUpperInvariant(), VideoFormat.HdrLabel(vs?.VideoRangeType, out _), "Direct play" }
                 .Where(x => !string.IsNullOrEmpty(x)));
             _playSessionId = info.PlaySessionId;
 
@@ -422,10 +445,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             _lastReport = DateTime.UtcNow;
 
             _ = LoadTrickplayAsync(item.Id, source.Id!);
-            var segments = await segmentsTask;
-            if (_item != item || _disposed) return; // a quick switch: these belong to the previous item
-            _segments = segments;
-            if (_queue == null && _syncEntry == null && item.IsEpisode && _settings.AutoPlayNextEpisode) _ = FindNextEpisodeAsync(item);
+            if (_item != item || _disposed) return; // a quick switch
+            // Looked up even with auto-play off: the Next button and the N key need it. Only the Up Next
+            // card and the automatic start follow the setting.
+            if (_queue == null && _syncEntry == null && item.IsEpisode) _ = FindNextEpisodeAsync(item);
         }
         catch (Exception ex)
         {
@@ -689,7 +712,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         LiveInterstitial = null;
         var v = source.MediaStreams.FirstOrDefault(s => s.Type == "Video");
         _sourceStreams = source.MediaStreams;
-        var quality = VideoFormat.Resolution(v?.Width) ?? (slot.VideoResolution != null ? slot.VideoResolution + "p" : null);
+        var quality = VideoFormat.Resolution(v?.Width, v?.Height) ?? (slot.VideoResolution != null ? slot.VideoResolution + "p" : null);
         LiveSourceLabel = string.Join(" · ", new[] { "Original", quality, v?.Codec?.ToUpperInvariant(), VideoFormat.HdrLabel(v?.VideoRangeType, out _), "Direct play" }.Where(x => !string.IsNullOrEmpty(x)));
         SwapMedia(load);
         UpdateLiveInfo();
@@ -705,8 +728,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         try
         {
             var now = DateTimeOffset.Now;
-            var next = _liveSchedule.FirstOrDefault(s => s.Start <= now.AddSeconds(1) && s.End > now)
-                       ?? _liveSchedule.FirstOrDefault(s => s.StartTimeMs >= _liveSlot.EndTimeMs - 1000);
+            // Not the slot that is ending: the rollover fires 250 ms early, when that one still covers "now",
+            // and picking it reloaded the old programme at its very end before the real switch.
+            var ending = _liveSlot;
+            var next = _liveSchedule.FirstOrDefault(s => s != ending && s.StartTimeMs >= ending.EndTimeMs - 1000 && s.End > now);
             if (next == null || next.End <= now)
             {
                 // Ran past the cached rows: refresh the schedule.
@@ -790,6 +815,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private async Task CommitTypedChannelLaterAsync(CancellationToken ct)
     {
         try { await Task.Delay(1500, ct); } catch (OperationCanceledException) { return; }
+        if (_disposed) return;
         CommitTypedChannel();
     }
 
@@ -856,6 +882,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     /// </summary>
     private async Task MatchScreenHdrAsync(IReadOnlyList<MediaStream>? streams)
     {
+        if (_disposed) return; // closing already put the screen back; a late tune must not switch it again
         if (AppServices.Window is not { } w) return;
         var v = streams?.FirstOrDefault(s => s.Type == "Video");
         bool hdr = VideoFormat.HdrLabel(v?.VideoRangeType, out _) != null;
@@ -891,7 +918,8 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             CheckLiveStillWatching();
             if (IsLiveDirect && _liveSlot != null && _livePausedAt == null && DateTimeOffset.Now.ToUnixTimeMilliseconds() >= _liveSlot.EndTimeMs - 250)
                 _ = AdvanceSlotAsync();
-            UpdateLiveInfo();
+            // Now / next lines change by the minute: once a second is plenty (the tick runs four times a second).
+            if ((++_liveInfoTicks & 3) == 0) UpdateLiveInfo();
             return;
         }
 
@@ -924,13 +952,19 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Skip segments for the item, on their own: nothing else waits for them, and a failed request is retried.</summary>
+    private async Task LoadSegmentsAsync(BaseItemDto item)
+    {
+        var found = await AppServices.Segments.GetSegmentsReliablyAsync(item.Id, legacyFallback: item.IsEpisode);
+        if (_item != item || _disposed) return; // a quick switch: these belong to the previous item
+        _segments = found;
+        Nettle.Core.Services.Log.Info(found.Count == 0 ? "skip segments: none for this item"
+            : "skip segments: " + string.Join(", ", found.Select(s => $"{s.Kind} {Format.Clock(s.Start)}-{Format.Clock(s.End)}")));
+    }
+
     private void UpdateSegments(TimeSpan pos, long lenMs)
     {
-        PlaybackSegment? active = null;
-        foreach (var s in _segments)
-        {
-            if (pos >= s.Start && pos < s.End - TimeSpan.FromSeconds(0.5)) { active = s; break; }
-        }
+        var active = SegmentService.ActiveAt(_segments, pos, _settings, _dismissedSegment);
 
         if (active != null)
         {
@@ -950,7 +984,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         double remainingMs = lenMs - pos.TotalMilliseconds;
         bool nearEndNoMarker = _segments.All(s => s.Kind != SegmentKind.Credits) && lenMs > 0 && remainingMs < UpNextLeadMs && pos.TotalSeconds > 60;
         bool creditsNow = active?.Kind == SegmentKind.Credits || nearEndNoMarker;
-        if (_nextEpisode != null && creditsNow && !_upNextDismissed)
+        if (_nextEpisode != null && creditsNow && !_upNextDismissed && !IsStillWatchingVisible && (_settings.AutoPlayNextEpisode || _queue != null))
         {
             if (!IsUpNextVisible)
             {
@@ -1206,6 +1240,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
             Error = "The channel stream ended.";
             return;
         }
+        // The next item is already being fetched and this is the OLD file running out underneath it:
+        // acting on it would close the player, or skip an item of the queue.
+        if (_sourcePending) return;
         if (IsStillWatchingVisible) return;
         if (IsSyncPlay)
         {
@@ -1250,6 +1287,9 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     public void SeekBy(int seconds)
     {
         if (IsLive) return;
+        // Still opening (no length yet): the clamp below would turn any step into "seek to 0" and the
+        // resume position would be reported as the start.
+        if (Player.LengthMs <= 0) return;
         ShowOsd();
         // mpv reports the new position only after a seek lands, so presses in quick succession
         // build on the last target rather than the (stale) reported time: 5 × Right = +5 steps.
@@ -1321,6 +1361,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     }
 
     private void StopGlide() { _glide?.Stop(); _glide = null; }
+    private int _liveInfoTicks;
 
     private void MoveScrub(double deltaMs)
     {
@@ -1449,7 +1490,11 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    public void Close() => _main.ClosePlayer();
+    public void Close()
+    {
+        // A player that has been replaced must not close the one that took its place.
+        if (_main.Player == this) _main.ClosePlayer();
+    }
 
     /// <summary>Keyboard / remote handling. Returns true when the key was consumed.</summary>
     public enum TvKeyResult { Handled, MoveFocus, LetFocusedControlHandle }
@@ -1553,11 +1598,13 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
                 ScrubKey(forward: false); return true;
             case Key.Right or Key.L when IsVod && !IsTracksOpen:
                 ScrubKey(forward: true); return true;
-            case Key.Up when IsLive && !IsTracksOpen:
+            // The arrows move through the channels the way the guide lists them: Up is the channel above
+            // (the previous one), Down the one below. Page Up / Down stay "channel + / -", as on a remote.
+            case Key.Down when IsLive && !IsTracksOpen:
             case Key.PageUp when IsLive:
             case Key.MediaNextTrack when IsLive:
                 ChannelUp(); return true;
-            case Key.Down when IsLive && !IsTracksOpen:
+            case Key.Up when IsLive && !IsTracksOpen:
             case Key.PageDown when IsLive:
             case Key.MediaPreviousTrack when IsLive:
                 ChannelDown(); return true;
@@ -1634,7 +1681,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     {
         _trick = null;
         _trickShown = (-1, -1);
-        _trickSheets.Clear();
+        DisposeTrickSheets();
         _trickOrder.Clear();
         _trickLoading.Clear();
         HasTrickImage = false;
@@ -1712,11 +1759,28 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         _trickWantedMs = -1;
     }
 
+    /// <summary>Frees the decoded thumbnail sheets (tens of MB each; the GC can't see their native size).</summary>
+    private void DisposeTrickSheets()
+    {
+        TrickImage = null;
+        // Not the sheet that was last on screen: a frame still being drawn may hold it (the GC takes that one).
+        foreach (var (index, sheet) in _trickSheets)
+            if (index != _trickShown.Sheet) sheet?.Dispose();
+        _trickSheets.Clear();
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _tick.Stop();
+        // Anything still in flight (a tune, a typed channel number, a held arrow key) stops here: it would
+        // otherwise run against the closed player and could switch the screen's HDR or refresh rate again.
+        _tuneVersion++;
+        _typedCts?.Cancel();
+        _badgeHideCts?.Cancel();
+        StopGlide();
+        DisposeTrickSheets();
         AppServices.KeepAwake?.SetActive(false);
         _syncUnpauseCts?.Cancel();
         if (!IsLive) Stopped = ReportStoppedAsync();

@@ -256,19 +256,24 @@ public sealed partial class LoginViewModel : ViewModelBase
             QuickConnectCode = start.Code;
             var secret = start.Secret!;
             var deadline = DateTime.UtcNow.AddMinutes(10);
-            while (!cts.IsCancellationRequested && DateTime.UtcNow < deadline)
+            // Whatever ends the wait (signed in, timed out, a failed check), the code leaves the screen with it:
+            // a code that is no longer being checked must not stay up as if it still worked.
+            try
             {
-                await Task.Delay(2500, cts.Token);
-                var state = await AppServices.Jellyfin.QuickConnectStateAsync(secret, cts.Token);
-                if (state.Authenticated)
+                while (!cts.IsCancellationRequested && DateTime.UtcNow < deadline)
                 {
-                    var auth = await AppServices.Jellyfin.QuickConnectAuthenticateAsync(secret, cts.Token);
-                    QuickConnectCode = null;
-                    await FinishAsync(auth);
-                    return;
+                    await Task.Delay(2500, cts.Token);
+                    var state = await AppServices.Jellyfin.QuickConnectStateAsync(secret, cts.Token);
+                    if (state.Authenticated)
+                    {
+                        var auth = await AppServices.Jellyfin.QuickConnectAuthenticateAsync(secret, cts.Token);
+                        QuickConnectCode = null;
+                        await FinishAsync(auth);
+                        return;
+                    }
                 }
             }
-            QuickConnectCode = null;
+            finally { if (_qcCts == cts) QuickConnectCode = null; }
         }, showBusy: false);
     }
 

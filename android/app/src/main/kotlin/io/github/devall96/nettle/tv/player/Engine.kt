@@ -70,6 +70,11 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
     // ---- state the screen reads (Compose state, main thread) ----
     var videoWidth by mutableStateOf(0); private set
     var videoHeight by mutableStateOf(0); private set
+    /**
+     * Width / height as the picture should be SHOWN (0 = unknown). Not always width / height in pixels: DVD
+     * remuxes and SD broadcast feeds store non-square pixels (720×480 shown as 16:9 or 4:3).
+     */
+    var videoAspect by mutableStateOf(0f); private set
     /** True once the current load has drawn its first video frame (Live TV hides its tuning screen then). */
     var firstFrameShown by mutableStateOf(false); private set
     var cues by mutableStateOf<List<Cue>>(emptyList()); private set
@@ -169,6 +174,8 @@ class Engine(private val context: Context, private val passthrough: Boolean) {
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 videoWidth = videoSize.width
                 videoHeight = videoSize.height
+                val par = videoSize.pixelWidthHeightRatio.takeIf { it > 0f && it.isFinite() } ?: 1f
+                videoAspect = if (videoSize.height > 0) videoSize.width * par / videoSize.height else 0f
                 updateOutput()
             }
             override fun onTracksChanged(t: Tracks) { rebuildTracks(t); updateOutput() }

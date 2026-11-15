@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -76,7 +77,9 @@ fun DetailsScreen(vm: DetailsModel) {
                         T("Cast & Crew", style = Nettle.type.h3)
                         KeepClear(before = 24.dp, after = 80.dp) {
                             LazyRow(Modifier.focusRestorer(), state = vm.castState, contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                                items(vm.cast, key = { (it.p.id ?: "") + it.role + it.name }) { PersonView(vm, it) }
+                                // The index too: the same person can be listed twice with the same role (Actor and Guest star),
+                                // and a repeated key crashes the row.
+                                itemsIndexed(vm.cast, key = { i, c -> "$i|" + (c.p.id ?: "") + c.role + c.name }) { _, c -> PersonView(vm, c) }
                             }
                         }
                     }

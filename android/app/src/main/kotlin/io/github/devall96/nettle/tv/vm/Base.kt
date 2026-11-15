@@ -51,11 +51,21 @@ abstract class Page : ViewModelBase() {
     val focusRequesters = HashMap<String, FocusRequester>()
     fun requester(key: String): FocusRequester = focusRequesters.getOrPut(key) { FocusRequester() }
 
+    private var active = false
+
     fun activate() {
+        active = true
         scope.launch {
             if (!loaded) { loaded = true; load() } else refresh()
-            onActivated()
+            // Left while it was loading: starting its timers now would leave them running.
+            if (active) onActivated()
         }
+    }
+
+    /** The page is no longer on screen. */
+    fun deactivate() {
+        active = false
+        onDeactivated()
     }
 
     /** Back pressed: return true if the page handled it itself (e.g. closed a dialog). */
@@ -64,7 +74,7 @@ abstract class Page : ViewModelBase() {
     protected open suspend fun load() {}
     protected open suspend fun refresh() {}
     protected open fun onActivated() {}
-    open fun onDeactivated() {}
+    protected open fun onDeactivated() {}
 }
 
 /**

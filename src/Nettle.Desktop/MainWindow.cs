@@ -18,7 +18,7 @@ internal sealed class MainWindow : Window, IWindowHost
 {
     private WindowState _restoreState = WindowState.Normal;
     private readonly MainViewModel _vm;
-    private bool _readyToClose;
+    private bool _readyToClose, _closing;
     // Last size/position while in a normal (not maximized / full-screen) state.
     private Size _normalSize;
     private PixelPoint? _normalPos;
@@ -267,7 +267,10 @@ internal sealed class MainWindow : Window, IWindowHost
         if (_readyToClose || e.Cancel) return;
         // Finish the "stopped" report (resume position) and save settings before exiting.
         e.Cancel = true;
-        _readyToClose = true;
+        // A second close request (X clicked again, Alt+F4) while that is under way waits for it too,
+        // instead of closing the window before the save.
+        if (_closing) return;
+        _closing = true;
         try
         {
             SavePlacement();
@@ -275,6 +278,7 @@ internal sealed class MainWindow : Window, IWindowHost
             await AppServices.Settings.SaveAsync();
         }
         catch (Exception ex) { Nettle.Core.Services.Log.Error("shutdown", ex); }
+        _readyToClose = true;
         Close();
     }
 

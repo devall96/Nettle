@@ -85,6 +85,16 @@ public sealed partial class SettingsViewModel : PageViewModel
         if (AppServices.Ntv.IsConfigured) NtvStatus = "Configured";
         var picker = new AccountPickerViewModel(AppServices.Main);
         foreach (var a in picker.Accounts) Accounts.Add(a);
+        // The tiles' Switch / Forget commands act on that picker, not on this page: follow what it removes
+        // (a forgotten profile used to stay listed here) and show its errors (they went nowhere).
+        picker.Accounts.CollectionChanged += (_, _) =>
+        {
+            foreach (var gone in Accounts.Except(picker.Accounts).ToList()) Accounts.Remove(gone);
+        };
+        picker.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Error) && !string.IsNullOrEmpty(picker.Error)) AppServices.Main.Toast(picker.Error, 5000);
+        };
         _ = LoadPluginsAsync();
     }
 
@@ -119,6 +129,11 @@ public sealed partial class SettingsViewModel : PageViewModel
     // ---------- Playback ----------
     public bool HardwareDecoding { get => P.HardwareDecoding; set { P.HardwareDecoding = value; Save(); OnPropertyChanged(); } }
     public bool AutoPlayNext { get => P.AutoPlayNextEpisode; set { P.AutoPlayNextEpisode = value; Save(); OnPropertyChanged(); } }
+    public bool MediaTags { get => P.MediaTags; set { P.MediaTags = value; Save(); OnPropertyChanged(); } }
+    public bool TagResolution { get => P.TagResolution; set { P.TagResolution = value; Save(); OnPropertyChanged(); } }
+    public bool TagRange { get => P.TagRange; set { P.TagRange = value; Save(); OnPropertyChanged(); } }
+    public bool TagCodec { get => P.TagCodec; set { P.TagCodec = value; Save(); OnPropertyChanged(); } }
+    public bool TagAudio { get => P.TagAudio; set { P.TagAudio = value; Save(); OnPropertyChanged(); } }
     public string AudioLanguage { get => P.PreferredAudioLanguage; set { P.PreferredAudioLanguage = value.Trim(); Save(); OnPropertyChanged(); } }
     public string SubtitleLanguage { get => P.PreferredSubtitleLanguage; set { P.PreferredSubtitleLanguage = value.Trim(); Save(); OnPropertyChanged(); } }
 

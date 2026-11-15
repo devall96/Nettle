@@ -48,8 +48,11 @@ public sealed class SegmentService
                 result.Add(new PlaybackSegment(kind.Value, TimeSpan.FromTicks(s.StartTicks), TimeSpan.FromTicks(s.EndTicks)));
         }
 
-        if (result.Count == 0 && legacyFallback)
+        // The plugin's own endpoint is asked whenever the server's list has no intro: some setups publish
+        // only part of what Intro Skipper found (credits but no intro), which used to hide Skip Intro.
+        if (legacyFallback && result.All(s => s.Kind != SegmentKind.Intro))
         {
+            var have = result.Select(s => s.Kind).ToHashSet();
             var legacy = await _client.GetIntroSkipperSegmentsAsync(itemId, ct).ConfigureAwait(false);
             foreach (var (key, v) in legacy)
             {
@@ -66,12 +69,47 @@ public sealed class SegmentService
                     "Commercial" => SegmentKind.Commercial,
                     _ => SegmentKind.Intro
                 };
+                if (have.Contains(kind)) continue; // the server's own entry wins
                 result.Add(new PlaybackSegment(kind, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end)));
             }
         }
 
         result.Sort((a, b) => a.Start.CompareTo(b.Start));
         return result;
+    }
+
+    /// <summary>
+    /// <see cref="GetSegmentsAsync"/>, asked again (after 3 s, then 10 s) when the server couldn't answer.
+    /// One failed request at the start of an episode used to mean no Skip buttons for all of it.
+    /// </summary>
+    public async Task<List<PlaybackSegment>> GetSegmentsReliablyAsync(string itemId, bool legacyFallback = true, CancellationToken ct = default)
+    {
+        int[] waits = [3000, 10000];
+        for (int attempt = 0; ; attempt++)
+        {
+            try { return await GetSegmentsAsync(itemId, legacyFallback, ct).ConfigureAwait(false); }
+            catch (ApiException ex)
+            {
+                if (attempt >= waits.Length) { Log.Warn("skip segments couldn't be loaded: " + ex.Message); return new(); }
+                Log.Info($"skip segments not loaded ({ex.Message}); asking again");
+                await Task.Delay(waits[attempt], ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The segment to act on at <paramref name="position"/>: the first one covering it that isn't switched
+    /// off or dismissed. (Taking simply the first one let a hidden recap mask the intro it overlaps.)
+    /// </summary>
+    public static PlaybackSegment? ActiveAt(IReadOnlyList<PlaybackSegment> segments, TimeSpan position, PlaybackSettings settings, PlaybackSegment? dismissed)
+    {
+        foreach (var s in segments)
+        {
+            if (position < s.Start || position >= s.End - TimeSpan.FromSeconds(0.5)) continue;
+            if (s == dismissed || ActionFor(s.Kind, settings) == SegmentAction.Off) continue;
+            return s;
+        }
+        return null;
     }
 
     public static SegmentAction ActionFor(SegmentKind kind, PlaybackSettings s) => kind switch

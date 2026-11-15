@@ -71,7 +71,13 @@ class JellyfinSocket(private val client: JellyfinClient, base: OkHttpClient) {
                         runCatching { onConnected?.invoke() }.onFailure { Log.warn("socket connected handler: ${it.message}") }
                         while (true) {
                             when (val e = events.receive()) {
-                                is Closed -> { if (e.error != null) throw e.error; return@coroutineScope }
+                                is Closed -> {
+                                    if (e.error != null) throw e.error
+                                    // The keep-alive is a child of this scope: left running, the scope never ends after a
+                                    // clean close (server restart) and the socket would never reconnect.
+                                    keepAlive?.cancel()
+                                    return@coroutineScope
+                                }
                                 is Text -> {
                                     val root = runCatching { Json.parseToJsonElement(e.s).jsonObject }.getOrNull() ?: continue
                                     val type = (root["MessageType"] as? JsonPrimitive)?.contentOrNull ?: ""

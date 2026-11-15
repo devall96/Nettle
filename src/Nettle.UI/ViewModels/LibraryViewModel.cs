@@ -185,9 +185,20 @@ public sealed partial class LibraryViewModel : PageViewModel
     }
 
     /// <param name="upTo">Load at least this many items in one request (A–Z jump far down the list).</param>
+    // One page request at a time: infinite scroll and an A–Z jump both start from "how many are loaded",
+    // so two at once fetched the same items and appended them twice.
+    private readonly SemaphoreSlim _pageGate = new(1, 1);
+
     private async Task LoadPageAsync(CancellationToken ct, int upTo = 0)
     {
-        if (_cards.Count >= _total) return;
+        await _pageGate.WaitAsync();
+        try { await LoadPageCoreAsync(ct, upTo); }
+        finally { _pageGate.Release(); }
+    }
+
+    private async Task LoadPageCoreAsync(CancellationToken ct, int upTo)
+    {
+        if (ct.IsCancellationRequested || _cards.Count >= _total) return;
         // The server reshuffles on every request, so a second "page" of a random sort would
         // repeat and skip items: random is one larger batch, with no further pages.
         bool random = Sort.SortBy == "Random";
