@@ -164,9 +164,13 @@ class SessionService(private val client: JellyfinClient, private val accountStor
     fun preferredSubtitleLanguage(deviceSetting: String?): String? =
         deviceSetting?.takeIf { it.isNotBlank() } ?: userConfig?.subtitleLanguagePreference?.takeIf { it.isNotBlank() }
 
-    /** Default, Always, OnlyForced, Smart or None: this device's setting, else the profile's, else Default. */
+    /** Default, Always, OnlyForced, Smart or None. Off unless asked for: blank is None, "Profile" follows the Jellyfin profile. */
     fun subtitleMode(deviceSetting: String?): String =
-        deviceSetting?.takeIf { it.isNotBlank() } ?: userConfig?.subtitleMode?.takeIf { it.isNotBlank() } ?: "Default"
+        when {
+            deviceSetting.isNullOrBlank() -> "None"
+            deviceSetting == "Profile" -> userConfig?.subtitleMode?.takeIf { it.isNotBlank() } ?: "None"
+            else -> deviceSetting
+        }
 
     /** Libraries this user hid from "Recently added". */
     val latestExcludes: Collection<String> get() = userConfig?.latestItemsExcludes ?: emptyList()

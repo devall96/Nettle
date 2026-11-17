@@ -748,7 +748,7 @@ class PlayerModel private constructor() {
 
     private fun autoPlayNext() {
         if (nextEpisode == null) return
-        if (settings.stillWatchingPrompt && autoPlayedInARow >= maxOf(1, settings.stillWatchingEpisodes)) {
+        if (settings.askStillWatching && autoPlayedInARow >= maxOf(1, settings.stillWatchingEpisodes)) {
             engine.setPause(true)
             isUpNextVisible = false
             stillWatchingDetail = "${autoPlayedInARow + 1} episodes in a row without a break. Nettle paused before the next one."
@@ -761,7 +761,7 @@ class PlayerModel private constructor() {
     }
 
     private fun checkLiveStillWatching() {
-        if (!settings.stillWatchingPrompt || isStillWatchingVisible || !engine.isPlaying) return
+        if (!settings.askStillWatching || isStillWatchingVisible || !engine.isPlaying) return
         if (System.currentTimeMillis() - lastUserInput < liveStillWatchingAfterMs) return
         engine.setPause(true)
         if (isLiveDirect) livePausedAt = System.currentTimeMillis()
@@ -902,16 +902,10 @@ class PlayerModel private constructor() {
         showOsd()
         if (isSyncPlay) { val pause = engine.isPlaying; askGroup(if (pause) "pause" else "play") { if (pause) sync.pause() else sync.unpause() }; return }
         val it = item
-        if (engine.ended && !isLive && it != null) { scope.launch { startItem(it, null, mediaSourceId) }; return }
+        // Live TV can't be paused, like a real channel: play / pause only brings the controls up.
+        if (isLive) return
+        if (engine.ended && it != null) { scope.launch { startItem(it, null, mediaSourceId) }; return }
         val willPause = engine.isPlaying || !engine.isPaused
-        if (isLive && isLiveDirect) {
-            if (willPause) livePausedAt = System.currentTimeMillis()
-            else livePausedAt?.let { at ->
-                livePausedAt = null
-                // Live TV resumes at the live point, like a real channel.
-                if (System.currentTimeMillis() - at > 3000) { tuneTo(channelIndex); return }
-            }
-        }
         engine.setPause(willPause)
         isPlaying = !willPause
         if (canReport) { val p = progress(willPause); AppServices.scope.launch { AppServices.jellyfin.reportProgress(p) } }
@@ -1140,8 +1134,22 @@ class PlayerModel private constructor() {
 
     /** The app went to the background (Home button): pause and save the position. */
     fun onAppStopped() {
+        if (isLive) {
+            // Live TV has no pause of its own: go quiet in the background, and retune when the app comes back.
+            if (!engine.isPaused && !isStillWatchingVisible) { engine.setPause(true); livePausedAt = System.currentTimeMillis(); stoppedLive = true }
+            return
+        }
         if (engine.isPlaying) togglePlay()
         if (canReport) { val p = progress(true); AppServices.scope.launch { AppServices.jellyfin.reportProgress(p) } }
+    }
+
+    private var stoppedLive = false
+
+    /** The app is back in front: a live channel that went quiet in the background returns to the live point. */
+    fun onAppStarted() {
+        if (!stoppedLive) return
+        stoppedLive = false
+        if (isLive && !isStillWatchingVisible) { livePausedAt = null; tuneTo(channelIndex) }
     }
 
     // ===================== TV-style format badges =====================

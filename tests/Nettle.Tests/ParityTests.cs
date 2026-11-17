@@ -242,6 +242,38 @@ public class ParityTests
         // The check's clip goes into Nettle's own cache, not /tmp.
         Assert.Contains("AppServices.Platform.CacheDirectory, \"lipsync-check.mkv\"", vm);
     }
+
+    [Fact]
+    public void LiveTv_HasNoPlayPause_Everywhere()
+    {
+        // Play / pause returns before it can pause a live channel, on both apps.
+        Assert.Matches(@"if \(IsLive\) return;\s*if \(Player\.HasEnded", Desk("ViewModels/PlayerViewModel.cs"));
+        Assert.Matches(@"if \(isLive\) return\s*if \(engine\.ended", TvFile("player/PlayerModel.kt"));
+        // And the live controls have no play / pause button.
+        var live = Desk("Views/PlayerView.axaml");
+        live = live[live.IndexOf("<!-- Live controls -->", StringComparison.Ordinal)..live.IndexOf("<!-- Brief messages", StringComparison.Ordinal)];
+        Assert.DoesNotContain("TogglePlayCommand", live);
+        var tv = TvFile("player/PlayerScreen.kt");
+        tv = tv[tv.IndexOf("private fun LiveControls", StringComparison.Ordinal)..];
+        tv = tv[..tv.IndexOf("@Composable", StringComparison.Ordinal)];
+        Assert.DoesNotContain("togglePlay", tv);
+    }
+
+    [Fact]
+    public void Subtitles_AreOffUnlessAskedFor_Everywhere()
+    {
+        var session = new Nettle.Core.Services.SessionService(null!, null!, null!);
+        Assert.Equal("None", session.SubtitleMode(""));
+        Assert.Equal("None", session.SubtitleMode(null));
+        Assert.Equal("None", session.SubtitleMode("Profile")); // no profile loaded: still off
+        Assert.Equal("Always", session.SubtitleMode("Always"));
+        var kt = KtCore("services/Services.kt");
+        Assert.Contains("deviceSetting.isNullOrBlank() -> \"None\"", kt);
+        Assert.Contains("deviceSetting == \"Profile\" -> userConfig?.subtitleMode?.takeIf { it.isNotBlank() } ?: \"None\"", kt);
+        // Both settings screens offer "off" first (the blank default) and the profile as its own choice.
+        Assert.Contains("new(\"Off (only when I pick one)\", \"\")", Desk("ViewModels/SettingsViewModel.cs"));
+        Assert.Contains("Choice(\"\", \"Off (only when I pick one)\")", TvFile("vm/Settings.kt"));
+    }
 }
 
 /// <summary>

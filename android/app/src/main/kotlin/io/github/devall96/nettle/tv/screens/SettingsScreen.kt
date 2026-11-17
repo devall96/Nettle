@@ -100,7 +100,7 @@ fun SettingsScreen(vm: SettingsModel) {
                         ToggleRow("Tag: audio", vm.tagAudio, { vm.changeTagAudio(it) }, hint = "Format and channels: ATMOS 7.1, DD+ 5.1, AAC 2.0")
                     }
                     ToggleRow("Ask \"Are you still watching?\"", vm.stillWatching, { vm.changeStillWatching(it) },
-                        hint = "Pauses before the next episode after several in a row with no input, and pauses Live TV after 4 hours with no input. Turn off to never be asked.")
+                        hint = "Pauses before the next episode after several in a row with no input, and pauses Live TV after 4 hours with no input. Off unless you turn it on.")
                     if (vm.stillWatching) StepperRow("Episodes before asking", "Auto-played episodes in a row before the question appears",
                         vm.stillWatchingEpisodes, { vm.changeStillWatchingEpisodes(it) }, 1)
                     SegmentRow(vm, "Intros", "From the Intro Skipper plugin / Jellyfin media segments", vm.introAction) { vm.changeIntro(it) }

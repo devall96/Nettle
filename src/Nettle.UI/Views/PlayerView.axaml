@@ -222,12 +222,6 @@
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
             <Button Classes="osd" Command="{Binding LastChannelCommand}" ToolTip.Tip="Last channel (R). Type a number to jump to a channel."><PathIcon Data="{StaticResource Icon.Back}" /></Button>
             <Button Classes="osd" Command="{Binding ChannelDownCommand}" ToolTip.Tip="Channel down"><PathIcon Data="{StaticResource Icon.ChevronLeft}" /></Button>
-            <Button Classes="osd big" Command="{Binding TogglePlayCommand}">
-              <Panel>
-                <PathIcon Data="{StaticResource Icon.Pause}" IsVisible="{Binding IsPlaying}" />
-                <PathIcon Data="{StaticResource Icon.Play}" IsVisible="{Binding !IsPlaying}" />
-              </Panel>
-            </Button>
             <Button Classes="osd" Command="{Binding ChannelUpCommand}" ToolTip.Tip="Channel up"><PathIcon Data="{StaticResource Icon.ChevronRight}" /></Button>
           </StackPanel>
         </Grid>

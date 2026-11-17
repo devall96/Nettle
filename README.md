@@ -47,6 +47,10 @@ and credits, multiple profiles, and sixteen hand-made themes. It has **no teleme
 > to show), **Skip Intro that shows up reliably**, Live TV that finds NostalgiaTV on its own, and about
 > fifty fixes from a full review of the code.
 > [What's in 1.1.0](https://github.com/devall96/Nettle/releases/tag/v1.1.0)
+>
+> **1.1.1 changes three defaults:** subtitles stay off until you pick one, "Are you still watching?" is
+> off unless you turn it on, and Live TV no longer pauses.
+> [What's in 1.1.1](https://github.com/devall96/Nettle/releases/tag/v1.1.1)
 
 > [!IMPORTANT]
 > ### 🪟 Nettle is on the Microsoft Store
@@ -138,7 +142,7 @@ Google TV built in…).** If you have a Jellyfin server and a few minutes, you'd
   - Audio formats only appear once that audio is actually being decoded.
 - **Skip intro, recap, credits, previews and ads,** using the [Intro Skipper](https://github.com/intro-skipper/intro-skipper) plugin or Jellyfin media segments. Each one can show a button, skip automatically, or do nothing.
 - **Up Next** card with a countdown during the credits, then automatic next episode.
-- **"Are you still watching?"** After a few episodes in a row with no input (3 by default), or 4 hours of Live TV, Nettle pauses and asks. You can change the count or turn it off in **Settings → Playback**.
+- **"Are you still watching?"** Off unless you turn it on in **Settings → Playback**. Then, after a few episodes in a row with no input (3 by default, and you can change the count), or 4 hours of Live TV, Nettle pauses and asks.
 - **Scrubbing with previews,** the way TV streaming apps do it. Press **←** / **→** (or Left / Right on a remote) and the video pauses while a thumbnail preview moves along the seek bar: a tap moves 10 seconds, holding glides smoothly and speeds up the longer you hold. **Enter** (OK) jumps there and carries on playing; **Esc** (Back) cancels and carries on from where you were. With a mouse, hover over or drag the seek bar. Thumbnails come from the trickplay images your Jellyfin server already generates.
 - **Audio passthrough** (optional): Dolby Digital, Dolby Digital Plus / Atmos, TrueHD, DTS and DTS-HD / DTS:X go to your AV receiver untouched, so it decodes them, height channels included.
 - Resume points, watched status and your audio / subtitle choices stay in sync with your server. Closing Nettle mid-episode still saves where you were.
@@ -150,7 +154,7 @@ Google TV built in…).** If you have a Jellyfin server and a few minutes, you'd
 - **Lip sync check** (Settings → Playback): a small grey box blinks once a second with a beep, and you nudge the sound in 10 ms steps until they line up. It's saved for the refresh rate your screen is running at. ⚠ It blinks for as long as it's open: if you or anyone watching (pets included) has epilepsy or is sensitive to flashing or blinking light, don't run it.
 - **Chapters:** marks on the seek bar, chapter names in the scrubbing preview, and Page Up / Page Down to jump between them.
 - **Find subtitles online** from the player, through your server's subtitle plugins (such as Open Subtitles). Nettle itself only talks to your server.
-- **Subtitles turn on the way you like:** default track, always, only forced (foreign dialogue), smart (when the audio is in another language), or off. By default this, and your audio and subtitle languages, follow each person's own Jellyfin profile.
+- **Subtitles stay off until you want them.** Pick one while watching, or have them turn on by themselves in **Settings → Playback**: the file's default track, always, only forced (foreign dialogue), smart (when the audio is in another language), or the same as your Jellyfin profile. Your audio and subtitle languages follow each person's own Jellyfin profile.
 - **Play all and Shuffle** for libraries and collections, and **Shuffle for a whole series** (every episode of every season, in random order).
 - **Play on Nettle from other Jellyfin apps.** Nettle shows up as a "Play on" target: your phone can start, queue, pause, seek, skip and change the volume or tracks.
 - **Watch together (SyncPlay).** Start or join a group from *Watch together* on the rail, then play anything: it plays for everyone in the group at the same moment, on Windows, Linux, Android TV and other Jellyfin apps that support SyncPlay. Pausing, seeking and skipping happen for everyone, and players that drift apart are brought back in step.
@@ -309,7 +313,7 @@ your Jellyfin server for NostalgiaTV (port 19850) and Seerr (port 5055), using t
 |---|---|---|---|
 | Arrow keys | Move focus | ←/→ scrub (tap 10 s, hold to glide), ↑/↓ volume | ↑/↓ change channel |
 | Enter | Open / select | Show controls; while scrubbing, jump there | Show controls |
-| Space / K | | Play / pause | Pause (resumes at the live point) |
+| Space / K | | Play / pause | Show controls (Live TV doesn't pause) |
 | Esc / Back | Go back (mouse back button too) | Close player; while scrubbing, cancel | Close player |
 | F / F11 | Full screen | Full screen | Full screen |
 | S | | Skip intro/credits | |

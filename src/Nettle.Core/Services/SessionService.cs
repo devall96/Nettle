@@ -30,11 +30,17 @@ public sealed class SessionService
         !string.IsNullOrWhiteSpace(deviceSetting) ? deviceSetting : NullIfEmpty(UserConfig?.SubtitleLanguagePreference);
 
     /// <summary>
-    /// Subtitle mode: this device's setting if set, else the user's Jellyfin profile, else
-    /// "Default". One of Default, Always, OnlyForced, Smart, None.
+    /// Subtitle mode. Subtitles are off unless someone asks for them: a blank device setting means
+    /// "None", and only <see cref="SubtitleModeFromProfile"/> follows the user's Jellyfin profile.
+    /// One of Default, Always, OnlyForced, Smart, None.
     /// </summary>
     public string SubtitleMode(string? deviceSetting) =>
-        !string.IsNullOrWhiteSpace(deviceSetting) ? deviceSetting : NullIfEmpty(UserConfig?.SubtitleMode) ?? "Default";
+        string.IsNullOrWhiteSpace(deviceSetting) ? "None"
+        : deviceSetting == SubtitleModeFromProfile ? NullIfEmpty(UserConfig?.SubtitleMode) ?? "None"
+        : deviceSetting;
+
+    /// <summary>The device setting that means "same as my Jellyfin profile".</summary>
+    public const string SubtitleModeFromProfile = "Profile";
 
     /// <summary>Libraries this user hid from "Recently added".</summary>
     public IReadOnlyCollection<string> LatestExcludes => UserConfig?.LatestItemsExcludes ?? (IReadOnlyCollection<string>)Array.Empty<string>();

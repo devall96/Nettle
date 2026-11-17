@@ -78,7 +78,7 @@ public class SettingsTests
         var store = new SettingsStore(p);
         store.Load();
         store.Current.Theme = "neon";
-        store.Current.Playback.StillWatchingPrompt = false;
+        store.Current.Playback.AskStillWatching = true;
         store.Current.Playback.NetworkBufferSeconds = 45;
         store.Current.Window = new WindowPlacement { Width = 1200, Height = 800, Maximized = true };
         await store.SaveAsync();
@@ -86,7 +86,7 @@ public class SettingsTests
         var again = new SettingsStore(p);
         again.Load();
         Assert.Equal("neon", again.Current.Theme);
-        Assert.False(again.Current.Playback.StillWatchingPrompt);
+        Assert.True(again.Current.Playback.AskStillWatching);
         Assert.Equal(45, again.Current.Playback.NetworkBufferSeconds);
         Assert.True(again.Current.Window!.Maximized);
         Assert.Empty(Directory.GetFiles(p.DataDirectory, "*.broken-*"));
@@ -110,10 +110,18 @@ public class SettingsTests
     }
 
     [Fact]
-    public void StillWatching_IsOnByDefault()
+    public void StillWatching_IsOptIn()
     {
         var s = new PlaybackSettings();
-        Assert.True(s.StillWatchingPrompt);
+        Assert.False(s.AskStillWatching);
+        Assert.Contains("var askStillWatching: Boolean = false", ParityTests.KtCore("models/AppSettings.kt"));
+
+        // The "on" that 1.1.0 and earlier saved by default doesn't carry over: everyone starts with it off.
+        using var p = new TempPlatform();
+        var store = new SettingsStore(p);
+        File.WriteAllText(Path.Combine(p.DataDirectory, "settings.json"), "{\"Playback\":{\"StillWatchingPrompt\":true}}");
+        store.Load();
+        Assert.False(store.Current.Playback.AskStillWatching);
         Assert.InRange(s.StillWatchingEpisodes, 1, 20);
         Assert.False(s.AudioPassthrough);
     }

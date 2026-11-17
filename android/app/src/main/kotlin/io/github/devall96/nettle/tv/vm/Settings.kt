@@ -36,12 +36,12 @@ class SettingsModel : Page() {
         Choice(SegmentAction.Off, "Do nothing"),
     )
     val subtitleModes = listOf(
-        Choice("", "Same as my Jellyfin profile"),
+        Choice("", "Off (only when I pick one)"), // the default; an older saved "None" lands here too
+        Choice("Profile", "Same as my Jellyfin profile"),
         Choice("Default", "Default (the file's default track)"),
         Choice("Always", "Always on"),
         Choice("OnlyForced", "Only forced (foreign dialogue)"),
         Choice("Smart", "Smart (when audio is in another language)"),
-        Choice("None", "Off"),
     )
     val frameRateChoices = listOf(
         Choice(FrameRateMatching.Off, "Off"),
@@ -69,7 +69,7 @@ class SettingsModel : Page() {
     fun changeTagRange(v: Boolean) { tagRange = v; p.tagRange = v; save() }
     fun changeTagCodec(v: Boolean) { tagCodec = v; p.tagCodec = v; save() }
     fun changeTagAudio(v: Boolean) { tagAudio = v; p.tagAudio = v; save() }
-    var stillWatching by mutableStateOf(p.stillWatchingPrompt); private set
+    var stillWatching by mutableStateOf(p.askStillWatching); private set
     var stillWatchingEpisodes by mutableStateOf(p.stillWatchingEpisodes); private set
     var introAction by mutableStateOf(p.introAction); private set
     var recapAction by mutableStateOf(p.recapAction); private set
@@ -127,7 +127,7 @@ class SettingsModel : Page() {
     fun changeReduceMotion(v: Boolean) { reduceMotion = v; s.reduceMotion = v; Main.applySettings(); save() }
     fun changeInterfaceWidth(v: Int) { interfaceWidth = v; s.interfaceWidth = v; Main.applySettings(); save() }
     fun changePassthrough(v: Boolean) { audioPassthrough = v; p.audioPassthrough = v; save() }    fun changeAutoPlayNext(v: Boolean) { autoPlayNext = v; p.autoPlayNextEpisode = v; save() }
-    fun changeStillWatching(v: Boolean) { stillWatching = v; p.stillWatchingPrompt = v; save() }
+    fun changeStillWatching(v: Boolean) { stillWatching = v; p.askStillWatching = v; save() }
     fun changeStillWatchingEpisodes(v: Int) { stillWatchingEpisodes = v.coerceIn(1, 20); p.stillWatchingEpisodes = stillWatchingEpisodes; save() }
     fun changeIntro(v: SegmentAction) { introAction = v; p.introAction = v; save() }
     fun changeRecap(v: SegmentAction) { recapAction = v; p.recapAction = v; save() }

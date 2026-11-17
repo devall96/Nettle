@@ -37,7 +37,7 @@ public sealed class PlaybackSettings
     public int UpNextCountdownSeconds { get; set; } = 10;
     public string PreferredAudioLanguage { get; set; } = "";
     public string PreferredSubtitleLanguage { get; set; } = "";
-    /// <summary>"" = follow the user's Jellyfin profile; else Default, Always, OnlyForced, Smart or None.</summary>
+    /// <summary>"" = off (the default); "Profile" = follow the user's Jellyfin profile; else Default, Always, OnlyForced, Smart or None.</summary>
     public string SubtitleMode { get; set; } = "";
     /// <summary>Playback speed kept between files (1 = normal).</summary>
     public double PlaybackSpeed { get; set; } = 1;
@@ -49,8 +49,12 @@ public sealed class PlaybackSettings
     public int Volume { get; set; } = 100;
     /// <summary>Send Dolby / DTS audio untouched to an AV receiver (S/PDIF or HDMI passthrough).</summary>
     public bool AudioPassthrough { get; set; }
-    /// <summary>Ask "Are you still watching?" after several episodes (or hours of live TV) with no input.</summary>
-    public bool StillWatchingPrompt { get; set; } = true;
+    /// <summary>
+    /// Ask "Are you still watching?" after several episodes (or hours of live TV) with no input. Opt-in. It was
+    /// "StillWatchingPrompt" and on by default up to 1.1.0; the new name leaves that saved value behind, so
+    /// everyone starts with it off.
+    /// </summary>
+    public bool AskStillWatching { get; set; }
     /// <summary>Episodes auto-played in a row, with no input, before the prompt appears.</summary>
     public int StillWatchingEpisodes { get; set; } = 3;
     /// <summary>

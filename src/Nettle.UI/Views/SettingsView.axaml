@@ -113,7 +113,7 @@
             <StackPanel>
               <TextBlock Text="Ask &quot;Are you still watching?&quot;" FontWeight="SemiBold" />
               <TextBlock Classes="muted caption" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                         Text="Pauses before the next episode after several in a row with no input, and pauses Live TV after 4 hours with no input. Turn off to never be asked." />
+                         Text="Pauses before the next episode after several in a row with no input, and pauses Live TV after 4 hours with no input. Off unless you turn it on." />
             </StackPanel>
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding StillWatchingPrompt}" OnContent="" OffContent="" VerticalAlignment="Center" />
           </Grid>

@@ -29,7 +29,7 @@ data class PlaybackSettings(
     var upNextCountdownSeconds: Int = 10,
     var preferredAudioLanguage: String = "",
     var preferredSubtitleLanguage: String = "",
-    /** "" = follow the user's Jellyfin profile; else Default, Always, OnlyForced, Smart or None. */
+    /** "" = off (the default); "Profile" = follow the user's Jellyfin profile; else Default, Always, OnlyForced, Smart or None. */
     var subtitleMode: String = "",
     /** Playback speed kept between files (1 = normal). */
     var playbackSpeed: Double = 1.0,
@@ -41,8 +41,12 @@ data class PlaybackSettings(
     var volume: Int = 100,
     /** Send Dolby / DTS audio untouched to the TV / AV receiver over HDMI. */
     var audioPassthrough: Boolean = false,
-    /** Ask "Are you still watching?" after several episodes (or hours of live TV) with no input. */
-    var stillWatchingPrompt: Boolean = true,
+    /**
+     * Ask "Are you still watching?" after several episodes (or hours of live TV) with no input. Opt-in. It was
+     * "stillWatchingPrompt" and on by default up to 1.1.0; the new name leaves that saved value behind, so
+     * everyone starts with it off.
+     */
+    var askStillWatching: Boolean = false,
     /** Episodes auto-played in a row, with no input, before the prompt appears. */
     var stillWatchingEpisodes: Int = 3,
     /**

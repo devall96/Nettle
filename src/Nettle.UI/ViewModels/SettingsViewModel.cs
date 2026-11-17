@@ -140,12 +140,12 @@ public sealed partial class SettingsViewModel : PageViewModel
     /// <summary>When subtitles turn on by themselves (Jellyfin's subtitle modes).</summary>
     public IReadOnlyList<ChoiceOption> SubtitleModes { get; } =
     [
-        new("Same as my Jellyfin profile", ""),
+        new("Off (only when I pick one)", ""), // the default; an older saved "None" lands here too
+        new("Same as my Jellyfin profile", "Profile"),
         new("Default (the file's default track)", "Default"),
         new("Always on", "Always"),
         new("Only forced (foreign dialogue)", "OnlyForced"),
         new("Smart (when audio is in another language)", "Smart"),
-        new("Off", "None"),
     ];
 
     public ChoiceOption SubtitleModeChoice
@@ -173,8 +173,8 @@ public sealed partial class SettingsViewModel : PageViewModel
 
     public bool StillWatchingPrompt
     {
-        get => P.StillWatchingPrompt;
-        set { P.StillWatchingPrompt = value; Save(); OnPropertyChanged(); }
+        get => P.AskStillWatching;
+        set { P.AskStillWatching = value; Save(); OnPropertyChanged(); }
     }
     public decimal StillWatchingEpisodes { get => P.StillWatchingEpisodes; set { P.StillWatchingEpisodes = Math.Clamp((int)value, 1, 20); Save(); OnPropertyChanged(); } }
 

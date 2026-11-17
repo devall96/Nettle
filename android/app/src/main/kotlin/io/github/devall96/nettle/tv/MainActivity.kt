@@ -86,6 +86,11 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Home button / another app: pause and save the position, like closing the desktop window. */
+    override fun onStart() {
+        super.onStart()
+        Main.player?.onAppStarted()
+    }
+
     override fun onStop() {
         super.onStop()
         Main.player?.onAppStopped()

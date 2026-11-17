@@ -1068,7 +1068,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
     private void AutoPlayNext()
     {
         if (_nextEpisode == null) return;
-        if (_settings.StillWatchingPrompt && _autoPlayedInARow >= Math.Max(1, _settings.StillWatchingEpisodes))
+        if (_settings.AskStillWatching && _autoPlayedInARow >= Math.Max(1, _settings.StillWatchingEpisodes))
         {
             Player.SetPause(true);
             IsUpNextVisible = false;
@@ -1083,7 +1083,7 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
 
     private void CheckLiveStillWatching()
     {
-        if (!_settings.StillWatchingPrompt || IsStillWatchingVisible || !Player.IsPlaying) return;
+        if (!_settings.AskStillWatching || IsStillWatchingVisible || !Player.IsPlaying) return;
         if (DateTime.UtcNow - _lastUserInput < LiveStillWatchingAfter) return;
         Player.SetPause(true);
         if (IsLiveDirect) _livePausedAt = DateTime.UtcNow;
@@ -1262,18 +1262,10 @@ public sealed partial class PlayerViewModel : ViewModelBase, IDisposable
         if (_scrubbing) { CommitScrub(); return; }
         ShowOsd();
         if (IsSyncPlay) { var pause = Player.IsPlaying; AskGroup(() => pause ? Sync.PauseAsync() : Sync.UnpauseAsync(), pause ? "pause" : "play"); return; }
-        if (Player.HasEnded && !IsLive && _item != null) { _ = StartItemAsync(_item, null, _mediaSourceId); return; }
+        // Live TV can't be paused, like a real channel: play / pause only brings the controls up.
+        if (IsLive) return;
+        if (Player.HasEnded && _item != null) { _ = StartItemAsync(_item, null, _mediaSourceId); return; }
         var willPause = Player.IsPlaying;
-        if (IsLive && IsLiveDirect)
-        {
-            if (willPause) _livePausedAt = DateTime.UtcNow;
-            else if (_livePausedAt is { } at)
-            {
-                _livePausedAt = null;
-                // Live TV resumes at the live point, like a real channel.
-                if ((DateTime.UtcNow - at).TotalSeconds > 3) { TuneTo(_channelIndex); return; }
-            }
-        }
         Player.SetPause(willPause);
         IsPlaying = !willPause;
         if (CanReport) _ = AppServices.Jellyfin.ReportProgressAsync(Progress(willPause));

@@ -532,10 +532,10 @@ private fun LiveControls(vm: PlayerModel, playPause: FocusRequester, modifier: M
             vm.nextTitle?.let { T(it, Modifier.alpha(0.65f), color = White, maxLines = 1) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // No play / pause on Live TV. Focus lands on the tracks button, so a stray OK can't change the channel.
             OsdButton(Icons.ChevronLeft, { vm.channelDown() })
-            OsdButton(if (vm.isPlaying) Icons.Pause else Icons.Play, { vm.togglePlay() }, big = true, focusRequester = playPause)
             OsdButton(Icons.ChevronRight, { vm.channelUp() })
-            OsdButton(Icons.Subtitles, { vm.toggleTracks() })
+            OsdButton(Icons.Subtitles, { vm.toggleTracks() }, focusRequester = playPause)
         }
     }
 }
