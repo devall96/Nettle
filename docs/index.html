@@ -363,6 +363,10 @@
       .card { padding: 24px 18px 20px; }
     }
     @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+    .kofi-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin-top: 16px; width: 100%; }
+    .kofi-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; background: #1fb8e6; color: #0a0f14 !important; font-weight: 600; font-size: 14px; text-decoration: none !important; transition: filter .15s ease, transform .15s ease; }
+    .kofi-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .kofi-btn svg { width: 14px; height: 14px; }
   </style>
 </head>
 <body>
@@ -554,6 +558,7 @@
       <a href="https://github.com/devall96/Nettle/issues">Report a bug</a>
       <a href="privacy.html">Privacy policy</a>
       <span>Nettle is not affiliated with Jellyfin.</span>
+    <div class="kofi-row"><span>Enjoying Nettle?</span> <a class="kofi-btn" href="https://ko-fi.com/devall96" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M7 2v2M11 2v2M15 2v2"/></svg> Support me on Ko-fi</a></div>
     </footer>
   </div>
 

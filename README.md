@@ -515,3 +515,7 @@ Nettle is an independent project. It is not affiliated with or endorsed by Jelly
 project, Seerr, TMDB or NostalgiaTV.
 **How it was made:** Nettle's code is entirely AI-written (Anthropic's Claude), directed, reviewed and
 tested by a single person.
+
+---
+
+<p align="center"><a href="https://ko-fi.com/devall96"><img src="https://img.shields.io/badge/Support_me_on-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white&style=for-the-badge" alt="Support me on Ko-fi"></a></p>
